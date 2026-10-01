@@ -40,30 +40,34 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   const plotReady = chartWidth > 0;
 
   // Find min and max for scaling
-  const values = data.map((d) => d.value);
-  const rawMin = Math.min(...values);
-  const rawMax = Math.max(...values);
-  const range = rawMax - rawMin || 1;
+  const values = data.map((d) => (typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0));
+  const rawMin = values.length ? Math.min(...values) : 0;
+  const rawMax = values.length ? Math.max(...values) : 0;
+  const range = (Number.isFinite(rawMax) && Number.isFinite(rawMin) && rawMax > rawMin) ? (rawMax - rawMin) : 1;
   const paddingY = 20;
-  const availableHeight = height - paddingY * 2;
+  const availableHeight = Math.max(0, height - paddingY * 2);
 
   // Keep the line and its active marker inside the measured plot, even at narrow widths.
   const insetX = Math.min(10, chartWidth / 2);
   const points = plotReady ? data.map((d, index) => {
+    const val = typeof d.value === 'number' && Number.isFinite(d.value) ? d.value : 0;
     const x = data.length > 1
       ? (index / (data.length - 1)) * (chartWidth - insetX * 2) + insetX
       : chartWidth / 2;
-    const y = height - paddingY - ((d.value - rawMin) / range) * availableHeight;
-    return { x, y };
+    const y = height - paddingY - ((val - rawMin) / range) * availableHeight;
+    return {
+      x: Number.isFinite(x) ? x : 0,
+      y: Number.isFinite(y) ? y : height - paddingY,
+    };
   }) : [];
 
   // Straight segments show the actual snapshots without smoothing away short-term changes.
   const linePath = points.map((point, index) =>
-    `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
+    `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`
   ).join(' ');
 
   const areaPath = points.length
-    ? `${linePath} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`
+    ? `${linePath} L ${points[points.length - 1].x.toFixed(1)} ${height} L ${points[0].x.toFixed(1)} ${height} Z`
     : '';
 
   const activePoint =
@@ -116,7 +120,7 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
             />
 
             {/* Active Point Indicator Line & Dot */}
-            {activePoint ? (
+            {activePoint && Number.isFinite(activePoint.x) && Number.isFinite(activePoint.y) ? (
               <>
                 <Line
                   x1={activePoint.x}

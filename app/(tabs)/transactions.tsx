@@ -113,8 +113,12 @@ export default function TransactionsScreen() {
     }
 
     result.sort((a, b) => {
-      if (sortBy === 'NEWEST') return b.date.localeCompare(a.date);
-      if (sortBy === 'OLDEST') return a.date.localeCompare(b.date);
+      if (sortBy === 'NEWEST') {
+        return b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '');
+      }
+      if (sortBy === 'OLDEST') {
+        return a.date.localeCompare(b.date) || (a.createdAt || '').localeCompare(b.createdAt || '');
+      }
       if (sortBy === 'HIGHEST') return b.amount - a.amount;
       if (sortBy === 'LOWEST') return a.amount - b.amount;
       return 0;

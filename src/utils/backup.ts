@@ -14,6 +14,7 @@ import { getAllLiabilities } from '../database/repositories/liabilityRepository'
 import { getSettingsMap } from '../database/repositories/settingsRepository';
 import { getAllSnapshots, NetWorthSnapshotRecord } from '../database/repositories/snapshotRepository';
 import { Account, Person, Category, Transaction, Asset, Liability } from '../domain/finance/types';
+import { formatDateIso } from './dateUtils';
 
 export interface VaelthBackupData {
   appName: 'Vaelth';
@@ -84,10 +85,11 @@ export async function createBackupData(): Promise<VaelthBackupData> {
 export async function exportBackupToFile(): Promise<string> {
   const backup = await createBackupData();
   const jsonStr = JSON.stringify(backup, null, 2);
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const dateStr = formatDateIso(new Date());
   const fileName = `vaelth_backup_${dateStr}.json`;
-  const fileUri = `${FileSystem.documentDirectory || ''}${fileName}`;
+  const baseDir = FileSystem.documentDirectory || '';
+  const cleanDir = baseDir.endsWith('/') ? baseDir : `${baseDir}/`;
+  const fileUri = `${cleanDir}${fileName}`;
 
   await FileSystem.writeAsStringAsync(fileUri, jsonStr, {
     encoding: FileSystem.EncodingType.UTF8,

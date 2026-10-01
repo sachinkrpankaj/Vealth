@@ -183,6 +183,7 @@ export default function AddTransactionScreen() {
   }, [selectedPerson, selectedType, personDebts]);
 
   const handleSubmit = async () => {
+    if (isSaving) return;
     setErrorMessage(null);
 
     const validation = validateTransactionRequiredFields({
@@ -219,10 +220,11 @@ export default function AddTransactionScreen() {
   };
 
   const executeSave = async () => {
+    if (isSaving) return;
     try {
       setIsSaving(true);
       await createTransaction({
-        id: `tx-${Date.now()}`,
+        id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         type: selectedType,
         amount,
         date,

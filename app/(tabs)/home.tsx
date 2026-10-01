@@ -78,19 +78,11 @@ export default function HomeScreen() {
   const recentTransactions = transactions.slice(0, 5);
 
   // Solvency score calculation
-  const totalDebtObligations = netWorth.totalLiabilities + netWorth.totalPayables;
-  const solvencyScore =
-    totalDebtObligations === 0
-      ? 100
-      : Math.max(
-          10,
-          Math.min(
-            100,
-            Math.round(
-              (netWorth.totalAssets / (netWorth.totalAssets + totalDebtObligations)) * 100
-            )
-          )
-        );
+  const totalAssetsVal = Math.max(0, netWorth.totalAssets);
+  const totalDebtObligations = Math.max(0, netWorth.totalLiabilities + netWorth.totalPayables);
+  const totalBase = totalAssetsVal + totalDebtObligations;
+  const rawScore = totalBase === 0 ? 100 : Math.round((totalAssetsVal / totalBase) * 100);
+  const solvencyScore = Math.max(10, Math.min(100, isNaN(rawScore) ? 100 : rawScore));
 
   const animatedNetWorth = useCountingAnimation(netWorth.netWorth, {
     isMasked: isBalanceHidden,

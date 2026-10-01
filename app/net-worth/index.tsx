@@ -52,10 +52,14 @@ export default function NetWorthScreen() {
     }
 
     const points: ChartDataPoint[] = snapshots.map((s) => {
-      const parts = s.date.split('-');
+      const parts = (s.date || '').split('-');
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const monthIndex = parseInt(parts[1], 10) - 1;
-      const label = `${monthNames[monthIndex] || ''} ${parseInt(parts[2], 10)}`;
+      const dayNum = parseInt(parts[2], 10);
+      const label =
+        !isNaN(monthIndex) && monthIndex >= 0 && monthIndex < 12 && !isNaN(dayNum)
+          ? `${monthNames[monthIndex]} ${dayNum}`
+          : s.date;
       return {
         date: s.date,
         label,

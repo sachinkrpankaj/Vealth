@@ -42,6 +42,7 @@ export default function AddAccountScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!name.trim()) {
       setError('Please enter an account name');
       return;
@@ -67,7 +68,7 @@ export default function AddAccountScreen() {
       setError(null);
 
       await createAccount({
-        id: `acc-${Date.now()}`,
+        id: `acc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: name.trim(),
         type,
         openingBalance: type === 'CREDIT_CARD' ? 0 : openingBalance,

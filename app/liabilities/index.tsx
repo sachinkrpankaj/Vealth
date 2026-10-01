@@ -55,7 +55,7 @@ export default function LiabilitiesListScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedLiability) return;
+    if (isSaving || !selectedLiability) return;
     if (!editName.trim()) {
       Alert.alert('Required', 'Please enter a liability name');
       return;

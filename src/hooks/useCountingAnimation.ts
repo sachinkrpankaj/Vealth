@@ -59,10 +59,11 @@ export function useCountingAnimation(
         return;
       }
 
-      const startTime = performance.now();
+      const startTime = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
 
       const step = (now: number) => {
-        const elapsed = now - startTime;
+        const currentTime = typeof now === 'number' && isFinite(now) ? now : (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
+        const elapsed = currentTime - startTime;
         const { currentVal, isComplete } = calculateCountStep(
           fromVal,
           toVal,

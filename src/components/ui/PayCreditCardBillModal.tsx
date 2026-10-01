@@ -55,9 +55,15 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
 }) => {
   const { colors, typography, radii, spacing, isDark } = useTheme();
 
-  // STRICT REQUIREMENT: "do not give option of cash accounts"
+  // STRICT REQUIREMENT: Only spendable non-credit funding accounts allowed (BANK, OTHER).
+  // Strictly exclude CASH, CREDIT_CARD, INVESTMENT, the card itself, and archived accounts.
   const eligibleAccounts = accounts.filter(
-    (a) => a.type !== 'CASH' && a.id !== creditCard?.id && !a.isArchived
+    (a) =>
+      a.type !== 'CASH' &&
+      a.type !== 'CREDIT_CARD' &&
+      a.type !== 'INVESTMENT' &&
+      a.id !== creditCard?.id &&
+      !a.isArchived
   );
 
   const [paymentAmount, setPaymentAmount] = useState<number>(unpaidBillAmount);
@@ -66,6 +72,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
     eligibleAccounts[0]?.id || ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -127,26 +134,54 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
 
   const handleConfirm = async () => {
     if (!creditCard) return;
+    if (isSubmittingRef.current || isSubmitting) return;
+
     if (paymentAmount <= 0) {
-      setError('Please enter an amount greater than 0');
+      setError('Please enter a payment amount greater than zero.');
       return;
     }
-    if (!eligibleAccounts.some((account) => account.id === selectedAccountId)) {
-      setError('Please select an available account to pay from');
+
+    if (paymentAmount > unpaidBillAmount) {
+      setError(`Payment amount cannot exceed the unpaid statement bill of ${formatRupee(unpaidBillAmount)}.`);
+      return;
+    }
+
+    const fundingAccount = eligibleAccounts.find((account) => account.id === selectedAccountId);
+    if (!fundingAccount) {
+      setError('Please select a valid funding account to pay from.');
+      return;
+    }
+
+    if (fundingAccount.id === creditCard.id || fundingAccount.type === 'CREDIT_CARD') {
+      setError('Cannot pay a credit card bill from a credit card account.');
+      return;
+    }
+
+    if (fundingAccount.type === 'INVESTMENT' || fundingAccount.type === 'CASH') {
+      setError('Selected account type is not eligible for credit card bill payments.');
+      return;
+    }
+
+    const sourceBalance = accountBalances.get(fundingAccount.id) ?? fundingAccount.openingBalance;
+    if (paymentAmount > sourceBalance) {
+      setError(
+        `Insufficient funds in ${fundingAccount.name}. Available: ${formatRupee(sourceBalance)}, required: ${formatRupee(paymentAmount)}.`
+      );
       return;
     }
 
     try {
+      isSubmittingRef.current = true;
       setIsSubmitting(true);
       setError(null);
 
       // Record TRANSFER from Bank to Credit Card
       await createTransaction({
-        id: `tx-bill-${Date.now()}`,
+        id: `tx-bill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         type: 'TRANSFER',
         amount: Math.round(paymentAmount),
         date: paymentDate,
-        accountId: selectedAccountId, // Balance cut from this bank account
+        accountId: fundingAccount.id, // Balance cut from this funding account
         destinationAccountId: creditCard.id, // Balance credited to credit card (restores limit)
         note: `Credit card bill payment for ${creditCard.name}`,
       });
@@ -158,6 +193,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
     } catch (err: any) {
       setError(err?.message || 'Failed to record bill payment');
     } finally {
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -260,7 +296,14 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
               <AmountInput
                 label="Amount to Pay"
                 value={paymentAmount}
-                onChangeAmount={setPaymentAmount}
+                onChangeAmount={(amt) => {
+                  setPaymentAmount(amt);
+                  if (amt > unpaidBillAmount) {
+                    setError(`Payment cannot exceed unpaid bill of ${formatRupee(unpaidBillAmount)}`);
+                  } else if (error) {
+                    setError(null);
+                  }
+                }}
                 placeholder="0.00"
               />
             </View>
@@ -393,7 +436,12 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
             title="Confirm & Deduct Bill"
             onPress={handleConfirm}
             loading={isSubmitting}
-            disabled={!eligibleAccounts.some((account) => account.id === selectedAccountId) || paymentAmount <= 0 || isSubmitting}
+            disabled={
+              !eligibleAccounts.some((account) => account.id === selectedAccountId) ||
+              paymentAmount <= 0 ||
+              paymentAmount > unpaidBillAmount ||
+              isSubmitting
+            }
             style={{ marginTop: 12 }}
           />
         </LiquidGlassCard>

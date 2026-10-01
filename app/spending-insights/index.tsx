@@ -141,6 +141,7 @@ export default function SpendingInsightsScreen() {
   const [newCatColor, setNewCatColor] = useState(COLOR_PALETTE[0]);
   const [newCatIcon, setNewCatIcon] = useState('Tag');
   const [allCategoriesList, setAllCategoriesList] = useState<Category[]>([]);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
 
   const loadAllCategories = async () => {
     try {
@@ -205,11 +206,13 @@ export default function SpendingInsightsScreen() {
 
   // Category CRUD in Manager
   const handleSaveCategoryInManager = async () => {
+    if (isSavingCategory) return;
     if (!newCatName.trim()) {
       Alert.alert('Required', 'Please enter a category name');
       return;
     }
     try {
+      setIsSavingCategory(true);
       if (editingCategory) {
         await updateCategory(editingCategory.id, {
           name: newCatName.trim(),
@@ -231,6 +234,8 @@ export default function SpendingInsightsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to save category');
+    } finally {
+      setIsSavingCategory(false);
     }
   };
 
@@ -949,10 +954,18 @@ export default function SpendingInsightsScreen() {
                 />
                 <Pressable
                   onPress={handleSaveCategoryInManager}
-                  style={[styles.quickAddSaveBtn, { backgroundColor: colors.accent, borderRadius: radii.sm }]}
+                  disabled={isSavingCategory}
+                  style={[
+                    styles.quickAddSaveBtn,
+                    {
+                      backgroundColor: colors.accent,
+                      borderRadius: radii.sm,
+                      opacity: isSavingCategory ? 0.6 : 1,
+                    },
+                  ]}
                 >
                   <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
-                    {editingCategory ? 'Update' : 'Add'}
+                    {isSavingCategory ? 'Saving...' : editingCategory ? 'Update' : 'Add'}
                   </Text>
                 </Pressable>
                 {editingCategory ? (

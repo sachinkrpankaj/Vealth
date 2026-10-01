@@ -30,22 +30,6 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('ALTER TABLE transactions ADD COLUMN metadata TEXT;');
   } catch {}
 
-  // Auto-repair accounts mistakenly set to non-CREDIT_CARD if their name indicates a Credit Card (e.g. 'HDFC Millennia Credit Card')
-  try {
-    await db.execAsync(`
-      UPDATE accounts
-      SET type = 'CREDIT_CARD',
-          creditLimit = CASE WHEN creditLimit IS NULL OR creditLimit <= 0 THEN 5000000 ELSE creditLimit END,
-          billingDay = CASE WHEN billingDay IS NULL THEN 15 ELSE billingDay END,
-          dueDay = CASE WHEN dueDay IS NULL THEN 5 ELSE dueDay END
-      WHERE (
-        name LIKE '%Credit Card%' OR
-        name LIKE '%credit card%' OR
-        name LIKE '%Millennia Credit%' OR
-        name LIKE '%millennia credit%'
-      ) AND type != 'CREDIT_CARD';
-    `);
-  } catch {}
 
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
   let fkRows: Array<{ table: string }> = [];

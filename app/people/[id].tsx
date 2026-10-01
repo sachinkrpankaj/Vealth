@@ -122,7 +122,7 @@ export default function PersonDetailScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!id) return;
+    if (isSavingEdit || !id) return;
     if (!editName.trim()) {
       setEditError('Please enter a name');
       return;

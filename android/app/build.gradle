@@ -120,9 +120,7 @@ android {
         }
         release {
             // Production builds must never use debug signing.
-            // If release signing credentials are provided via environment variables or Gradle properties,
-            // sign with the production key. Otherwise, produce an unsigned release artifact for EAS/CI signing.
-            signingConfig (signingConfigs.release.storeFile != null ? signingConfigs.release : null)
+            signingConfig signingConfigs.release
             debuggable false
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
@@ -132,6 +130,20 @@ android {
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def isReleaseBuild = taskGraph.allTasks.any { task ->
+        task.name.equalsIgnoreCase("assembleRelease") ||
+        task.name.equalsIgnoreCase("bundleRelease") ||
+        task.name.equalsIgnoreCase("packageRelease")
+    }
+    if (isReleaseBuild) {
+        def storeFilePath = System.getenv("VAELTH_RELEASE_STORE_FILE") ?: (project.findProperty('MYAPP_UPLOAD_STORE_FILE') ?: project.findProperty('VAELTH_RELEASE_STORE_FILE'))
+        if (!storeFilePath || !file(storeFilePath).exists()) {
+            throw new GradleException("Production release build failed: Missing production release keystore (VAELTH_RELEASE_STORE_FILE). Release builds must never use debug signing and cannot generate unsigned artifacts when a production release is requested.")
+        }
+    }
+}
     packagingOptions {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'

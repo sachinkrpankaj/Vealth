@@ -11,6 +11,7 @@ import { CategoryBreakdownChart, CategoryBreakdownItem } from '../../src/compone
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { getCurrentLocalMonthString } from '../../src/utils/dateUtils';
 
 export default function AnalyticsScreen() {
   const { colors, typography, radii, spacing } = useTheme();
@@ -22,7 +23,7 @@ export default function AnalyticsScreen() {
     }, [refresh])
   );
 
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+  const currentMonth = getCurrentLocalMonthString(); // Local YYYY-MM
 
   // Aggregate category spending this month
   const categoryStats = useMemo(() => {

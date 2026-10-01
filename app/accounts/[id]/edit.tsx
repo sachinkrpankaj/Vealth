@@ -68,6 +68,7 @@ export default function EditAccountScreen() {
   }, [id]);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!id) return;
     if (!name.trim()) {
       setError('Please enter an account name');

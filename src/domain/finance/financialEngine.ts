@@ -467,11 +467,20 @@ export function calculateNetWorth(
   let incomeMonth = 0;
   let expenseMonth = 0;
 
+  const ccAccountIds = new Set(
+    accounts.filter((a) => a.type === 'CREDIT_CARD').map((a) => a.id)
+  );
+
   const activeTx = getActiveTransactions(transactions);
   for (const tx of activeTx) {
     if (tx.date.startsWith(targetMonth)) {
       if (tx.type === 'INCOME') {
-        incomeMonth = addMinor(incomeMonth, Math.abs(tx.amount));
+        if (tx.accountId && ccAccountIds.has(tx.accountId)) {
+          // Refunds and statement credits on credit cards reduce card spending rather than inflating income
+          expenseMonth = Math.max(0, subMinor(expenseMonth, Math.abs(tx.amount)));
+        } else {
+          incomeMonth = addMinor(incomeMonth, Math.abs(tx.amount));
+        }
       } else if (tx.type === 'EXPENSE') {
         expenseMonth = addMinor(expenseMonth, Math.abs(tx.amount));
       }

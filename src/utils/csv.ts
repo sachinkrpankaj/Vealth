@@ -51,7 +51,8 @@ export function generateTransactionsCSV(transactions: Transaction[]): string {
 export async function exportTransactionsToCSV(transactions: Transaction[]): Promise<void> {
   const csvData = generateTransactionsCSV(transactions);
   const fileName = `vaelth_transactions_${formatDateIso(new Date())}.csv`;
-  const fileUri = `${FileSystem.documentDirectory || ''}${fileName}`;
+  const docDir = FileSystem.documentDirectory || '';
+  const fileUri = docDir.endsWith('/') ? `${docDir}${fileName}` : `${docDir}/${fileName}`;
 
   await FileSystem.writeAsStringAsync(fileUri, csvData, {
     encoding: FileSystem.EncodingType.UTF8,

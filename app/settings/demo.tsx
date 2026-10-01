@@ -15,6 +15,7 @@ export default function DemoSettingsScreen() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSeedDemo = async () => {
+    if (isLoading) return;
     try {
       setIsLoading(true);
       await seedDemoData();
@@ -31,6 +32,7 @@ export default function DemoSettingsScreen() {
   };
 
   const handleResetData = () => {
+    if (isLoading) return;
     Alert.alert(
       'Reset All Data',
       'This will erase all accounts, people, assets, liabilities, and transactions. This action cannot be undone.',
@@ -40,6 +42,7 @@ export default function DemoSettingsScreen() {
           text: 'Reset Everything',
           style: 'destructive',
           onPress: async () => {
+            if (isLoading) return;
             try {
               setIsLoading(true);
               await resetAllData();

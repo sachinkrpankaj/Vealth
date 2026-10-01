@@ -26,7 +26,8 @@ export function RadialArcGauge({
   subtitle,
 }: RadialArcGaugeProps) {
   const { colors, isDark } = useTheme();
-  const clamped = Math.max(0, Math.min(100, percentage));
+  const safePercentage = (typeof percentage === 'number' && isFinite(percentage) && !isNaN(percentage)) ? percentage : 0;
+  const clamped = Math.max(0, Math.min(100, safePercentage));
   const r = (size - strokeWidth * 2 - 2) / 2;
   const cx = size / 2;
   const cy = size / 2 - 2;

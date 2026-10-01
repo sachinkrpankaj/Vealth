@@ -61,6 +61,8 @@ export default function TransactionDetailScreen() {
 
   // Edit Mode state
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editAmount, setEditAmount] = useState(0);
   const [editNote, setEditNote] = useState('');
   const [editDate, setEditDate] = useState('');
@@ -123,11 +125,13 @@ export default function TransactionDetailScreen() {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            if (!id) return;
+            if (!id || isDeleting) return;
+            setIsDeleting(true);
             try {
               await deleteTransaction(id);
               router.back();
             } catch (e: any) {
+              setIsDeleting(false);
               Alert.alert('Delete Error', e?.message || 'Failed to delete transaction.');
             }
           },
@@ -137,7 +141,8 @@ export default function TransactionDetailScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!transaction || editAmount <= 0) return;
+    if (isSaving || !transaction || editAmount <= 0) return;
+    setIsSaving(true);
 
     // Enforce repayment balance checks on edit
     if (transaction.type === 'REPAYMENT_RECEIVED' || transaction.type === 'REPAYMENT_MADE') {
@@ -149,6 +154,7 @@ export default function TransactionDetailScreen() {
         // Total allowable is current balance plus the amount this transaction originally repaid
         const maxAllowed = currentOutstanding + transaction.amount;
         if (editAmount > maxAllowed) {
+          setIsSaving(false);
           Alert.alert(
             'Overpayment Error',
             `Edited repayment (${formatRupee(editAmount)}) cannot exceed total outstanding balance of ${formatRupee(maxAllowed)}.`
@@ -162,6 +168,7 @@ export default function TransactionDetailScreen() {
     if (transaction.type === 'ASSET_SALE' && asset) {
       const maxPossible = asset.currentValue + transaction.amount;
       if (editAmount > maxPossible) {
+        setIsSaving(false);
         Alert.alert(
           'Valuation Limit',
           `Sale amount (${formatRupee(editAmount)}) cannot exceed available asset valuation (${formatRupee(maxPossible)}).`
@@ -180,6 +187,8 @@ export default function TransactionDetailScreen() {
       await loadData();
     } catch (e: any) {
       Alert.alert('Update Error', e?.message || 'Failed to update transaction.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -285,6 +294,8 @@ export default function TransactionDetailScreen() {
 
             <PrimaryButton
               title="Save Changes"
+              loading={isSaving}
+              disabled={isSaving}
               onPress={handleSaveEdit}
               style={{ marginTop: 16 }}
             />

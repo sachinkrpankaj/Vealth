@@ -10,6 +10,7 @@
  * e.g., 500 -> "500", 2500 -> "2,500", 125000 -> "1,25,000", 1000000 -> "10,00,000"
  */
 export function formatIndianNumber(num: number): string {
+  if (typeof num !== 'number' || !isFinite(num) || isNaN(num)) return '0';
   const isNegative = num < 0;
   const absNum = Math.abs(Math.floor(num));
   const str = absNum.toString();
@@ -45,6 +46,10 @@ export function formatRupee(minorUnits: number, options?: FormatRupeeOptions): s
   const showPaise = options?.showPaise;
   const space = options?.spaceAfterSymbol && symbol ? ' ' : '';
 
+  if (typeof minorUnits !== 'number' || !isFinite(minorUnits) || isNaN(minorUnits)) {
+    return `${symbol}${space}0`;
+  }
+
   const isNegative = minorUnits < 0;
   const absMinor = Math.abs(Math.round(minorUnits));
   const rupees = Math.floor(absMinor / 100);
@@ -70,6 +75,10 @@ export function formatRupee(minorUnits: number, options?: FormatRupeeOptions): s
  * e.g., ₹1.25 L, ₹10 L, ₹1.5 Cr
  */
 export function formatRupeeCompact(minorUnits: number): string {
+  if (typeof minorUnits !== 'number' || !isFinite(minorUnits) || isNaN(minorUnits)) {
+    return '₹0';
+  }
+
   const isNegative = minorUnits < 0;
   const absRupees = Math.abs(Math.round(minorUnits)) / 100;
 
@@ -101,6 +110,9 @@ export function formatRupeeCompact(minorUnits: number): string {
  * 1000000 paise (₹10,000) -> 5 digits
  */
 export function getRupeeDigitCount(minorUnits: number): number {
+  if (typeof minorUnits !== 'number' || !isFinite(minorUnits) || isNaN(minorUnits)) {
+    return 1;
+  }
   const absMinor = Math.abs(Math.round(minorUnits));
   const rupees = Math.floor(absMinor / 100);
   return Math.max(1, rupees.toString().length);

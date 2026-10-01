@@ -59,7 +59,7 @@ export default function AssetsListScreen() {
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedAsset) return;
+    if (isSaving || !selectedAsset) return;
     if (!editName.trim()) {
       Alert.alert('Required', 'Please enter an asset name');
       return;

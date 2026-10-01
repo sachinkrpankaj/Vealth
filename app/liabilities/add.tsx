@@ -30,6 +30,7 @@ export default function AddLiabilityScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!name.trim()) {
       setError('Please enter a liability name');
       return;
@@ -44,7 +45,7 @@ export default function AddLiabilityScreen() {
       setError(null);
 
       await createLiability({
-        id: `liability-${Date.now()}`,
+        id: `liability-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: name.trim(),
         type,
         amount,

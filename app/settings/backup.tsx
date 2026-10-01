@@ -22,6 +22,7 @@ export default function BackupScreen() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const handleExportCsv = async () => {
+    if (isExportingCsv) return;
     try {
       setIsExportingCsv(true);
       setStatusMessage(null);
@@ -35,6 +36,7 @@ export default function BackupScreen() {
   };
 
   const handleExportBackup = async () => {
+    if (isExportingBackup) return;
     try {
       setIsExportingBackup(true);
       setStatusMessage(null);
@@ -48,6 +50,7 @@ export default function BackupScreen() {
   };
 
   const handleRestoreBackup = () => {
+    if (isRestoring) return;
     Alert.alert(
       'Restore Backup',
       'Restoring a backup will replace current records with the data from your backup file. Do you want to select a backup file to proceed?',
@@ -56,6 +59,7 @@ export default function BackupScreen() {
         {
           text: 'Select Backup File',
           onPress: async () => {
+            if (isRestoring) return;
             try {
               setIsRestoring(true);
               setStatusMessage(null);

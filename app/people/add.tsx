@@ -55,6 +55,7 @@ export default function AddPersonScreen() {
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!name.trim()) {
       setError('Please enter a name');
       return;
@@ -72,7 +73,7 @@ export default function AddPersonScreen() {
       const trimmedName = name.trim();
 
       await createPerson({
-        id: `person-${Date.now()}`,
+        id: `person-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: trimmedName,
         phone: trimmedPhone || undefined,
         email: email.trim() || undefined,

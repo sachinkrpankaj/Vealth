@@ -36,6 +36,7 @@ export default function AddAssetScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!name.trim()) {
       setError('Please enter an asset name');
       return;
@@ -50,7 +51,7 @@ export default function AddAssetScreen() {
       setError(null);
 
       await createAsset({
-        id: `asset-${Date.now()}`,
+        id: `asset-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         name: name.trim(),
         category,
         currentValue,

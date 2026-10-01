@@ -35,25 +35,13 @@ function mapRowToAccount(row: AccountRow): Account {
   };
 }
 
+/**
+ * Safe credit card repair: Does NOT mutate account types based on name string heuristics.
+ * Accounts retain their explicit user-defined account type without silent overwriting.
+ */
 export async function repairMisclassifiedCreditCards(): Promise<void> {
-  try {
-    const db = await getDatabase();
-    await db.runAsync(`
-      UPDATE accounts
-      SET type = 'CREDIT_CARD',
-          creditLimit = CASE WHEN creditLimit IS NULL OR creditLimit <= 0 THEN 5000000 ELSE creditLimit END,
-          billingDay = CASE WHEN billingDay IS NULL THEN 15 ELSE billingDay END,
-          dueDay = CASE WHEN dueDay IS NULL THEN 5 ELSE dueDay END
-      WHERE (
-        name LIKE '%Credit Card%' OR
-        name LIKE '%credit card%' OR
-        name LIKE '%Millennia Credit%' OR
-        name LIKE '%millennia credit%'
-      ) AND type != 'CREDIT_CARD';
-    `);
-  } catch (e) {
-    console.error('Failed to repair misclassified credit cards:', e);
-  }
+  // Preserved for backward compatibility signature; unsafe name-based mutations removed.
+  return Promise.resolve();
 }
 
 export async function getAllAccounts(includeArchived = false): Promise<Account[]> {
