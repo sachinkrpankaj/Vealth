@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
@@ -12,6 +12,7 @@ if (!__DEV__) {
   console.info = () => {};
   console.debug = () => {};
   console.warn = () => {};
+  console.error = () => {};
 }
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,6 +29,16 @@ function RootStack() {
   const { colors, isDark } = useTheme();
   const checkSecurityConfig = useSecurityStore((state) => state.checkSecurityConfig);
   const setThemeMode = useThemeStore((state) => state.setThemeMode);
+
+  useEffect(() => {
+    // Re-lock Vaelth whenever the app transitions to background or inactive state
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        useSecurityStore.getState().lock();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     getDatabase().then(async () => {

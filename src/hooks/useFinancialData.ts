@@ -22,6 +22,7 @@ import {
   calculateAllPersonDebts,
   calculateNetWorth,
 } from '../domain/finance/financialEngine';
+import { formatDateIso } from '../utils/dateUtils';
 
 export interface FinancialDataState {
   isLoading: boolean;
@@ -74,8 +75,8 @@ export function useFinancialData(): FinancialDataState {
       setPhysicalAssets(asts);
       setStandaloneLiabilities(libs);
 
-      // Record daily net-worth snapshot silently in background
-      const today = new Date().toISOString().split('T')[0];
+      // Record daily net-worth snapshot silently in background using local date
+      const today = formatDateIso(new Date());
       const nw = calculateNetWorth({
         accounts: accs,
         people: ppl,

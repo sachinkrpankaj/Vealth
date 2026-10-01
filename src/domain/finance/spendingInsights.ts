@@ -143,12 +143,12 @@ export function resolveCategoryMeta(
       name: categoryId.startsWith('cat-') ? categoryId.replace('cat-', '').replace(/-/g, ' ') : categoryId,
       icon: 'Folder',
       color: '#A855F7',
-      isGeneral: categoryId.includes('general'),
+      isGeneral: false,
       isUncategorized: false,
     };
   }
 
-  const isGeneral = !!cat.monthYear || cat.name.includes('· General');
+  const isGeneral = typeof cat.monthYear === 'string' && cat.monthYear.trim().length > 0;
 
   return {
     id: cat.id,
@@ -189,8 +189,8 @@ export function calculateYearOverview(
   const yearExpenses = transactions.filter((tx) => {
     if (tx.deletedAt || tx.type !== 'EXPENSE') return false;
     if (!tx.date || !tx.date.startsWith(`${year}-`)) return false;
-    // For current year, ignore any future-dated transactions beyond today to prevent distortion
-    if (year === currentYear && tx.date > todayStr) return false;
+    // Ignore any future-dated transactions beyond today to prevent distortion
+    if (tx.date > todayStr) return false;
     return true;
   });
 
@@ -324,8 +324,8 @@ export function calculateMonthInsights(
   const monthTransactions = transactions.filter((tx) => {
     if (tx.deletedAt || tx.type !== 'EXPENSE') return false;
     if (!tx.date || !tx.date.startsWith(`${monthKey}-`)) return false;
-    // Don't show future-dated transactions if in current month
-    if (isCurrentMonth && tx.date > todayStr) return false;
+    // Don't count future-dated transactions
+    if (tx.date > todayStr) return false;
     return true;
   });
 
@@ -419,7 +419,7 @@ export function calculateCategoryInsights(
   for (const tx of transactions) {
     if (tx.deletedAt || tx.type !== 'EXPENSE') continue;
     if (!tx.date || !tx.date.startsWith(`${year}-`)) continue;
-    if (year === currentYear && tx.date > todayStr) continue;
+    if (tx.date > todayStr) continue;
 
     const amt = Math.max(0, Math.round(tx.amount));
     yearTotalAllCategories += amt;

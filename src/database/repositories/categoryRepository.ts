@@ -31,7 +31,7 @@ export function getMonthYearKey(date: Date = new Date()): string {
 }
 
 export function isMonthlyGeneralCategory(category: Category): boolean {
-  return !!category.monthYear || category.name.includes('· General');
+  return typeof category.monthYear === 'string' && category.monthYear.trim().length > 0;
 }
 
 function mapRowToCategory(row: CategoryRow): Category {
@@ -282,7 +282,7 @@ export async function archiveCategory(id: string, isArchived: boolean = true): P
 export async function deleteCategory(id: string): Promise<void> {
   const db = await getDatabase();
   const txRef = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM transactions WHERE categoryId = ? AND deletedAt IS NULL;',
+    'SELECT COUNT(*) as count FROM transactions WHERE categoryId = ?;',
     [id]
   );
 

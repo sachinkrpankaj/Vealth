@@ -130,6 +130,7 @@ export default function TransactionsScreen() {
         title="activity"
         onProfilePress={() => router.push('/profile')}
         onRightPress={() => router.push('/transaction/add')}
+        rightAccessibilityLabel="Add transaction"
         rightIcon={<Plus size={18} color={colors.textPrimary} />}
       />
 

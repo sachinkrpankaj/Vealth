@@ -14,6 +14,7 @@ interface TransactionRow {
   liabilityId: string | null;
   note: string | null;
   dueDate: string | null;
+  metadata: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -33,6 +34,7 @@ function mapRowToTransaction(row: TransactionRow): Transaction {
     liabilityId: row.liabilityId ?? undefined,
     note: row.note ?? undefined,
     dueDate: row.dueDate ?? undefined,
+    metadata: row.metadata ?? undefined,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     deletedAt: row.deletedAt ?? undefined,
@@ -154,28 +156,62 @@ export async function createTransaction(
 ): Promise<Transaction> {
   const db = await getDatabase();
   const now = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO transactions (id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, createdAt, updatedAt, deletedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [
-      tx.id,
-      tx.type,
-      Math.round(Math.abs(tx.amount)),
-      tx.date,
-      tx.accountId ?? null,
-      tx.destinationAccountId ?? null,
-      tx.personId ?? null,
-      tx.categoryId ?? null,
-      tx.assetId ?? null,
-      tx.liabilityId ?? null,
-      tx.note ?? null,
-      tx.dueDate ?? null,
-      now,
-      now,
-      tx.deletedAt ?? null,
-    ]
-  );
-  return { ...tx, createdAt: now, updatedAt: now };
+  let metadata = tx.metadata ?? null;
+
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    if (tx.type === 'ASSET_SALE' && tx.assetId) {
+      const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
+        'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
+        [tx.assetId]
+      );
+      if (asset) {
+        const valueDeducted = Math.min(asset.currentValue, Math.round(Math.abs(tx.amount)));
+        if (!metadata) {
+          metadata = JSON.stringify({
+            assetBookValueBefore: asset.currentValue,
+            assetArchivedBefore: asset.isArchived === 1,
+            assetValueDeducted: valueDeducted,
+            bookValueSold: valueDeducted,
+          });
+        }
+        const newAssetValue = Math.max(0, asset.currentValue - valueDeducted);
+        const newArchived = newAssetValue === 0 ? 1 : asset.isArchived;
+        await txn.runAsync(
+          'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+          [newAssetValue, newArchived, now, tx.assetId]
+        );
+      }
+    } else if (tx.type === 'ASSET_PURCHASE' && tx.assetId) {
+      await txn.runAsync(
+        'UPDATE assets SET isArchived = 0, updatedAt = ? WHERE id = ? AND isArchived = 1;',
+        [now, tx.assetId]
+      );
+    }
+
+    await txn.runAsync(
+      `INSERT INTO transactions (id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, metadata, createdAt, updatedAt, deletedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      [
+        tx.id,
+        tx.type,
+        Math.round(Math.abs(tx.amount)),
+        tx.date,
+        tx.accountId ?? null,
+        tx.destinationAccountId ?? null,
+        tx.personId ?? null,
+        tx.categoryId ?? null,
+        tx.assetId ?? null,
+        tx.liabilityId ?? null,
+        tx.note ?? null,
+        tx.dueDate ?? null,
+        metadata,
+        now,
+        now,
+        tx.deletedAt ?? null,
+      ]
+    );
+  });
+  return { ...tx, metadata: metadata ?? undefined, createdAt: now, updatedAt: now };
 }
 
 export async function updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
@@ -190,32 +226,88 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
     const now = new Date().toISOString();
     const updated: Transaction = { ...mapRowToTransaction(current), ...updates, updatedAt: now };
 
-    // If an ASSET_SALE amount is updated, adjust the underlying asset valuation accordingly
-    if (
-      current.type === 'ASSET_SALE' &&
-      current.assetId &&
-      updates.amount !== undefined &&
-      Math.round(Math.abs(updates.amount)) !== current.amount
-    ) {
+    if (current.type === 'ASSET_SALE' && updated.type === 'ASSET_SALE' && current.assetId === updated.assetId && current.assetId) {
       const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
         'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
         [current.assetId]
       );
       if (asset) {
-        const delta = Math.round(Math.abs(updates.amount)) - current.amount;
-        // delta > 0: user increased sale amount, asset decreases further
-        // delta < 0: user decreased sale amount, asset gains back value
-        const newAssetValue = Math.max(0, asset.currentValue - delta);
-        const newArchived = newAssetValue === 0 && (asset.isArchived === 1 || delta > 0) ? 1 : 0;
+        const netValue = Math.max(0, asset.currentValue + current.amount - Math.round(Math.abs(updated.amount)));
+        const newArchived = netValue === 0 ? 1 : 0;
         await txn.runAsync(
           'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-          [newAssetValue, newArchived, now, current.assetId]
+          [netValue, newArchived, now, current.assetId]
+        );
+        updated.metadata = JSON.stringify({
+          assetBookValueBefore: asset.currentValue + current.amount,
+          assetArchivedBefore: false,
+          assetValueDeducted: Math.round(Math.abs(updated.amount)),
+          bookValueSold: Math.round(Math.abs(updated.amount)),
+        });
+      }
+    } else {
+      // Step 1: Reverse previous transaction entity effects
+      if (current.type === 'ASSET_SALE' && current.assetId) {
+        const oldAsset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
+          'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
+          [current.assetId]
+        );
+        if (oldAsset) {
+          let restoredValue = oldAsset.currentValue + current.amount;
+          let restoredArchived = 0;
+          if (current.metadata) {
+            try {
+              const meta = JSON.parse(current.metadata);
+              if (meta.assetBookValueBefore !== undefined) {
+                restoredValue = meta.assetBookValueBefore;
+              } else if (meta.assetValueDeducted !== undefined) {
+                restoredValue = oldAsset.currentValue + meta.assetValueDeducted;
+              } else if (meta.bookValueSold !== undefined) {
+                restoredValue = oldAsset.currentValue + meta.bookValueSold;
+              }
+              if (meta.assetArchivedBefore !== undefined) {
+                restoredArchived = meta.assetArchivedBefore ? 1 : 0;
+              }
+            } catch {}
+          }
+          await txn.runAsync(
+            'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+            [restoredValue, restoredArchived, now, current.assetId]
+          );
+        }
+      }
+
+      // Step 2: Apply new transaction entity effects
+      if (updated.type === 'ASSET_SALE' && updated.assetId) {
+        const targetAsset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
+          'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
+          [updated.assetId]
+        );
+        if (targetAsset) {
+          const valueDeducted = Math.min(targetAsset.currentValue, Math.round(Math.abs(updated.amount)));
+          const newAssetValue = Math.max(0, targetAsset.currentValue - valueDeducted);
+          const newArchived = newAssetValue === 0 ? 1 : targetAsset.isArchived;
+          await txn.runAsync(
+            'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+            [newAssetValue, newArchived, now, updated.assetId]
+          );
+          updated.metadata = JSON.stringify({
+            assetBookValueBefore: targetAsset.currentValue,
+            assetArchivedBefore: targetAsset.isArchived === 1,
+            assetValueDeducted: valueDeducted,
+            bookValueSold: valueDeducted,
+          });
+        }
+      } else if (updated.type === 'ASSET_PURCHASE' && updated.assetId) {
+        await txn.runAsync(
+          'UPDATE assets SET isArchived = 0, updatedAt = ? WHERE id = ? AND isArchived = 1;',
+          [now, updated.assetId]
         );
       }
     }
 
     await txn.runAsync(
-      `UPDATE transactions SET type = ?, amount = ?, date = ?, accountId = ?, destinationAccountId = ?, personId = ?, categoryId = ?, assetId = ?, liabilityId = ?, note = ?, dueDate = ?, updatedAt = ?, deletedAt = ?
+      `UPDATE transactions SET type = ?, amount = ?, date = ?, accountId = ?, destinationAccountId = ?, personId = ?, categoryId = ?, assetId = ?, liabilityId = ?, note = ?, dueDate = ?, metadata = ?, updatedAt = ?, deletedAt = ?
        WHERE id = ?;`,
       [
         updated.type,
@@ -229,6 +321,7 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
         updated.liabilityId ?? null,
         updated.note ?? null,
         updated.dueDate ?? null,
+        updated.metadata ?? null,
         now,
         updated.deletedAt ?? null,
         id,
@@ -239,8 +332,6 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
 
 export async function deleteTransaction(id: string): Promise<void> {
   const db = await getDatabase();
-  // The read, reversal and soft delete must commit together. Unlike withTransactionAsync,
-  // exclusive transactions do not admit unrelated queries into this transaction.
   await db.withExclusiveTransactionAsync(async (txn) => {
     const tx = await txn.getFirstAsync<TransactionRow>(
       'SELECT * FROM transactions WHERE id = ? AND deletedAt IS NULL;',
@@ -254,19 +345,38 @@ export async function deleteTransaction(id: string): Promise<void> {
         'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
         [tx.assetId]
       );
-      if (!asset) throw new Error(`Asset ${tx.assetId} not found`);
-      // A full sale discarded the original book value. Sale proceeds are not book value,
-      // so guessing here would silently corrupt net worth. Partial sales remain reversible.
-      if (asset.isArchived || asset.currentValue === 0) {
-        throw new Error('Cannot reverse a fully liquidated asset sale: its previous value was not recorded.');
+      if (asset) {
+        let restoredValue = asset.currentValue + tx.amount;
+        let restoredArchived = 0;
+        let hasRestoredFromMeta = false;
+        if (tx.metadata) {
+          try {
+            const meta = JSON.parse(tx.metadata);
+            if (meta.assetBookValueBefore !== undefined) {
+              restoredValue = meta.assetBookValueBefore;
+              hasRestoredFromMeta = true;
+            } else if (meta.assetValueDeducted !== undefined) {
+              restoredValue = asset.currentValue + meta.assetValueDeducted;
+              hasRestoredFromMeta = true;
+            } else if (meta.bookValueSold !== undefined) {
+              restoredValue = asset.currentValue + meta.bookValueSold;
+              hasRestoredFromMeta = true;
+            }
+            if (meta.assetArchivedBefore !== undefined) {
+              restoredArchived = meta.assetArchivedBefore ? 1 : 0;
+            }
+          } catch {}
+        }
+        if (!hasRestoredFromMeta && asset.isArchived && asset.currentValue === 0) {
+          throw new Error('Cannot safely reverse asset sale: previous value was not recorded.');
+        }
+        await txn.runAsync(
+          'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+          [restoredValue, restoredArchived, now, tx.assetId]
+        );
       }
-      await txn.runAsync(
-        'UPDATE assets SET currentValue = ?, updatedAt = ? WHERE id = ?;',
-        [asset.currentValue + tx.amount, now, tx.assetId]
-      );
     }
-    // Creating ASSET_PURCHASE never increases currentValue: it only unarchives an
-    // existing asset. Subtracting the purchase price on delete destroys its valuation.
+
     await txn.runAsync('UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL;', [
       now, now, id,
     ]);

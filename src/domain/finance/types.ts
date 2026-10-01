@@ -68,6 +68,7 @@ export interface Transaction {
   liabilityId?: string;
   note?: string;
   dueDate?: string;
+  metadata?: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;

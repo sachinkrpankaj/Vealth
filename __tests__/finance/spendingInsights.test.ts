@@ -62,6 +62,7 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
         type: 'EXPENSE',
         icon: 'Folder',
         isDefault: false,
+        monthYear: '2026-11',
         createdAt: '2026-11-01',
       };
       const customCat: Category = {
@@ -73,10 +74,20 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
         monthYear: null,
         createdAt: '2026-01-01',
       };
+      const nameCollisionCat: Category = {
+        id: 'cat-custom-collision',
+        name: "December '26 · General",
+        type: 'EXPENSE',
+        icon: 'Folder',
+        isDefault: false,
+        monthYear: null,
+        createdAt: '2026-12-01',
+      };
 
       expect(isMonthlyGeneralCategory(generalCat1)).toBe(true);
       expect(isMonthlyGeneralCategory(generalCat2)).toBe(true);
       expect(isMonthlyGeneralCategory(customCat)).toBe(false);
+      expect(isMonthlyGeneralCategory(nameCollisionCat)).toBe(false);
     });
   });
 

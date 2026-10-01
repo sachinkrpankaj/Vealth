@@ -54,13 +54,14 @@ CREATE TABLE IF NOT EXISTS transactions (
   liabilityId TEXT,
   note TEXT,
   dueDate TEXT,
+  metadata TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
   deletedAt TEXT,
   FOREIGN KEY (accountId) REFERENCES accounts(id) ON DELETE RESTRICT,
   FOREIGN KEY (destinationAccountId) REFERENCES accounts(id) ON DELETE RESTRICT,
   FOREIGN KEY (personId) REFERENCES people(id) ON DELETE RESTRICT,
-  FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL,
+  FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE RESTRICT,
   FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE RESTRICT,
   FOREIGN KEY (liabilityId) REFERENCES liabilities(id) ON DELETE RESTRICT
 );

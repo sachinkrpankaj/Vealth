@@ -12,6 +12,7 @@ import { getAllTransactions } from '../database/repositories/transactionReposito
 import { getAllAssets } from '../database/repositories/assetRepository';
 import { getAllLiabilities } from '../database/repositories/liabilityRepository';
 import { getSettingsMap } from '../database/repositories/settingsRepository';
+import { getAllSnapshots, NetWorthSnapshotRecord } from '../database/repositories/snapshotRepository';
 import { Account, Person, Category, Transaction, Asset, Liability } from '../domain/finance/types';
 
 export interface VaelthBackupData {
@@ -25,6 +26,7 @@ export interface VaelthBackupData {
     transactions: Transaction[];
     assets: Asset[];
     liabilities: Liability[];
+    snapshots?: NetWorthSnapshotRecord[];
     settings: Record<string, string>;
   };
 }
@@ -42,7 +44,7 @@ export function isSecurityKey(key: string): boolean {
 }
 
 export async function createBackupData(): Promise<VaelthBackupData> {
-  const [accounts, people, categories, transactions, assets, liabilities, allSettings] =
+  const [accounts, people, categories, transactions, assets, liabilities, snapshots, allSettings] =
     await Promise.all([
       getAllAccounts(true),
       getAllPeople(true),
@@ -50,6 +52,7 @@ export async function createBackupData(): Promise<VaelthBackupData> {
       getAllTransactions({ includeDeleted: true }),
       getAllAssets(true),
       getAllLiabilities(true),
+      getAllSnapshots(),
       getSettingsMap(),
     ]);
 
@@ -72,6 +75,7 @@ export async function createBackupData(): Promise<VaelthBackupData> {
       transactions,
       assets,
       liabilities,
+      snapshots,
       settings: sanitizedSettings,
     },
   };
@@ -80,7 +84,9 @@ export async function createBackupData(): Promise<VaelthBackupData> {
 export async function exportBackupToFile(): Promise<string> {
   const backup = await createBackupData();
   const jsonStr = JSON.stringify(backup, null, 2);
-  const fileName = `vaelth_backup_${new Date().toISOString().split('T')[0]}.json`;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const fileName = `vaelth_backup_${dateStr}.json`;
   const fileUri = `${FileSystem.documentDirectory || ''}${fileName}`;
 
   await FileSystem.writeAsStringAsync(fileUri, jsonStr, {
@@ -98,6 +104,23 @@ export async function exportBackupToFile(): Promise<string> {
   return fileUri;
 }
 
+const VALID_ACCOUNT_TYPES = new Set(['CASH', 'BANK', 'INVESTMENT', 'CREDIT_CARD', 'SAVINGS', 'WALLET', 'OTHER']);
+const VALID_TRANSACTION_TYPES = new Set([
+  'INCOME',
+  'EXPENSE',
+  'TRANSFER',
+  'LEND',
+  'BORROW',
+  'REPAYMENT_RECEIVED',
+  'REPAYMENT_MADE',
+  'ASSET_PURCHASE',
+  'ASSET_SALE',
+  'OTHER',
+]);
+const VALID_LIABILITY_TYPES = new Set(['LOAN', 'CREDIT_CARD', 'MORTGAGE', 'OTHER']);
+const VALID_CATEGORY_TYPES = new Set(['EXPENSE', 'INCOME']);
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
 export function validateBackupData(parsed: any): { isValid: boolean; error?: string } {
   if (!parsed || typeof parsed !== 'object') {
     return { isValid: false, error: 'Invalid backup file format.' };
@@ -109,34 +132,130 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     return { isValid: false, error: 'Unsupported backup schema version.' };
   }
   const data = parsed.data;
-  if (!data || typeof data !== 'object' ||
-      !['accounts', 'people', 'categories', 'transactions', 'assets', 'liabilities'].every(
-        (key) => Array.isArray(data[key])
-      ) || !data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !['accounts', 'people', 'categories', 'transactions', 'assets', 'liabilities'].every(
+      (key) => Array.isArray(data[key])
+    ) ||
+    !data.settings ||
+    typeof data.settings !== 'object' ||
+    Array.isArray(data.settings)
+  ) {
     return { isValid: false, error: 'Backup is missing core financial records.' };
   }
 
   const validId = (value: any) => typeof value === 'string' && value.length > 0;
   const validMoney = (value: any) => Number.isSafeInteger(value);
-  const validRecord = (record: any) => record && typeof record === 'object' &&
-    !Array.isArray(record) && validId(record.id) &&
-    typeof record.createdAt === 'string' && typeof record.updatedAt === 'string';
+  const validRecord = (record: any) =>
+    record &&
+    typeof record === 'object' &&
+    !Array.isArray(record) &&
+    validId(record.id) &&
+    typeof record.createdAt === 'string' &&
+    typeof record.updatedAt === 'string';
   const hasUniqueIds = (rows: any[]) => new Set(rows.map((row) => row.id)).size === rows.length;
-  if (!data.accounts.every((a: any) => validRecord(a) && validMoney(a.openingBalance) &&
-      (a.creditLimit == null || validMoney(a.creditLimit)) && validId(a.name) && validId(a.type)) ||
-      !data.people.every((p: any) => validRecord(p) && validId(p.name) && validId(p.avatarColor)) ||
-      !data.categories.every((c: any) => c && typeof c === 'object' && validId(c.id) &&
-        validId(c.name) && validId(c.type) && validId(c.icon) && typeof c.createdAt === 'string') ||
-      !data.assets.every((a: any) => validRecord(a) && validId(a.name) && validId(a.category) &&
-        validMoney(a.currentValue) && validMoney(a.purchaseValue) && validId(a.purchaseDate)) ||
-      !data.liabilities.every((l: any) => validRecord(l) && validId(l.name) && validId(l.type) &&
-        validMoney(l.amount)) ||
-      !data.transactions.every((t: any) => validRecord(t) && validId(t.type) &&
-        validId(t.date) && validMoney(t.amount) && t.amount > 0) ||
-      ![data.accounts, data.people, data.categories, data.assets, data.liabilities, data.transactions]
-        .every(hasUniqueIds) ||
-      !Object.values(data.settings).every((v) => typeof v === 'string')) {
-    return { isValid: false, error: 'Backup contains invalid financial records.' };
+
+  if (
+    !data.accounts.every(
+      (a: any) =>
+        validRecord(a) &&
+        validMoney(a.openingBalance) &&
+        (a.creditLimit == null || validMoney(a.creditLimit)) &&
+        validId(a.name) &&
+        VALID_ACCOUNT_TYPES.has(a.type)
+    ) ||
+    !data.people.every(
+      (p: any) => validRecord(p) && validId(p.name) && validId(p.avatarColor)
+    ) ||
+    !data.categories.every(
+      (c: any) =>
+        c &&
+        typeof c === 'object' &&
+        validId(c.id) &&
+        validId(c.name) &&
+        VALID_CATEGORY_TYPES.has(c.type) &&
+        validId(c.icon) &&
+        typeof c.createdAt === 'string'
+    ) ||
+    !data.assets.every(
+      (a: any) =>
+        validRecord(a) &&
+        validId(a.name) &&
+        validId(a.category) &&
+        validMoney(a.currentValue) &&
+        validMoney(a.purchaseValue) &&
+        typeof a.purchaseDate === 'string' &&
+        DATE_REGEX.test(a.purchaseDate.slice(0, 10))
+    ) ||
+    !data.liabilities.every(
+      (l: any) =>
+        validRecord(l) &&
+        validId(l.name) &&
+        VALID_LIABILITY_TYPES.has(l.type) &&
+        validMoney(l.amount) &&
+        (!l.dueDate || DATE_REGEX.test(l.dueDate.slice(0, 10)))
+    ) ||
+    !data.transactions.every(
+      (t: any) =>
+        validRecord(t) &&
+        VALID_TRANSACTION_TYPES.has(t.type) &&
+        validId(t.date) &&
+        DATE_REGEX.test(t.date) &&
+        validMoney(t.amount) &&
+        t.amount > 0
+    ) ||
+    ![data.accounts, data.people, data.categories, data.assets, data.liabilities, data.transactions].every(
+      hasUniqueIds
+    ) ||
+    !Object.values(data.settings).every((v) => typeof v === 'string')
+  ) {
+    return { isValid: false, error: 'Backup contains invalid financial records or unsupported enum types.' };
+  }
+
+  // Validate snapshots if present
+  if (data.snapshots) {
+    if (
+      !Array.isArray(data.snapshots) ||
+      !data.snapshots.every(
+        (s: any) =>
+          s &&
+          typeof s === 'object' &&
+          validId(s.id) &&
+          DATE_REGEX.test(s.date) &&
+          validMoney(s.netWorth) &&
+          validMoney(s.totalAssets) &&
+          validMoney(s.totalLiabilities)
+      )
+    ) {
+      return { isValid: false, error: 'Backup contains corrupted net-worth snapshot records.' };
+    }
+  }
+
+  // Validate transaction-specific field integrity
+  for (const t of data.transactions) {
+    if (t.type === 'TRANSFER') {
+      if (!validId(t.accountId) || !validId(t.destinationAccountId) || t.accountId === t.destinationAccountId) {
+        return { isValid: false, error: 'Transfer transaction requires distinct source and destination accounts.' };
+      }
+    } else if (t.type === 'EXPENSE' || t.type === 'INCOME') {
+      if (!validId(t.accountId)) {
+        return { isValid: false, error: `${t.type} transaction requires an account ID.` };
+      }
+    } else if (
+      t.type === 'LEND' ||
+      t.type === 'BORROW' ||
+      t.type === 'REPAYMENT_RECEIVED' ||
+      t.type === 'REPAYMENT_MADE'
+    ) {
+      if (!validId(t.personId)) {
+        return { isValid: false, error: `${t.type} transaction requires a person ID.` };
+      }
+    } else if (t.type === 'ASSET_PURCHASE' || t.type === 'ASSET_SALE') {
+      if (!validId(t.assetId)) {
+        return { isValid: false, error: `${t.type} transaction requires an asset ID.` };
+      }
+    }
   }
 
   const ids = (rows: any[]) => new Set(rows.map((row) => row.id));
@@ -146,11 +265,18 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   const assetIds = ids(data.assets);
   const liabilityIds = ids(data.liabilities);
   const exists = (id: any, known: Set<string>) => id == null || known.has(id);
-  if (!data.liabilities.every((l: any) => exists(l.personId, personIds)) ||
-      !data.transactions.every((t: any) =>
-        exists(t.accountId, accountIds) && exists(t.destinationAccountId, accountIds) &&
-        exists(t.personId, personIds) && exists(t.categoryId, categoryIds) &&
-        exists(t.assetId, assetIds) && exists(t.liabilityId, liabilityIds))) {
+  if (
+    !data.liabilities.every((l: any) => exists(l.personId, personIds)) ||
+    !data.transactions.every(
+      (t: any) =>
+        exists(t.accountId, accountIds) &&
+        exists(t.destinationAccountId, accountIds) &&
+        exists(t.personId, personIds) &&
+        exists(t.categoryId, categoryIds) &&
+        exists(t.assetId, assetIds) &&
+        exists(t.liabilityId, liabilityIds)
+    )
+  ) {
     return { isValid: false, error: 'Backup contains missing financial references.' };
   }
   return { isValid: true };
@@ -172,9 +298,16 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
       DELETE FROM accounts;
       DELETE FROM categories;
       DELETE FROM net_worth_snapshots;
+      DELETE FROM app_settings
+      WHERE key NOT LIKE 'security_%'
+        AND key NOT LIKE '%pin%'
+        AND key NOT LIKE '%biometric%'
+        AND key NOT LIKE '%password%'
+        AND key NOT LIKE '%secret%'
+        AND key NOT LIKE '%token%';
     `);
 
-    const { accounts, people, categories, transactions, assets, liabilities, settings } =
+    const { accounts, people, categories, transactions, assets, liabilities, snapshots, settings } =
       backup.data;
 
     // 1. Restore accounts (including creditLimit, billingDay, dueDay)
@@ -281,8 +414,8 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     // 6. Restore transactions
     for (const t of transactions) {
       await db.runAsync(
-        `INSERT INTO transactions (id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, createdAt, updatedAt, deletedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        `INSERT INTO transactions (id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, metadata, createdAt, updatedAt, deletedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           t.id,
           t.type,
@@ -296,6 +429,7 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
           t.liabilityId ?? null,
           t.note ?? null,
           t.dueDate ?? null,
+          t.metadata ?? null,
           t.createdAt,
           t.updatedAt,
           t.deletedAt ?? null,
@@ -303,7 +437,27 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
       );
     }
 
-    // 7. Restore safe settings (never write security credentials into SQLite)
+    // 7. Restore snapshots
+    if (snapshots && Array.isArray(snapshots)) {
+      for (const s of snapshots) {
+        await db.runAsync(
+          `INSERT INTO net_worth_snapshots (id, date, netWorth, totalAssets, totalLiabilities, totalReceivables, totalPayables, createdAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            s.id,
+            s.date,
+            Math.round(s.netWorth),
+            Math.round(s.totalAssets),
+            Math.round(s.totalLiabilities),
+            Math.round(s.totalReceivables ?? 0),
+            Math.round(s.totalPayables ?? 0),
+            s.createdAt,
+          ]
+        );
+      }
+    }
+
+    // 8. Restore safe settings (never write security credentials into SQLite)
     if (settings) {
       for (const [k, v] of Object.entries(settings)) {
         if (!isSecurityKey(k)) {

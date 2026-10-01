@@ -162,11 +162,13 @@ export default function HomeScreen() {
         title="vaelth"
         onProfilePress={() => router.push('/profile')}
         actionIcon={<Plus size={18} color={colors.textPrimary} strokeWidth={2.4} />}
+        actionAccessibilityLabel="Add transaction"
         onActionPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           router.push('/transaction/add');
         }}
         onRightPress={() => setIsBalanceHidden(!isBalanceHidden)}
+        rightAccessibilityLabel={isBalanceHidden ? 'Show balance' : 'Hide balance'}
         rightIcon={
           isBalanceHidden ? (
             <EyeOff size={18} color={colors.textSecondary} />

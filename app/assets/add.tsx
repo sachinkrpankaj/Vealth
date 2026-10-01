@@ -10,6 +10,7 @@ import { DatePickerField } from '../../src/components/ui/DatePickerField';
 import { useTheme } from '../../src/theme';
 import { createAsset } from '../../src/database/repositories/assetRepository';
 import { AssetCategory } from '../../src/domain/finance/types';
+import { formatDateIso } from '../../src/utils/dateUtils';
 
 const ASSET_CATEGORIES: { cat: AssetCategory; label: string }[] = [
   { cat: 'GOLD', label: 'Gold & Jewelry' },
@@ -27,8 +28,8 @@ export default function AddAssetScreen() {
   const [category, setCategory] = useState<AssetCategory>('GOLD');
   const [currentValue, setCurrentValue] = useState<number>(0);
   const [purchaseValue, setPurchaseValue] = useState<number>(0);
-  const [purchaseDate, setPurchaseDate] = useState(
-    new Date().toISOString().split('T')[0]
+  const [purchaseDate, setPurchaseDate] = useState(() =>
+    formatDateIso(new Date())
   );
   const [note, setNote] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

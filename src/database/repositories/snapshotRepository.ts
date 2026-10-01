@@ -1,4 +1,5 @@
 import { getDatabase } from '../db';
+import { formatDateIso } from '../../utils/dateUtils';
 
 export interface NetWorthSnapshotRecord {
   id: string;
@@ -23,7 +24,7 @@ export async function getSnapshotsForRange(days: number): Promise<NetWorthSnapsh
   const db = await getDatabase();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  const cutoffStr = formatDateIso(cutoff);
 
   const rows = await db.getAllAsync<NetWorthSnapshotRecord>(
     'SELECT * FROM net_worth_snapshots WHERE date >= ? ORDER BY date ASC;',

@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Transaction } from '../domain/finance/types';
+import { formatDateIso } from './dateUtils';
 
 export function escapeCSVField(val: string | number | null | undefined): string {
   if (val == null) return '';
@@ -49,7 +50,7 @@ export function generateTransactionsCSV(transactions: Transaction[]): string {
 
 export async function exportTransactionsToCSV(transactions: Transaction[]): Promise<void> {
   const csvData = generateTransactionsCSV(transactions);
-  const fileName = `vaelth_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+  const fileName = `vaelth_transactions_${formatDateIso(new Date())}.csv`;
   const fileUri = `${FileSystem.documentDirectory || ''}${fileName}`;
 
   await FileSystem.writeAsStringAsync(fileUri, csvData, {

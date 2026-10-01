@@ -177,6 +177,7 @@ export default function MoreScreen() {
         title="more"
         onProfilePress={() => router.push('/profile')}
         onRightPress={() => router.push('/settings/security')}
+        rightAccessibilityLabel="Security settings"
         rightIcon={<ShieldCheck size={18} color={colors.textPrimary} strokeWidth={2.2} />}
       />
 

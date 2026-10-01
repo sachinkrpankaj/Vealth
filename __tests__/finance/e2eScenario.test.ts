@@ -214,7 +214,7 @@ describe('End-to-End Scenario Verification (Section 55)', () => {
     // Expenses = Spend ₹3,000 (Repayment made is NOT expense!)
     expect(finalNW.expenseMonth).toBe(rupeeToMinor(3000));
 
-    // Net savings this month = 20,000 - 3,000 = ₹17,000
-    expect(finalNW.netWorthChangeMonth).toBe(rupeeToMinor(17000));
+    // True Net Worth change this month: ₹42,000 - ₹15,000 = ₹27,000 (includes ₹17k net savings + ₹10k new asset)
+    expect(finalNW.netWorthChangeMonth).toBe(rupeeToMinor(27000));
   });
 });

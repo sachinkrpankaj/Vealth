@@ -104,6 +104,23 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
   const current = await getAccountById(id);
   if (!current) throw new Error(`Account ${id} not found`);
 
+  // Restrict unsafe account type changes if transactions exist
+  if (updates.type && updates.type !== current.type) {
+    const isCurrentCC = current.type === 'CREDIT_CARD';
+    const isNewCC = updates.type === 'CREDIT_CARD';
+    if (isCurrentCC !== isNewCC) {
+      const txCount = await db.getFirstAsync<{ count: number }>(
+        'SELECT COUNT(*) as count FROM transactions WHERE accountId = ? OR destinationAccountId = ?;',
+        [id, id]
+      );
+      if ((txCount?.count ?? 0) > 0) {
+        throw new Error(
+          'Cannot switch account between Credit Card and asset account because transactions are recorded for it.'
+        );
+      }
+    }
+  }
+
   const updated: Account = { ...current, ...updates, updatedAt: now };
   await db.runAsync(
     `UPDATE accounts SET name = ?, type = ?, openingBalance = ?, creditLimit = ?, billingDay = ?, dueDay = ?, currency = ?, color = ?, icon = ?, isArchived = ?, updatedAt = ?
@@ -127,4 +144,20 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
 
 export async function archiveAccount(id: string): Promise<void> {
   await updateAccount(id, { isArchived: true });
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  const db = await getDatabase();
+  const txRef = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE accountId = ? OR destinationAccountId = ?;',
+    [id, id]
+  );
+  if ((txRef?.count ?? 0) > 0) {
+    await db.runAsync('UPDATE accounts SET isArchived = 1, updatedAt = ? WHERE id = ?;', [
+      new Date().toISOString(),
+      id,
+    ]);
+  } else {
+    await db.runAsync('DELETE FROM accounts WHERE id = ?;', [id]);
+  }
 }

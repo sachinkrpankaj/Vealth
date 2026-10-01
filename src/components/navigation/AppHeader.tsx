@@ -11,9 +11,11 @@ interface AppHeaderProps {
   onProfilePress?: () => void;
   onRightPress?: () => void;
   rightIcon?: React.ReactNode;
+  rightAccessibilityLabel?: string;
   showNotificationDot?: boolean;
   onActionPress?: () => void;
   actionIcon?: React.ReactNode;
+  actionAccessibilityLabel?: string;
   rightComponent?: React.ReactNode;
 }
 
@@ -22,9 +24,11 @@ export function AppHeader({
   onProfilePress,
   onRightPress,
   rightIcon,
+  rightAccessibilityLabel,
   showNotificationDot = true,
   onActionPress,
   actionIcon,
+  actionAccessibilityLabel,
   rightComponent,
 }: AppHeaderProps) {
   const { colors } = useTheme();
@@ -76,7 +80,7 @@ export function AppHeader({
               onActionPress?.();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Action"
+            accessibilityLabel={actionAccessibilityLabel || 'Action'}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
           >
@@ -90,7 +94,7 @@ export function AppHeader({
               onRightPress?.();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Settings and notifications"
+            accessibilityLabel={rightAccessibilityLabel || 'Settings and notifications'}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
           >
@@ -116,7 +120,7 @@ export function AppHeader({
               onRightPress?.();
             }}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={rightAccessibilityLabel || (rightIcon ? 'Action' : 'Notifications')}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
           >

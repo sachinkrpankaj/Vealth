@@ -190,6 +190,10 @@ interface SecurityState {
   isBiometricEnabled: boolean;
   isLocked: boolean;
   hasCheckedAuth: boolean;
+  failedAttempts: number;
+  lockoutUntil: number | null;
+  getRemainingLockoutSeconds: () => number;
+  resetLockout: () => void;
   checkSecurityConfig: () => Promise<void>;
   setPin: (pin: string | null) => Promise<void>;
   setBiometricEnabled: (enabled: boolean) => Promise<void>;
@@ -204,6 +208,19 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   isBiometricEnabled: false,
   isLocked: false,
   hasCheckedAuth: false,
+  failedAttempts: 0,
+  lockoutUntil: null,
+
+  getRemainingLockoutSeconds: () => {
+    const { lockoutUntil } = get();
+    if (!lockoutUntil) return 0;
+    const diff = Math.ceil((lockoutUntil - Date.now()) / 1000);
+    return Math.max(0, diff);
+  },
+
+  resetLockout: () => {
+    set({ failedAttempts: 0, lockoutUntil: null });
+  },
 
   checkSecurityConfig: async () => {
     try {
@@ -261,8 +278,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   verifyPin: async (enteredPin: string) => {
+    const { lockoutUntil, failedAttempts } = get();
+    const now = Date.now();
+    if (lockoutUntil && now < lockoutUntil) {
+      return false;
+    }
+
     const savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
     if (!savedHash) return false;
+
+    let isMatch = false;
 
     // Check if stored in modern PBKDF2 format: pbkdf2:v1:<salt>:<iterations>:<derived>
     if (savedHash.startsWith('pbkdf2:v1:')) {
@@ -272,25 +297,42 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         const iterations = parseInt(parts[3], 10) || PBKDF2_ITERATIONS;
         const expectedDerived = parts[4];
         const enteredDerived = await deriveKeyFromPin(enteredPin, saltHex, iterations);
-        if (timingSafeEqual(expectedDerived, enteredDerived)) {
-          set({ isLocked: false });
-          return true;
-        }
-        return false;
+        isMatch = timingSafeEqual(expectedDerived, enteredDerived);
+      }
+    } else {
+      // Check legacy static SHA-256 hash for seamless backward compatibility
+      const legacyHash = await hashPinLegacy(enteredPin);
+      if (savedHash === legacyHash) {
+        // Automatically upgrade to modern PBKDF2 KDF with unique random salt
+        const modernHash = await hashPin(enteredPin);
+        await setSecureItem(SECURE_PIN_HASH_KEY, modernHash);
+        isMatch = true;
       }
     }
 
-    // Check legacy static SHA-256 hash for seamless backward compatibility
-    const legacyHash = await hashPinLegacy(enteredPin);
-    if (savedHash === legacyHash) {
-      // Automatically upgrade to modern PBKDF2 KDF with unique random salt
-      const modernHash = await hashPin(enteredPin);
-      await setSecureItem(SECURE_PIN_HASH_KEY, modernHash);
-      set({ isLocked: false });
+    if (isMatch) {
+      set({
+        isLocked: false,
+        failedAttempts: 0,
+        lockoutUntil: null,
+      });
       return true;
+    } else {
+      const nextFailed = failedAttempts + 1;
+      let newLockoutUntil: number | null = null;
+      if (nextFailed >= 10) {
+        newLockoutUntil = Date.now() + 300000; // 5 minutes lockout after 10 failures
+      } else if (nextFailed >= 7) {
+        newLockoutUntil = Date.now() + 60000;  // 1 minute lockout after 7 failures
+      } else if (nextFailed >= 5) {
+        newLockoutUntil = Date.now() + 30000;  // 30 seconds lockout after 5 failures
+      }
+      set({
+        failedAttempts: nextFailed,
+        lockoutUntil: newLockoutUntil,
+      });
+      return false;
     }
-
-    return false;
   },
 
   authenticateWithBiometrics: async () => {

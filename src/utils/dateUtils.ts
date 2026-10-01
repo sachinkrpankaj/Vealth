@@ -35,6 +35,30 @@ export function formatDateIso(date: Date): string {
 }
 
 /**
+ * Get today's local date as YYYY-MM-DD string.
+ * Completely immune to UTC midnight boundary issues (e.g. IST midnight to 5:30 AM).
+ */
+export function getTodayLocalDateString(date: Date = new Date()): string {
+  return formatDateIso(date);
+}
+
+/**
+ * Get current local month as YYYY-MM string.
+ */
+export function getCurrentLocalMonthString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+/**
+ * Get current local calendar year.
+ */
+export function getCurrentLocalYear(date: Date = new Date()): number {
+  return date.getFullYear();
+}
+
+/**
  * Safely parse a YYYY-MM-DD string into a local Date object.
  * Returns null if the string is empty or improperly formatted.
  */
@@ -56,6 +80,8 @@ export function parseDateIso(str?: string | null): Date | null {
   }
   return date;
 }
+
+export const parseLocalDate = parseDateIso;
 
 /**
  * Get human readable display string for a YYYY-MM-DD date.

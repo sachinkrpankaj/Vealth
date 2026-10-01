@@ -10,6 +10,7 @@ import {
 } from './types';
 import { addMinor, subMinor } from './currency';
 import { getCreditCardBillingInfo } from './creditCardBilling';
+import { getCurrentLocalMonthString, getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 
 /**
  * Filter active (non-soft-deleted) transactions.
@@ -209,25 +210,26 @@ export function calculatePersonDebt(
   youOwe = Math.max(0, youOwe);
 
   const netBalance = subMinor(owedToYou, youOwe);
-  const today = referenceDateStr ?? new Date().toISOString().split('T')[0];
+  const today = referenceDateStr ?? getTodayLocalDateString();
   let dueStatus: DueDateStatus = 'NO_DUE_DATE';
   let nearestDueDate: string | undefined = undefined;
 
   if (netBalance === 0) {
-    // Completely settled: settled debt must be ignored!
+    // Completely settled: settled debt must be ignored and have no due date!
     dueStatus = 'SETTLED';
     nearestDueDate = undefined;
   } else {
-    // Only outstanding tranches affect due date status
+    // Only outstanding tranches on the NET side affect due date status
     const eligibleTranches: DebtTranche[] = [];
-    if (owedToYou > 0) {
+    if (netBalance > 0) {
+      // The person owes user on net; only lend tranches define their due date to pay user
       for (const t of outstandingLendTranches) {
         if (t.unpaidAmount > 0 && t.dueDate) {
           eligibleTranches.push(t);
         }
       }
-    }
-    if (youOwe > 0) {
+    } else if (netBalance < 0) {
+      // The user owes this person on net; only borrow tranches define user's due date to pay them
       for (const t of outstandingBorrowTranches) {
         if (t.unpaidAmount > 0 && t.dueDate) {
           eligibleTranches.push(t);
@@ -249,7 +251,9 @@ export function calculatePersonDebt(
       } else if (nearestDueDate === today) {
         dueStatus = 'DUE_TODAY';
       } else {
-        const diffMs = new Date(nearestDueDate).getTime() - new Date(today).getTime();
+        const dueTs = parseLocalDate(nearestDueDate)?.getTime() ?? 0;
+        const todayTs = parseLocalDate(today)?.getTime() ?? 0;
+        const diffMs = dueTs - todayTs;
         const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
         if (diffDays <= 7) {
           dueStatus = 'DUE_SOON';
@@ -458,7 +462,8 @@ export function calculateNetWorth(
   );
 
   // Calculate this month's income & expenses
-  const targetMonth = currentMonthStr ?? new Date().toISOString().slice(0, 7); // YYYY-MM
+  const targetMonth = currentMonthStr ?? getCurrentLocalMonthString(); // YYYY-MM
+  const startOfMonth = `${targetMonth}-01`;
   let incomeMonth = 0;
   let expenseMonth = 0;
 
@@ -473,7 +478,76 @@ export function calculateNetWorth(
     }
   }
 
-  const netWorthChangeMonth = subMinor(incomeMonth, expenseMonth);
+  // Calculate true Net Worth at start of month (before startOfMonth)
+  const txBeforeStart = activeTx.filter((tx) => tx.date < startOfMonth);
+  const accountBalancesStart = calculateAllAccountBalances(accounts, txBeforeStart);
+  let totalPositiveAccountsStart = 0;
+  let totalNegativeAccountsStart = 0;
+  for (const acc of accounts) {
+    const bal = accountBalancesStart.get(acc.id) ?? 0;
+    if (acc.type === 'CREDIT_CARD') {
+      if (bal > 0) totalPositiveAccountsStart = addMinor(totalPositiveAccountsStart, bal);
+      else if (bal < 0) totalNegativeAccountsStart = addMinor(totalNegativeAccountsStart, Math.abs(bal));
+    } else {
+      if (bal >= 0) totalPositiveAccountsStart = addMinor(totalPositiveAccountsStart, bal);
+      else if (bal < 0) totalNegativeAccountsStart = addMinor(totalNegativeAccountsStart, Math.abs(bal));
+    }
+  }
+
+  const totalReceivablesStart = calculateTotalReceivables(people, txBeforeStart);
+  const totalPayablesStart = calculateTotalPayables(people, txBeforeStart);
+
+  // Restore book value of assets sold during or after target month
+  const salesByAssetId = new Map<string, number>();
+  for (const sale of activeTx) {
+    if (sale.date >= startOfMonth && sale.type === 'ASSET_SALE' && sale.assetId) {
+      let bookValueSold = Math.abs(sale.amount);
+      if (sale.metadata) {
+        try {
+          const meta = JSON.parse(sale.metadata);
+          if (meta.bookValueSold !== undefined) bookValueSold = meta.bookValueSold;
+          else if (meta.assetValueDeducted !== undefined) bookValueSold = meta.assetValueDeducted;
+        } catch {}
+      }
+      salesByAssetId.set(sale.assetId, addMinor(salesByAssetId.get(sale.assetId) ?? 0, bookValueSold));
+    }
+  }
+
+  let totalPhysicalAssetsStart = 0;
+  for (const ast of physicalAssets) {
+    if (ast.createdAt && ast.createdAt.slice(0, 10) >= startOfMonth) {
+      continue;
+    }
+    const soldInOrAfter = salesByAssetId.get(ast.id) ?? 0;
+    const initialVal = addMinor(Math.round(ast.currentValue), soldInOrAfter);
+    totalPhysicalAssetsStart = addMinor(totalPhysicalAssetsStart, initialVal);
+  }
+
+  let totalStandaloneLiabilitiesStart = 0;
+  for (const l of standaloneLiabilities) {
+    if (l.isArchived) continue;
+    if (l.createdAt && l.createdAt.slice(0, 10) >= startOfMonth) continue;
+    if (
+      accounts &&
+      l.type === 'CREDIT_CARD' &&
+      accounts.some((a) => a.type === 'CREDIT_CARD' && (a.id === l.id || (a as any).liabilityId === l.id || (l as any).accountId === a.id))
+    ) {
+      continue;
+    }
+    totalStandaloneLiabilitiesStart = addMinor(
+      totalStandaloneLiabilitiesStart,
+      Math.round(l.amount ?? (l as any).remainingAmount ?? (l as any).totalAmount ?? 0)
+    );
+  }
+
+  const totalAssetsStart = addMinor(totalPositiveAccountsStart, totalPhysicalAssetsStart);
+  const totalLiabilitiesStart = addMinor(totalNegativeAccountsStart, totalStandaloneLiabilitiesStart);
+  const startNetWorth = subMinor(
+    addMinor(totalAssetsStart, totalReceivablesStart),
+    addMinor(totalLiabilitiesStart, totalPayablesStart)
+  );
+
+  const netWorthChangeMonth = subMinor(netWorth, startNetWorth);
 
   return {
     netWorth,

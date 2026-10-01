@@ -101,13 +101,29 @@ export default function SpendingInsightsScreen() {
   const { colors, typography, radii, spacing, isDark } = useTheme();
   const { transactions, categories, accounts, people, refresh } = useFinancialData();
 
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
   useFocusEffect(
     React.useCallback(() => {
       refresh();
+      setCurrentDate(new Date());
     }, [refresh])
   );
 
-  const currentDate = useMemo(() => new Date(), []);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      if (
+        now.getDate() !== currentDate.getDate() ||
+        now.getMonth() !== currentDate.getMonth() ||
+        now.getFullYear() !== currentDate.getFullYear()
+      ) {
+        setCurrentDate(now);
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [currentDate]);
+
   const availableYears = useMemo(
     () => getAvailableExpenseYears(transactions, currentDate),
     [transactions, currentDate]
@@ -129,7 +145,7 @@ export default function SpendingInsightsScreen() {
   const loadAllCategories = async () => {
     try {
       const cats = await getAllCategories(true);
-      setAllCategoriesList(cats);
+      setAllCategoriesList(cats.filter((c) => c.type === 'EXPENSE'));
     } catch {}
   };
 
@@ -992,7 +1008,7 @@ export default function SpendingInsightsScreen() {
                       </View>
                     </View>
 
-                    {!isGeneral ? (
+                    {!isGeneral && !cat.isDefault ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Pressable
                           onPress={() => {

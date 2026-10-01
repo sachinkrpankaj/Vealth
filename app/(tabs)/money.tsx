@@ -42,6 +42,7 @@ export default function MoneyScreen() {
         title="credit & debt"
         onProfilePress={() => router.push('/profile')}
         onRightPress={() => router.push('/people/add')}
+        rightAccessibilityLabel="Add person"
         rightIcon={<UserPlus size={18} color={colors.textPrimary} />}
       />
 

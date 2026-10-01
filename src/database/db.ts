@@ -26,6 +26,9 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
   try {
     await db.execAsync('ALTER TABLE categories ADD COLUMN color TEXT;');
   } catch {}
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN metadata TEXT;');
+  } catch {}
 
   // Auto-repair accounts mistakenly set to non-CREDIT_CARD if their name indicates a Credit Card (e.g. 'HDFC Millennia Credit Card')
   try {
@@ -57,12 +60,16 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('PRAGMA foreign_keys = OFF;');
     try {
       await db.withTransactionAsync(async () => {
-      // Nullify any dangling foreign key references that do not exist in target tables
+      // Preserve historical category references by creating archived categories for any orphaned category IDs
       await db.execAsync(`
+        INSERT OR IGNORE INTO categories (id, name, type, icon, color, isDefault, isArchived, createdAt)
+        SELECT DISTINCT categoryId, 'Archived Category', 'EXPENSE', 'Folder', '#94A3B8', 0, 1, datetime('now')
+        FROM transactions
+        WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM categories);
+
         UPDATE transactions SET accountId = NULL WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM accounts);
         UPDATE transactions SET destinationAccountId = NULL WHERE destinationAccountId IS NOT NULL AND destinationAccountId NOT IN (SELECT id FROM accounts);
         UPDATE transactions SET personId = NULL WHERE personId IS NOT NULL AND personId NOT IN (SELECT id FROM people);
-        UPDATE transactions SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM categories);
         UPDATE transactions SET assetId = NULL WHERE assetId IS NOT NULL AND assetId NOT IN (SELECT id FROM assets);
         UPDATE transactions SET liabilityId = NULL WHERE liabilityId IS NOT NULL AND liabilityId NOT IN (SELECT id FROM liabilities);
       `);
@@ -82,22 +89,23 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
           liabilityId TEXT,
           note TEXT,
           dueDate TEXT,
+          metadata TEXT,
           createdAt TEXT NOT NULL,
           updatedAt TEXT NOT NULL,
           deletedAt TEXT,
           FOREIGN KEY (accountId) REFERENCES accounts(id) ON DELETE RESTRICT,
           FOREIGN KEY (destinationAccountId) REFERENCES accounts(id) ON DELETE RESTRICT,
           FOREIGN KEY (personId) REFERENCES people(id) ON DELETE RESTRICT,
-          FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL,
+          FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE RESTRICT,
           FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE RESTRICT,
           FOREIGN KEY (liabilityId) REFERENCES liabilities(id) ON DELETE RESTRICT
         );
 
         INSERT INTO transactions_new (
-          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, createdAt, updatedAt, deletedAt
+          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, metadata, createdAt, updatedAt, deletedAt
         )
         SELECT
-          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, createdAt, updatedAt, deletedAt
+          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, NULL, createdAt, updatedAt, deletedAt
         FROM transactions;
 
         DROP TABLE transactions;

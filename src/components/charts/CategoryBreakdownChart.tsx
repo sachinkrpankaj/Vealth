@@ -53,21 +53,26 @@ export const CategoryBreakdownChart: React.FC<CategoryBreakdownChartProps> = ({
           },
         ]}
       >
-        {items.map((item, index) => {
-          const barColor = item.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
-          return (
-            <View
-              key={item.id}
-              style={[
-                styles.segment,
-                {
-                  width: `${Math.max(item.percentage, 2)}%`,
-                  backgroundColor: barColor,
-                },
-              ]}
-            />
-          );
-        })}
+        {(() => {
+          const totalPct = items.reduce((sum, it) => sum + Math.max(0, it.percentage), 0);
+          return items.map((item, index) => {
+            const barColor = item.color || CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+            const weight = totalPct > 0 ? (Math.max(0, item.percentage) / totalPct) * 100 : 0;
+            if (weight <= 0) return null;
+            return (
+              <View
+                key={item.id}
+                style={[
+                  styles.segment,
+                  {
+                    flex: weight,
+                    backgroundColor: barColor,
+                  },
+                ]}
+              />
+            );
+          });
+        })()}
       </View>
 
       {/* Category breakdown item list */}

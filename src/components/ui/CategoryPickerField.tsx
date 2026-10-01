@@ -530,6 +530,38 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               ))}
             </View>
 
+            <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+              ICON
+            </Text>
+            <View style={styles.iconPalette}>
+              {Object.keys(ICON_MAP).map((iconKey) => {
+                const IconComp = ICON_MAP[iconKey];
+                const isSelected = newCatIcon === iconKey;
+                return (
+                  <Pressable
+                    key={iconKey}
+                    onPress={() => setNewCatIcon(iconKey)}
+                    style={[
+                      styles.iconDot,
+                      {
+                        backgroundColor: isSelected
+                          ? `${newCatColor}25`
+                          : isDark
+                          ? 'rgba(255,255,255,0.06)'
+                          : 'rgba(0,0,0,0.04)',
+                        borderColor: isSelected ? newCatColor : colors.borderSubtle,
+                        borderWidth: isSelected ? 2 : 1,
+                        borderRadius: radii.sm,
+                      },
+                    ]}
+                    accessibilityLabel={`Select ${iconKey} icon`}
+                  >
+                    <IconComp size={16} color={isSelected ? newCatColor : colors.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <View style={styles.createModalActions}>
               {editingCategory && !isMonthlyGeneralCategory(editingCategory) && (
                 <Pressable
@@ -745,6 +777,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
+  },
+  iconPalette: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  iconDot: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   createModalActions: {
     flexDirection: 'row',

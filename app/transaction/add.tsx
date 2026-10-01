@@ -31,6 +31,7 @@ import { getAssetById, updateAsset } from '../../src/database/repositories/asset
 import { TransactionType } from '../../src/domain/finance/types';
 import { validateTransactionRequiredFields, validateRepaymentAmount } from '../../src/domain/finance/validator';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { formatDateIso } from '../../src/utils/dateUtils';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
@@ -146,7 +147,7 @@ export default function AddTransactionScreen() {
   const [selectedAsset, setSelectedAsset] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => formatDateIso(new Date()));
   const [dueDate, setDueDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -243,27 +244,6 @@ export default function AddTransactionScreen() {
         note: note.trim() || undefined,
         dueDate: dueDate.trim() || undefined,
       });
-
-      // Update target asset state so net worth doesn't double-count sold assets alongside received cash
-      if (selectedType === 'ASSET_SALE' && selectedAsset) {
-        const asset = await getAssetById(selectedAsset);
-        if (asset) {
-          if (amount >= asset.currentValue) {
-            // Full liquidation: archive the asset so it is excluded from physical assets
-            await updateAsset(selectedAsset, { isArchived: true, currentValue: 0 });
-          } else {
-            // Partial liquidation: decrease remaining value
-            await updateAsset(selectedAsset, {
-              currentValue: Math.max(0, asset.currentValue - amount),
-            });
-          }
-        }
-      } else if (selectedType === 'ASSET_PURCHASE' && selectedAsset) {
-        const asset = await getAssetById(selectedAsset);
-        if (asset && asset.isArchived) {
-          await updateAsset(selectedAsset, { isArchived: false });
-        }
-      }
 
       await refresh();
       router.back();

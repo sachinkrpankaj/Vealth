@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, BackHandler } from 'react-native';
 import { Lock, Fingerprint, Delete } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSecurityStore } from '../../stores/useSecurityStore';
@@ -11,23 +11,49 @@ export const SecurityLockScreen: React.FC = () => {
   const {
     isLocked,
     isBiometricEnabled,
+    lockoutUntil,
+    getRemainingLockoutSeconds,
     verifyPin,
     authenticateWithBiometrics,
   } = useSecurityStore();
 
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [remainingLockout, setRemainingLockout] = useState(0);
+
+  // Prevent hardware back button from closing or bypassing the lock screen on Android
+  useEffect(() => {
+    if (!isLocked) return;
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      return true; // Consume event, block bypass
+    });
+    return () => backSub.remove();
+  }, [isLocked]);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (!isLocked) return;
+    const checkRemaining = () => {
+      const remaining = getRemainingLockoutSeconds();
+      setRemainingLockout(remaining);
+    };
+    checkRemaining();
+    const interval = setInterval(checkRemaining, 1000);
+    return () => clearInterval(interval);
+  }, [isLocked, lockoutUntil]);
 
   useEffect(() => {
-    if (isLocked && isBiometricEnabled) {
+    if (isLocked && isBiometricEnabled && remainingLockout === 0) {
       authenticateWithBiometrics();
     }
-  }, [isLocked, isBiometricEnabled]);
+  }, [isLocked, isBiometricEnabled, remainingLockout]);
 
   if (!isLocked) return null;
 
+  const isLockedOut = remainingLockout > 0;
+
   const handleKeyPress = async (digit: string) => {
-    if (pin.length >= 4) return;
+    if (isLockedOut || pin.length >= 4) return;
     const newPin = pin + digit;
     setPin(newPin);
     setError(false);
@@ -54,6 +80,7 @@ export const SecurityLockScreen: React.FC = () => {
   };
 
   const handleDelete = () => {
+    if (isLockedOut) return;
     if (pin.length > 0) {
       setPin(pin.slice(0, -1));
       setError(false);
@@ -63,7 +90,14 @@ export const SecurityLockScreen: React.FC = () => {
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'bio', '0', 'del'];
 
   return (
-    <Modal visible={isLocked} animationType="fade" transparent={false}>
+    <Modal
+      visible={isLocked}
+      animationType="fade"
+      transparent={false}
+      onRequestClose={() => {
+        // Prevent dismissal on Android back button
+      }}
+    >
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <VealthLogo size={64} style={{ marginBottom: 12 }} />
@@ -78,10 +112,14 @@ export const SecurityLockScreen: React.FC = () => {
           <Text
             style={[
               styles.subtitle,
-              { color: error ? colors.negative : colors.textSecondary },
+              { color: isLockedOut || error ? colors.negative : colors.textSecondary },
             ]}
           >
-            {error ? 'Incorrect PIN. Try again.' : 'Enter your 4-digit PIN'}
+            {isLockedOut
+              ? `Too many failed attempts. Try again in ${remainingLockout}s`
+              : error
+              ? 'Incorrect PIN. Try again.'
+              : 'Enter your 4-digit PIN'}
           </Text>
 
           {/* PIN Dots */}
@@ -114,8 +152,9 @@ export const SecurityLockScreen: React.FC = () => {
                 <Pressable
                   key={index}
                   onPress={authenticateWithBiometrics}
-                  style={styles.key}
-                  disabled={!isBiometricEnabled}
+                  style={[styles.key, { opacity: isLockedOut || !isBiometricEnabled ? 0.3 : 1 }]}
+                  disabled={isLockedOut || !isBiometricEnabled}
+                  accessibilityLabel="Unlock with biometric"
                 >
                   {isBiometricEnabled ? (
                     <Fingerprint size={28} color={colors.textPrimary} />
@@ -126,7 +165,13 @@ export const SecurityLockScreen: React.FC = () => {
 
             if (key === 'del') {
               return (
-                <Pressable key={index} onPress={handleDelete} style={styles.key}>
+                <Pressable
+                  key={index}
+                  onPress={handleDelete}
+                  style={[styles.key, { opacity: isLockedOut ? 0.3 : 1 }]}
+                  disabled={isLockedOut}
+                  accessibilityLabel="Delete last digit"
+                >
                   <Delete size={24} color={colors.textSecondary} />
                 </Pressable>
               );
@@ -136,6 +181,8 @@ export const SecurityLockScreen: React.FC = () => {
               <Pressable
                 key={index}
                 onPress={() => handleKeyPress(key)}
+                disabled={isLockedOut}
+                accessibilityLabel={`Digit ${key}`}
                 style={({ pressed }) => [
                   styles.key,
                   {
@@ -143,6 +190,7 @@ export const SecurityLockScreen: React.FC = () => {
                       ? colors.surfaceElevated
                       : colors.surface,
                     borderRadius: radii.full,
+                    opacity: isLockedOut ? 0.4 : 1,
                   },
                 ]}
               >

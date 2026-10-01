@@ -97,7 +97,7 @@ export async function archiveAsset(id: string): Promise<void> {
 export async function deleteAsset(id: string): Promise<void> {
   const db = await getDatabase();
   const txRef = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM transactions WHERE assetId = ? AND deletedAt IS NULL;',
+    'SELECT COUNT(*) as count FROM transactions WHERE assetId = ?;',
     [id]
   );
   if ((txRef?.count ?? 0) > 0) {

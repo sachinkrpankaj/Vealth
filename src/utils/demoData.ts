@@ -1,29 +1,30 @@
 import { executeInTransaction } from '../database/db';
 import { rupeeToMinor } from '../domain/finance/currency';
+import { formatDateIso } from './dateUtils';
 
 export async function seedDemoData(): Promise<void> {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = formatDateIso(now);
 
   const d1 = new Date(now);
   d1.setDate(d1.getDate() - 10);
-  const d1Str = d1.toISOString().split('T')[0];
+  const d1Str = formatDateIso(d1);
 
   const d2 = new Date(now);
   d2.setDate(d2.getDate() - 5);
-  const d2Str = d2.toISOString().split('T')[0];
+  const d2Str = formatDateIso(d2);
 
   const d3 = new Date(now);
   d3.setDate(d3.getDate() - 2);
-  const d3Str = d3.toISOString().split('T')[0];
+  const d3Str = formatDateIso(d3);
 
   const dueRahul = new Date(now);
   dueRahul.setDate(dueRahul.getDate() + 4);
-  const dueRahulStr = dueRahul.toISOString().split('T')[0];
+  const dueRahulStr = formatDateIso(dueRahul);
 
   const dueAmit = new Date(now);
   dueAmit.setDate(dueAmit.getDate() + 10);
-  const dueAmitStr = dueAmit.toISOString().split('T')[0];
+  const dueAmitStr = formatDateIso(dueAmit);
 
   await executeInTransaction(async (db) => {
     // 1. Accounts: Cash (₹5,000), Bank (₹40,000), Investment (₹15,000)

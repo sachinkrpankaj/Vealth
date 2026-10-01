@@ -12,6 +12,7 @@ import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { getAllSnapshots, getSnapshotsForRange } from '../../src/database/repositories/snapshotRepository';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { formatDateIso } from '../../src/utils/dateUtils';
 
 const RANGES: { label: string; range: TimeRange; days: number }[] = [
   { label: '7D', range: '7D', days: 7 },
@@ -36,7 +37,7 @@ export default function NetWorthScreen() {
     const snapshots =
       days > 1000 ? await getAllSnapshots() : await getSnapshotsForRange(days);
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateIso(new Date());
 
     if (snapshots.length === 0) {
       // Just current net worth point

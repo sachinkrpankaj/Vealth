@@ -99,7 +99,7 @@ export async function archiveLiability(id: string): Promise<void> {
 export async function deleteLiability(id: string): Promise<void> {
   const db = await getDatabase();
   const txRef = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM transactions WHERE liabilityId = ? AND deletedAt IS NULL;',
+    'SELECT COUNT(*) as count FROM transactions WHERE liabilityId = ?;',
     [id]
   );
   if ((txRef?.count ?? 0) > 0) {

@@ -91,3 +91,19 @@ export async function updatePerson(id: string, updates: Partial<Person>): Promis
 export async function archivePerson(id: string): Promise<void> {
   await updatePerson(id, { isArchived: true });
 }
+
+export async function deletePerson(id: string): Promise<void> {
+  const db = await getDatabase();
+  const txRef = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE personId = ?;',
+    [id]
+  );
+  if ((txRef?.count ?? 0) > 0) {
+    await db.runAsync('UPDATE people SET isArchived = 1, updatedAt = ? WHERE id = ?;', [
+      new Date().toISOString(),
+      id,
+    ]);
+  } else {
+    await db.runAsync('DELETE FROM people WHERE id = ?;', [id]);
+  }
+}
