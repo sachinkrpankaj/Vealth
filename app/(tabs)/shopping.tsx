@@ -8,7 +8,8 @@ import { ShoppingListCard } from '../../src/components/shopping/ShoppingListCard
 import { ListFormModal } from '../../src/components/shopping/ListFormModal';
 import { ListActionModal } from '../../src/components/shopping/ListActionModal';
 import { EmptyState } from '../../src/components/ui/EmptyState';
-import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../../src/components/ui/LiquidGlassCard';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { SegmentedControl } from '../../src/components/ui/SegmentedControl';
 import { useShoppingData } from '../../src/hooks/useShoppingData';
 import { ShoppingList, ShoppingListSummary } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -160,83 +161,15 @@ export default function ShoppingScreen() {
       </LiquidGlassCard>
 
       {/* 3. Segment Switch: Active vs Archived */}
-      <LiquidGlassCard radius={24} padding={4} contentStyle={styles.segmentedContainer}>
-        <View style={styles.segmentRow}>
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setActiveTab('ACTIVE');
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === 'ACTIVE' }}
-            accessibilityLabel="Active shopping lists"
-            style={[
-              styles.segmentButton,
-              activeTab === 'ACTIVE' && [
-                styles.activeSegment,
-                { backgroundColor: isDark ? '#171929' : '#EDF1FA' },
-              ],
-            ]}
-          >
-            <LiquidGlassPrismOverlay
-              borderRadius={16}
-              isDark={isDark}
-              tone={activeTab === 'ACTIVE' ? 'emphasized' : 'default'}
-            />
-            <Text
-              style={[
-                styles.segmentText,
-                {
-                  color: activeTab === 'ACTIVE' ? '#FFFFFF' : colors.textSecondary,
-                  fontFamily:
-                    activeTab === 'ACTIVE'
-                      ? typography.fontFamilies.bold
-                      : typography.fontFamilies.medium,
-                },
-              ]}
-            >
-              Active Lists ({activeSummaries.length})
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              setActiveTab('ARCHIVED');
-            }}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === 'ARCHIVED' }}
-            accessibilityLabel="Archived shopping lists"
-            style={[
-              styles.segmentButton,
-              activeTab === 'ARCHIVED' && [
-                styles.activeSegment,
-                { backgroundColor: isDark ? '#171929' : '#EDF1FA' },
-              ],
-            ]}
-          >
-            <LiquidGlassPrismOverlay
-              borderRadius={16}
-              isDark={isDark}
-              tone={activeTab === 'ARCHIVED' ? 'emphasized' : 'default'}
-            />
-            <Text
-              style={[
-                styles.segmentText,
-                {
-                  color: activeTab === 'ARCHIVED' ? '#FFFFFF' : colors.textSecondary,
-                  fontFamily:
-                    activeTab === 'ARCHIVED'
-                      ? typography.fontFamilies.bold
-                      : typography.fontFamilies.medium,
-                },
-              ]}
-            >
-              Archived ({archivedSummaries.length})
-            </Text>
-          </Pressable>
-        </View>
-      </LiquidGlassCard>
+      <SegmentedControl
+        options={[
+          { key: 'ACTIVE', label: 'Active Lists', badge: activeSummaries.length },
+          { key: 'ARCHIVED', label: 'Archived', badge: archivedSummaries.length },
+        ]}
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        style={{ marginBottom: 16 }}
+      />
 
       {/* 4. Lists Grid / Container */}
       <View style={styles.listsContainer}>
@@ -389,32 +322,6 @@ const styles = StyleSheet.create({
     width: 1,
     height: 32,
     marginHorizontal: 12,
-  },
-  segmentedContainer: {
-    height: 48,
-    marginBottom: 16,
-  },
-  segmentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  segmentButton: {
-    flex: 1,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  activeSegment: {
-    elevation: 3,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-  },
-  segmentText: {
-    fontSize: 13,
   },
   listsContainer: {
     marginTop: 4,

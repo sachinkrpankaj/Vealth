@@ -128,7 +128,7 @@ export const LiquidGlassPrismOverlay: React.FC<{
 
   // Measure the actual surface, including pills and flex-driven cards, for Android SVG geometry.
   const safeRadius = Math.min(r, size.width / 2, size.height / 2);
-  const tint = tone === 'positive' ? '#047857' : tone === 'negative' ? '#BE123C' : '#62519A';
+  const tint = tone === 'positive' ? '#059669' : tone === 'negative' ? '#E11D48' : isDark ? '#6366F1' : '#4F46E5';
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
       {size.width > 0 && size.height > 0 && (
@@ -137,13 +137,13 @@ export const LiquidGlassPrismOverlay: React.FC<{
         {/* Base frosted glass gradient */}
         <LinearGradient id="lgBaseFillDark" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%" stopColor={tone === 'default' ? '#30334B' : tint} stopOpacity={tone === 'default' ? 0.82 : 0.94} />
-          <Stop offset="55%" stopColor={tone === 'default' ? '#1A1D30' : tint} stopOpacity={tone === 'default' ? 0.84 : 0.82} />
-          <Stop offset="100%" stopColor={tone === 'default' ? '#111422' : '#191728'} stopOpacity="0.96" />
+          <Stop offset="55%" stopColor={tone === 'default' ? '#1A1D30' : '#4338CA'} stopOpacity={tone === 'default' ? 0.84 : 0.90} />
+          <Stop offset="100%" stopColor={tone === 'default' ? '#111422' : '#312E81'} stopOpacity="0.96" />
         </LinearGradient>
         <LinearGradient id="lgBaseFillLight" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor={tone === 'default' ? '#FFFFFF' : tint} stopOpacity={tone === 'default' ? 0.96 : 0.90} />
-          <Stop offset="55%" stopColor={tone === 'default' ? '#F8FAFF' : tint} stopOpacity={tone === 'default' ? 0.92 : 0.85} />
-          <Stop offset="100%" stopColor={tone === 'default' ? '#E8EDFA' : tint} stopOpacity={tone === 'default' ? 0.90 : 0.95} />
+          <Stop offset="0%" stopColor={tone === 'default' ? '#FFFFFF' : tint} stopOpacity={tone === 'default' ? 0.96 : 0.96} />
+          <Stop offset="55%" stopColor={tone === 'default' ? '#F8FAFF' : '#4F46E5'} stopOpacity={tone === 'default' ? 0.92 : 0.94} />
+          <Stop offset="100%" stopColor={tone === 'default' ? '#E8EDFA' : '#4338CA'} stopOpacity={tone === 'default' ? 0.90 : 0.98} />
         </LinearGradient>
 
         {/* Specular highlight streak across top edge — full card coverage with smooth gradient fade */}

@@ -68,14 +68,14 @@ export default function MoreScreen() {
       title: 'Net Worth Trajectory',
       subtitle: 'Historical growth curve & asset ratios',
       icon: LineChart,
-      color: '#D4A373',
+      color: '#10B981',
       route: '/net-worth',
     },
     {
       title: 'Financial Analytics',
       subtitle: 'Cash flow & top spending categories',
       icon: PieChart,
-      color: '#7E69AB',
+      color: '#6366F1',
       route: '/analytics',
     },
   ];
@@ -99,7 +99,7 @@ export default function MoreScreen() {
       title: 'Developer & Demo Portfolio',
       subtitle: 'Load sample data or reset database',
       icon: Sparkles,
-      color: '#D4A373',
+      color: '#F59E0B',
       route: '/settings/demo',
     },
   ];

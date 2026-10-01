@@ -58,7 +58,7 @@ export function CalendarModal({
   onClear,
   includeFutureShortcuts = true,
 }: CalendarModalProps) {
-  const { colors, typography, radii, spacing } = useTheme();
+  const { colors, typography, radii, spacing, isDark } = useTheme();
 
   // Selected date inside modal before confirmation
   const [tempSelectedDate, setTempSelectedDate] = useState<string>(() => {
@@ -253,10 +253,10 @@ export function CalendarModal({
                 <View
                   style={[
                     styles.titleIconBadge,
-                    { backgroundColor: colors.goldBg, borderRadius: radii.full },
+                    { backgroundColor: colors.accentBg, borderRadius: radii.full },
                   ]}
                 >
-                  <CalendarIcon size={16} color={colors.gold} strokeWidth={2.4} />
+                  <CalendarIcon size={16} color={colors.accent} strokeWidth={2.4} />
                 </View>
                 <Text
                   style={[
@@ -297,7 +297,7 @@ export function CalendarModal({
                 style={[
                   styles.monthYearText,
                   {
-                    color: showFastPicker ? colors.gold : colors.textPrimary,
+                    color: showFastPicker ? colors.accent : colors.textPrimary,
                     fontFamily: typography.fontFamilies.bold,
                   },
                 ]}
@@ -306,7 +306,7 @@ export function CalendarModal({
               </Text>
               <ChevronDown
                 size={14}
-                color={showFastPicker ? colors.gold : colors.textSecondary}
+                color={showFastPicker ? colors.accent : colors.textSecondary}
                 style={{
                   marginLeft: 4,
                   transform: [{ rotate: showFastPicker ? '180deg' : '0deg' }],
@@ -349,7 +349,7 @@ export function CalendarModal({
                         style={[
                           styles.monthChipText,
                           {
-                            color: colors.textPrimary,
+                            color: isCurrentMonthActive ? '#FFFFFF' : colors.textPrimary,
                             fontFamily: isCurrentMonthActive
                               ? typography.fontFamilies.bold
                               : typography.fontFamilies.medium,
@@ -398,7 +398,7 @@ export function CalendarModal({
                         style={[
                           styles.yearChipText,
                           {
-                            color: colors.textPrimary,
+                            color: isYrActive ? '#FFFFFF' : colors.textPrimary,
                             fontFamily: isYrActive
                               ? typography.fontFamilies.bold
                               : typography.fontFamilies.medium,
@@ -433,7 +433,7 @@ export function CalendarModal({
                       style={[
                         styles.weekdayText,
                         {
-                          color: index === 0 || index === 6 ? colors.gold : colors.textMuted,
+                          color: index === 0 || index === 6 ? (isDark ? '#F87171' : '#EF4444') : colors.textMuted,
                           fontFamily: typography.fontFamilies.semibold,
                         },
                       ]}
@@ -457,12 +457,12 @@ export function CalendarModal({
                           {
                             borderRadius: radii.md,
                             backgroundColor: isSelected
-                              ? colors.gold
+                              ? colors.accent
                               : day.isToday
                               ? colors.surfaceSubtle
                               : 'transparent',
                             borderColor: day.isToday && !isSelected
-                              ? colors.gold
+                              ? colors.accent
                               : 'transparent',
                             borderWidth: day.isToday && !isSelected ? 1 : 0,
                             transform: [{ scale: pressed ? 0.9 : isSelected ? 1.05 : 1 }],
@@ -474,7 +474,7 @@ export function CalendarModal({
                             styles.dayNumberText,
                             {
                               color: isSelected
-                                ? '#090A0E'
+                                ? '#FFFFFF'
                                 : day.isCurrentMonth
                                 ? colors.textPrimary
                                 : colors.textMuted,
@@ -491,7 +491,7 @@ export function CalendarModal({
                           <View
                             style={[
                               styles.todayDot,
-                              { backgroundColor: colors.gold, borderRadius: radii.full },
+                              { backgroundColor: colors.accent, borderRadius: radii.full },
                             ]}
                           />
                         )}
@@ -518,7 +518,7 @@ export function CalendarModal({
                       style={[
                         styles.shortcutText,
                         {
-                          color: isActive ? colors.gold : colors.textSecondary,
+                          color: isActive ? '#FFFFFF' : colors.textSecondary,
                           fontFamily: isActive
                             ? typography.fontFamilies.bold
                             : typography.fontFamilies.medium,
@@ -584,11 +584,11 @@ export function CalendarModal({
               </LiquidGlassCard>
 
               <LiquidGlassCard onPress={handleConfirm} radius={radii.md} padding={0} tone="emphasized" style={styles.confirmBtn}>
-                <Check size={16} color={colors.textPrimary} strokeWidth={2.8} />
+                <Check size={16} color="#FFFFFF" strokeWidth={2.8} />
                 <Text
                   style={[
                     styles.confirmBtnText,
-                    { fontFamily: typography.fontFamilies.bold },
+                    { color: '#FFFFFF', fontFamily: typography.fontFamilies.bold },
                   ]}
                 >
                   Done

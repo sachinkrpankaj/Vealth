@@ -34,12 +34,12 @@ export const AppBackground: React.FC = React.memo(() => {
                 fx="15%"
                 fy="10%"
               >
-                <Stop offset="0%" stopColor="#7E69AB" stopOpacity="0.18" />
+                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.12" />
                 <Stop offset="50%" stopColor="#635BFF" stopOpacity="0.06" />
                 <Stop offset="100%" stopColor="#08090E" stopOpacity="0" />
               </RadialGradient>
 
-              {/* Center-right Champagne Gold ambient aura */}
+              {/* Center-right Subtle Indigo ambient aura */}
               <RadialGradient
                 id="darkAuraGold"
                 cx="88%"
@@ -48,8 +48,8 @@ export const AppBackground: React.FC = React.memo(() => {
                 fx="88%"
                 fy="42%"
               >
-                <Stop offset="0%" stopColor="#D4A373" stopOpacity="0.12" />
-                <Stop offset="60%" stopColor="#D4A373" stopOpacity="0.02" />
+                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.08" />
+                <Stop offset="60%" stopColor="#4F46E5" stopOpacity="0.02" />
                 <Stop offset="100%" stopColor="#08090E" stopOpacity="0" />
               </RadialGradient>
 
@@ -70,12 +70,12 @@ export const AppBackground: React.FC = React.memo(() => {
             <>
               {/* Base light pearl canvas */}
               <LinearGradient id="lightBase" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#F4F6FC" />
-                <Stop offset="50%" stopColor="#EEF2FA" />
-                <Stop offset="100%" stopColor="#E6ECF7" />
+                <Stop offset="0%" stopColor="#F8FAFC" />
+                <Stop offset="50%" stopColor="#F1F5F9" />
+                <Stop offset="100%" stopColor="#E2E8F0" />
               </LinearGradient>
 
-              {/* Top-right vibrant royal violet / lavender ambient aura */}
+              {/* Top-right vibrant modern iris / sky ambient aura */}
               <RadialGradient
                 id="lightAuraLavender"
                 cx="85%"
@@ -84,12 +84,12 @@ export const AppBackground: React.FC = React.memo(() => {
                 fx="85%"
                 fy="10%"
               >
-                <Stop offset="0%" stopColor="#7E69AB" stopOpacity="0.22" />
-                <Stop offset="45%" stopColor="#818CF8" stopOpacity="0.10" />
-                <Stop offset="100%" stopColor="#EEF2FA" stopOpacity="0" />
+                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.10" />
+                <Stop offset="45%" stopColor="#818CF8" stopOpacity="0.05" />
+                <Stop offset="100%" stopColor="#F1F5F9" stopOpacity="0" />
               </RadialGradient>
 
-              {/* Mid-left warm Champagne apricot / gold aura */}
+              {/* Mid-left crisp Sky ambient aura (replaces muddy yellow) */}
               <RadialGradient
                 id="lightAuraGold"
                 cx="12%"
@@ -98,9 +98,9 @@ export const AppBackground: React.FC = React.memo(() => {
                 fx="12%"
                 fy="44%"
               >
-                <Stop offset="0%" stopColor="#F59E0B" stopOpacity="0.18" />
-                <Stop offset="50%" stopColor="#D4A373" stopOpacity="0.08" />
-                <Stop offset="100%" stopColor="#EEF2FA" stopOpacity="0" />
+                <Stop offset="0%" stopColor="#38BDF8" stopOpacity="0.08" />
+                <Stop offset="50%" stopColor="#818CF8" stopOpacity="0.03" />
+                <Stop offset="100%" stopColor="#F1F5F9" stopOpacity="0" />
               </RadialGradient>
 
               {/* Bottom-right soft Cyan / Emerald freshness */}

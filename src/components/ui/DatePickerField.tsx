@@ -85,7 +85,7 @@ export function DatePickerField({
         <Pressable onPress={handleOpen} accessibilityRole="button" accessibilityLabel={label || 'Select date'} style={({ pressed }) => [styles.contentRow, { opacity: pressed ? 0.85 : 1 } ]}>
           <CalendarIcon
             size={16}
-            color={hasValue ? colors.gold : colors.textMuted}
+            color={hasValue ? colors.accent : colors.textMuted}
             style={{ marginRight: 8 }}
           />
 

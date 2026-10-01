@@ -6,7 +6,8 @@ import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
 import { PersonRow } from '../../src/components/ui/PersonRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
-import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../../src/components/ui/LiquidGlassCard';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { SegmentedControl } from '../../src/components/ui/SegmentedControl';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -47,87 +48,15 @@ export default function MoneyScreen() {
       />
 
       {/* 2. Modern Segmented Switch */}
-      <LiquidGlassCard radius={24} padding={4} contentStyle={styles.segmentedContainer}>
-        <View style={styles.segmentRow}>
-        {/* Each segment has its own measured glass layer. */}
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setActiveTab('OWED_TO_ME');
-          }}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'OWED_TO_ME' }}
-          accessibilityLabel="Credit to Collect tab"
-          style={[
-            styles.segmentButton,
-            activeTab === 'OWED_TO_ME' && [
-              styles.activeSegment,
-              {
-                backgroundColor: isDark ? '#171929' : '#EDF1FA',
-              },
-            ],
-          ]}
-        >
-          <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={activeTab === 'OWED_TO_ME' ? 'emphasized' : 'default'} />
-          <Text
-            style={[
-              styles.segmentText,
-              {
-                color:
-                  activeTab === 'OWED_TO_ME'
-                    ? '#FFFFFF'
-                    : colors.textSecondary,
-                fontFamily:
-                  activeTab === 'OWED_TO_ME'
-                    ? typography.fontFamilies.bold
-                    : typography.fontFamilies.medium,
-              },
-            ]}
-          >
-            Credit to Collect
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            Haptics.selectionAsync().catch(() => {});
-            setActiveTab('I_OWE');
-          }}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: activeTab === 'I_OWE' }}
-          accessibilityLabel="Debt I Owe tab"
-          style={[
-            styles.segmentButton,
-            activeTab === 'I_OWE' && [
-              styles.activeSegment,
-              {
-                backgroundColor: isDark ? '#171929' : '#EDF1FA',
-              },
-            ],
-          ]}
-        >
-          <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={activeTab === 'I_OWE' ? 'emphasized' : 'default'} />
-          <Text
-            style={[
-              styles.segmentText,
-              {
-                color:
-                  activeTab === 'I_OWE'
-                    ? '#FFFFFF'
-                    : colors.textSecondary,
-                fontFamily:
-                  activeTab === 'I_OWE'
-                    ? typography.fontFamilies.bold
-                    : typography.fontFamilies.medium,
-              },
-            ]}
-          >
-            Debt
-          </Text>
-        </Pressable>
-        </View>
-      </LiquidGlassCard>
+      <SegmentedControl
+        options={[
+          { key: 'OWED_TO_ME', label: 'Credit to Collect' },
+          { key: 'I_OWE', label: 'Debt' },
+        ]}
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        style={{ marginBottom: 16 }}
+      />
 
       {/* 3. Hero Total Summary Card with Giant Number */}
       <LiquidGlassCard style={styles.heroSummaryCard} radius={22} padding={18}>
@@ -274,7 +203,7 @@ export default function MoneyScreen() {
             style={[
               styles.seeAllText,
               {
-                color: colors.gold,
+                color: colors.accent,
                 fontFamily: typography.fontFamilies.semibold,
               },
             ]}
@@ -424,30 +353,9 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingHorizontal: 16,
   },
-  segmentedContainer: { height: 48 },
-  segmentRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   emptyCard: {
     marginTop: 4,
     marginBottom: 16,
-  },
-  segmentButton: {
-    flex: 1,
-    height: 40,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  activeSegment: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  segmentText: {
-    fontSize: 13.5,
-    letterSpacing: -0.2,
   },
   heroSummaryCard: {
     marginBottom: 20,
