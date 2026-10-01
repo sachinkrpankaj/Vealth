@@ -39,7 +39,15 @@ const FILTER_ITEMS: { label: string; key: FilterCategory }[] = [
 
 export default function TransactionsScreen() {
   const { colors, typography, isDark } = useTheme();
-  const { transactions, accounts, people, refresh } = useFinancialData();
+  const {
+    transactions,
+    accounts,
+    people,
+    categories,
+    physicalAssets,
+    standaloneLiabilities,
+    refresh,
+  } = useFinancialData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('ALL');
@@ -54,6 +62,9 @@ export default function TransactionsScreen() {
 
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
   const personMap = useMemo(() => new Map(people.map((p) => [p.id, p.name])), [people]);
+  const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const assetMap = useMemo(() => new Map(physicalAssets.map((ast) => [ast.id, ast.name])), [physicalAssets]);
+  const liabilityMap = useMemo(() => new Map(standaloneLiabilities.map((l) => [l.id, l.name])), [standaloneLiabilities]);
 
   const filteredTransactions = useMemo(() => {
     let result = [...transactions];
@@ -80,9 +91,24 @@ export default function TransactionsScreen() {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((t) => {
         const noteMatch = t.note?.toLowerCase().includes(q);
+        const idMatch = t.id.toLowerCase().includes(q);
         const accMatch = t.accountId && accountMap.get(t.accountId)?.toLowerCase().includes(q);
+        const destAccMatch =
+          t.destinationAccountId && accountMap.get(t.destinationAccountId)?.toLowerCase().includes(q);
         const personMatch = t.personId && personMap.get(t.personId)?.toLowerCase().includes(q);
-        return noteMatch || accMatch || personMatch;
+        const categoryMatch = t.categoryId && categoryMap.get(t.categoryId)?.toLowerCase().includes(q);
+        const assetMatch = t.assetId && assetMap.get(t.assetId)?.toLowerCase().includes(q);
+        const liabilityMatch = t.liabilityId && liabilityMap.get(t.liabilityId)?.toLowerCase().includes(q);
+        return (
+          noteMatch ||
+          idMatch ||
+          accMatch ||
+          destAccMatch ||
+          personMatch ||
+          categoryMatch ||
+          assetMatch ||
+          liabilityMatch
+        );
       });
     }
 
@@ -95,10 +121,10 @@ export default function TransactionsScreen() {
     });
 
     return result;
-  }, [transactions, activeFilter, searchQuery, sortBy, accountMap, personMap]);
+  }, [transactions, activeFilter, searchQuery, sortBy, accountMap, personMap, categoryMap, assetMap, liabilityMap]);
 
   return (
-    <ScreenContainer scrollable contentContainerStyle={styles.listContent}>
+    <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.listContent}>
       {/* 1. Header matching Reference Image 1 */}
       <AppHeader
         title="activity"
@@ -123,6 +149,8 @@ export default function TransactionsScreen() {
             Haptics.selectionAsync().catch(() => {});
             setShowSortMenu(!showSortMenu);
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Sort transactions"
           style={styles.sortButton}
         >
           <ArrowUpDown
@@ -154,37 +182,15 @@ export default function TransactionsScreen() {
               { label: 'Highest', key: 'HIGHEST' as SortOption },
               { label: 'Lowest', key: 'LOWEST' as SortOption },
             ].map((opt) => (
-              <Pressable
+              <FilterChip
                 key={opt.key}
+                label={opt.label}
+                selected={sortBy === opt.key}
                 onPress={() => {
                   setSortBy(opt.key);
                   setShowSortMenu(false);
                 }}
-                style={[
-                  styles.sortPill,
-                  {
-                    backgroundColor:
-                      sortBy === opt.key ? colors.textPrimary : 'transparent',
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.sortPillText,
-                    {
-                      color:
-                        sortBy === opt.key ? colors.background : colors.textSecondary,
-                      fontFamily:
-                        sortBy === opt.key
-                          ? typography.fontFamilies.bold
-                          : typography.fontFamilies.medium,
-                    },
-                  ]}
-                >
-                  {opt.label}
-                </Text>
-              </Pressable>
+              />
             ))}
           </View>
         </LiquidGlassCard>
@@ -298,15 +304,15 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 120,
+    paddingBottom: 20,
   },
   txListCard: {
     overflow: 'hidden',
-    marginBottom: 120,
+    marginBottom: 20,
   },
   emptyCard: {
     marginTop: 8,
-    marginBottom: 120,
+    marginBottom: 20,
   },
   rowDivider: {
     height: 1,

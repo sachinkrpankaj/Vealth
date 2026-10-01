@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, Lock, Fingerprint, ShieldCheck } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { useSecurityStore } from '../../src/stores/useSecurityStore';
 import { useTheme } from '../../src/theme';
@@ -62,20 +63,10 @@ export default function SecuritySettingsScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Security & Privacy</Text>
 
@@ -105,25 +96,15 @@ export default function SecuritySettingsScreen() {
 
         {isPinEnabled ? (
           <View style={styles.pinActionsRow}>
-            <Pressable
-              onPress={() => setShowSetup(true)}
-              style={[
-                styles.actionPill,
-                { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm },
-              ]}
-            >
+            <LiquidGlassCard onPress={() => setShowSetup(true)} accessibilityLabel="Change PIN"
+              radius={radii.sm} padding={0} style={styles.actionPill}>
               <Text style={[styles.actionPillText, { color: colors.textPrimary }]}>Change PIN</Text>
-            </Pressable>
+            </LiquidGlassCard>
 
-            <Pressable
-              onPress={handleDisablePin}
-              style={[
-                styles.actionPill,
-                { backgroundColor: colors.negativeBg, borderColor: colors.negative, borderRadius: radii.sm },
-              ]}
-            >
-              <Text style={[styles.actionPillText, { color: colors.negative }]}>Disable PIN</Text>
-            </Pressable>
+            <LiquidGlassCard onPress={handleDisablePin} accessibilityLabel="Disable PIN"
+              tone="negative" radius={radii.sm} padding={0} style={styles.actionPill}>
+              <Text style={[styles.actionPillText, { color: '#FFFFFF' }]}>Disable PIN</Text>
+            </LiquidGlassCard>
           </View>
         ) : (
           <PrimaryButton
@@ -198,20 +179,17 @@ export default function SecuritySettingsScreen() {
               disabled={newPin.length !== 4 || confirmPin.length !== 4}
               style={{ flex: 1 }}
             />
-            <Pressable
+            <LiquidGlassCard
               onPress={() => {
                 setShowSetup(false);
                 setNewPin('');
                 setConfirmPin('');
                 setError(null);
               }}
-              style={[
-                styles.cancelBtn,
-                { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md },
-              ]}
+              accessibilityLabel="Cancel PIN setup" radius={radii.md} padding={0} style={styles.cancelBtn}
             >
               <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
-            </Pressable>
+            </LiquidGlassCard>
           </View>
         </Card>
       ) : null}

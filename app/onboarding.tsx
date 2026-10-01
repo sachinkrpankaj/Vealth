@@ -17,7 +17,7 @@ import {
 import { ScreenContainer } from '../src/components/ui/ScreenContainer';
 import { PrimaryButton } from '../src/components/ui/PrimaryButton';
 import { AmountInput } from '../src/components/ui/AmountInput';
-import { VaelthLogo } from '../src/components/ui/VaelthLogo';
+import { VealthLogo } from '../src/components/ui/VealthLogo';
 import { LiquidGlassCard } from '../src/components/ui/LiquidGlassCard';
 import { ColorWheelPicker } from '../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../src/theme';
@@ -206,7 +206,7 @@ export default function OnboardingScreen() {
               ]}
             >
               {currentStep === 0 ? (
-                <VaelthLogo size={76} variant="transparent" />
+                <VealthLogo size={76} />
               ) : (
                 <Icon size={44} color={slide.color} />
               )}
@@ -322,17 +322,13 @@ export default function OnboardingScreen() {
 
           <View style={{ gap: 12, marginBottom: 28 }}>
             {/* Dark Mode Card */}
-            <Pressable
+            <LiquidGlassCard
               onPress={() => handleThemeChange('dark')}
-              style={[
-                styles.themeOptionCard,
-                {
-                  backgroundColor: isDark ? colors.surface : '#11141A',
-                  borderColor: selectedTheme === 'dark' ? colors.accent : colors.border,
-                  borderWidth: selectedTheme === 'dark' ? 2 : 1,
-                  borderRadius: radii.lg,
-                },
-              ]}
+              accessibilityLabel="Dark Obsidian theme"
+              accessibilityState={{ selected: selectedTheme === 'dark' }}
+              padding={0}
+              radius={radii.lg}
+              style={[styles.themeOptionCard, selectedTheme === 'dark' && { borderColor: colors.accent, borderWidth: 2 }]}
             >
               <View style={styles.themeCardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -340,8 +336,8 @@ export default function OnboardingScreen() {
                     <Moon size={20} color="#818CF8" />
                   </View>
                   <View>
-                    <Text style={[styles.themeTitle, { color: '#F8FAFC' }]}>Dark Obsidian</Text>
-                    <Text style={[styles.themeDesc, { color: '#94A3B8' }]}>
+                    <Text style={[styles.themeTitle, { color: colors.textPrimary }]}>Dark Obsidian</Text>
+                    <Text style={[styles.themeDesc, { color: colors.textSecondary }]}>
                       Sleek contrast, private & battery-saving
                     </Text>
                   </View>
@@ -365,20 +361,16 @@ export default function OnboardingScreen() {
                   <View key={hex} style={[styles.paletteChip, { backgroundColor: hex }]} />
                 ))}
               </View>
-            </Pressable>
+            </LiquidGlassCard>
 
             {/* Light Mode Card */}
-            <Pressable
+            <LiquidGlassCard
               onPress={() => handleThemeChange('light')}
-              style={[
-                styles.themeOptionCard,
-                {
-                  backgroundColor: !isDark ? colors.surface : '#FFFFFF',
-                  borderColor: selectedTheme === 'light' ? colors.accent : colors.border,
-                  borderWidth: selectedTheme === 'light' ? 2 : 1,
-                  borderRadius: radii.lg,
-                },
-              ]}
+              accessibilityLabel="Clean Light theme"
+              accessibilityState={{ selected: selectedTheme === 'light' }}
+              padding={0}
+              radius={radii.lg}
+              style={[styles.themeOptionCard, selectedTheme === 'light' && { borderColor: colors.accent, borderWidth: 2 }]}
             >
               <View style={styles.themeCardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -386,8 +378,8 @@ export default function OnboardingScreen() {
                     <Sun size={20} color="#D97706" />
                   </View>
                   <View>
-                    <Text style={[styles.themeTitle, { color: '#0F172A' }]}>Clean Light</Text>
-                    <Text style={[styles.themeDesc, { color: '#64748B' }]}>
+                    <Text style={[styles.themeTitle, { color: colors.textPrimary }]}>Clean Light</Text>
+                    <Text style={[styles.themeDesc, { color: colors.textSecondary }]}>
                       Bright, modern & crisp slate aesthetic
                     </Text>
                   </View>
@@ -417,7 +409,7 @@ export default function OnboardingScreen() {
                   />
                 ))}
               </View>
-            </Pressable>
+            </LiquidGlassCard>
           </View>
 
           {/* Continue Button */}
@@ -578,20 +570,18 @@ export default function OnboardingScreen() {
                 {BANK_PRESETS.map((p) => {
                   const isSelected = bankName === p.name;
                   return (
-                    <Pressable
+                    <LiquidGlassCard
                       key={p.short}
                       onPress={() => {
                         setBankName(p.name);
                         setBankColor(p.color);
                       }}
-                      style={[
-                        styles.presetChip,
-                        {
-                          backgroundColor: isSelected ? p.color : colors.surfaceElevated,
-                          borderColor: isSelected ? p.color : colors.border,
-                          borderRadius: radii.full,
-                        },
-                      ]}
+                      accessibilityLabel={p.name}
+                      accessibilityState={{ selected: isSelected }}
+                      tone={isSelected ? 'emphasized' : 'default'}
+                      radius={radii.full}
+                      padding={0}
+                      style={styles.presetChip}
                     >
                       <Text
                         style={[
@@ -601,7 +591,7 @@ export default function OnboardingScreen() {
                       >
                         {p.short}
                       </Text>
-                    </Pressable>
+                    </LiquidGlassCard>
                   );
                 })}
               </ScrollView>
@@ -678,17 +668,7 @@ export default function OnboardingScreen() {
         </LiquidGlassCard>
 
         {/* SUMMARY PREVIEW */}
-        <View
-          style={[
-            styles.summaryCard,
-            {
-              backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
-              borderRadius: radii.md,
-              marginTop: 20,
-            },
-          ]}
-        >
+        <LiquidGlassCard style={[styles.summaryCard, { marginTop: 20 }]} radius={radii.md} padding={0}>
           <View style={styles.summaryTop}>
             <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
               Starting Net Worth
@@ -705,7 +685,7 @@ export default function OnboardingScreen() {
               .filter(Boolean)
               .join('  •  ') || 'No accounts selected'}
           </Text>
-        </View>
+        </LiquidGlassCard>
 
         {/* Complete Setup Button */}
         <View style={{ marginTop: 24, marginBottom: 30 }}>

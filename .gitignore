@@ -55,3 +55,9 @@ dump.xml
 .idea/
 *.log
 
+# Android bundling outputs & assets
+android/app/src/main/assets/index.android.bundle*
+android/app/src/main/res/raw/
+android/app/src/main/res/drawable-*/node_modules_*
+android/app/src/main/res/drawable-*/assets_*
+

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Account,
   Asset,
+  Category,
   Liability,
   NetWorthSummary,
   Person,
@@ -13,6 +14,7 @@ import { getAllPeople } from '../database/repositories/personRepository';
 import { getAllTransactions } from '../database/repositories/transactionRepository';
 import { getAllAssets } from '../database/repositories/assetRepository';
 import { getAllLiabilities } from '../database/repositories/liabilityRepository';
+import { getAllCategories } from '../database/repositories/categoryRepository';
 import { recordSnapshot } from '../database/repositories/snapshotRepository';
 import { getSetting } from '../database/repositories/settingsRepository';
 import {
@@ -31,6 +33,7 @@ export interface FinancialDataState {
   personDebts: PersonDebtSummary[];
   physicalAssets: Asset[];
   standaloneLiabilities: Liability[];
+  categories: Category[];
   transactions: Transaction[];
   netWorth: NetWorthSummary;
   refresh: () => Promise<void>;
@@ -45,23 +48,26 @@ export function useFinancialData(): FinancialDataState {
   const [people, setPeople] = useState<Person[]>([]);
   const [physicalAssets, setPhysicalAssets] = useState<Asset[]>([]);
   const [standaloneLiabilities, setStandaloneLiabilities] = useState<Liability[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [accs, ppl, txs, asts, libs, storedName] = await Promise.all([
+      const [accs, ppl, txs, asts, libs, cats, storedName] = await Promise.all([
         getAllAccounts(),
         getAllPeople(),
         getAllTransactions(),
         getAllAssets(),
         getAllLiabilities(),
+        getAllCategories(true),
         getSetting('user_name'),
       ]);
 
       setAccounts(accs);
       setPeople(ppl);
       setTransactions(txs);
+      setCategories(cats);
       if (storedName) {
         setUserName(storedName);
       }
@@ -119,6 +125,7 @@ export function useFinancialData(): FinancialDataState {
     accountBalances,
     people,
     personDebts,
+    categories,
     physicalAssets,
     standaloneLiabilities,
     transactions,

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { Avatar } from '../../src/components/ui/Avatar';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { AmountText } from '../../src/components/ui/AmountText';
@@ -46,6 +47,7 @@ import { getAllAccounts } from '../../src/database/repositories/accountRepositor
 import { calculatePersonDebt } from '../../src/domain/finance/financialEngine';
 import { Person, PersonDebtSummary, Transaction, Account } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const COLOR_OPTIONS = [
   '#6366F1', // Indigo
@@ -60,6 +62,7 @@ const COLOR_OPTIONS = [
 
 export default function PersonDetailScreen() {
   const { colors, typography, radii, spacing } = useTheme();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [person, setPerson] = useState<Person | null>(null);
@@ -125,8 +128,8 @@ export default function PersonDetailScreen() {
       return;
     }
 
-    const cleanedPhone = editPhone.trim();
-    if (cleanedPhone && cleanedPhone.length !== 10) {
+    const cleanedPhone = editPhone.replace(/[^0-9]/g, '').slice(0, 10);
+    if (editPhone.trim() && cleanedPhone.length !== 10) {
       setEditError('Phone number must be exactly 10 digits (numbers only)');
       return;
     }
@@ -187,55 +190,19 @@ export default function PersonDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-              transform: [{ scale: pressed ? 0.94 : 1 }],
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back" radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <View style={styles.headerRightActions}>
-          <Pressable
-            onPress={handleOpenEdit}
-            style={({ pressed }) => [
-              styles.actionPill,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-                transform: [{ scale: pressed ? 0.94 : 1 }],
-              },
-            ]}
-          >
+          <LiquidGlassCard onPress={handleOpenEdit} hitSlop={8} accessibilityLabel="Edit person" radius={radii.full} padding={0} style={styles.actionPill}>
             <Pencil size={14} color={colors.textPrimary} />
             <Text style={[styles.actionPillText, { color: colors.textPrimary }]}>Edit</Text>
-          </Pressable>
+          </LiquidGlassCard>
 
-          <Pressable
-            onPress={handleArchive}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-                transform: [{ scale: pressed ? 0.94 : 1 }],
-              },
-            ]}
-          >
-            <Trash2 size={16} color={colors.textMuted} />
-          </Pressable>
+          <LiquidGlassCard onPress={handleArchive} hitSlop={10} accessibilityLabel="Delete or archive person" radius={radii.full} padding={0} tone="negative" style={styles.iconBtn}>
+            <Trash2 size={16} color={colors.textPrimary} />
+          </LiquidGlassCard>
         </View>
       </View>
 
@@ -405,7 +372,7 @@ export default function PersonDetailScreen() {
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalBackdrop}
         >
           <View
@@ -416,6 +383,7 @@ export default function PersonDetailScreen() {
                 borderTopColor: colors.border,
                 borderTopLeftRadius: radii.xl,
                 borderTopRightRadius: radii.xl,
+                paddingBottom: insets.bottom,
               },
             ]}
           >
@@ -424,24 +392,14 @@ export default function PersonDetailScreen() {
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 Edit Person Details
               </Text>
-              <Pressable
-                onPress={() => setIsEditModalOpen(false)}
-                style={({ pressed }) => [
-                  styles.modalCloseBtn,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderRadius: radii.full,
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => setIsEditModalOpen(false)} accessibilityLabel="Close editor" radius={radii.full} padding={0} style={styles.modalCloseBtn}>
                 <X size={18} color={colors.textPrimary} />
-              </Pressable>
+              </LiquidGlassCard>
             </View>
 
             <ScrollView
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 24 }}
             >
               {/* Avatar Preview */}

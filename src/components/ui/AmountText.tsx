@@ -50,22 +50,36 @@ export const AmountText: React.FC<AmountTextProps> = ({
   const fontSize = typography.fontSizes[size];
   const lineHeight = typography.lineHeights[size];
 
-  const { formattedText } = useCountingAnimation(amount, {
+  // If variant is explicitly negative with showSign and amount is positive, treat as negative for display
+  const signedAmount =
+    variant === 'negative' && showSign && amount > 0
+      ? -amount
+      : variant === 'positive' && showSign && amount < 0
+      ? Math.abs(amount)
+      : amount;
+
+  // Prevent fractional paise flicker during counting animation for whole-rupee amounts
+  const resolvedShowPaise =
+    showPaise !== undefined
+      ? showPaise
+      : Math.abs(amount) % 100 !== 0;
+
+  const { formattedText } = useCountingAnimation(signedAmount, {
     enabled: animated,
     duration,
     triggerOnFocus,
     isMasked,
     formatOptions: {
       showSign,
-      showPaise,
+      showPaise: resolvedShowPaise,
     },
   });
 
   const displayText = animated
     ? formattedText
     : isMasked
-    ? formatRupeeMasked(amount, { showSign })
-    : formatRupee(amount, { showSign, showPaise });
+    ? formatRupeeMasked(signedAmount, { showSign })
+    : formatRupee(signedAmount, { showSign, showPaise: resolvedShowPaise });
 
   return (
     <Text

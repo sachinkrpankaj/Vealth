@@ -1,15 +1,7 @@
 import React from 'react';
-import {
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-  View,
-} from 'react-native';
+import { Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle } from 'react-native';
 import { useTheme } from '../../theme';
-import { LiquidGlassPrismOverlay } from './LiquidGlassCard';
+import { LiquidGlassCard } from './LiquidGlassCard';
 
 interface SecondaryButtonProps {
   title: string;
@@ -22,90 +14,32 @@ interface SecondaryButtonProps {
 }
 
 export const SecondaryButton: React.FC<SecondaryButtonProps> = ({
-  title,
-  onPress,
-  disabled = false,
-  loading = false,
-  style,
-  textStyle,
-  icon,
+  title, onPress, disabled = false, loading = false, style, textStyle, icon,
 }) => {
-  const { colors, radii, spacing, typography, isDark } = useTheme();
-  const borderRadius = radii.md;
-
+  const { colors, radii, spacing, typography } = useTheme();
   return (
-    <Pressable
+    <LiquidGlassCard
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.wrapper,
-        {
-          borderRadius,
-          shadowColor: isDark ? '#000000' : '#312E81',
-          shadowOpacity: isDark ? 0.25 : 0.08,
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        },
-        style,
-      ]}
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      radius={radii.md}
+      padding={0}
+      style={style}
+      contentStyle={[styles.button, { paddingVertical: spacing.md - 2, paddingHorizontal: spacing.lg }]}
     >
-      <View
-        style={[
-          styles.inner,
-          {
-            borderRadius,
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.85)',
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.65)',
-            paddingVertical: spacing.md - 2,
-            paddingHorizontal: spacing.lg,
-          },
-        ]}
-      >
-        <LiquidGlassPrismOverlay borderRadius={borderRadius} isDark={isDark} />
-        {loading ? (
-          <ActivityIndicator size="small" color={colors.textPrimary} />
-        ) : (
-          <>
-            {icon ? <View style={styles.iconContainer}>{icon}</View> : null}
-            <Text
-              style={[
-                styles.text,
-                {
-                  color: colors.textPrimary,
-                  fontSize: typography.fontSizes.body,
-                },
-                textStyle,
-              ]}
-            >
-              {title}
-            </Text>
-          </>
-        )}
-      </View>
-    </Pressable>
+      {loading ? <ActivityIndicator size="small" color={colors.textPrimary} /> : (
+        <>
+          {icon ? <View style={styles.iconContainer}>{icon}</View> : null}
+          <Text style={[styles.text, { color: colors.textPrimary, fontSize: typography.fontSizes.body }, textStyle]}>{title}</Text>
+        </>
+      )}
+    </LiquidGlassCard>
   );
 };
 
 const styles = StyleSheet.create({
-  wrapper: {
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 12,
-    backgroundColor: 'transparent',
-  },
-  inner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  iconContainer: {
-    marginRight: 8,
-  },
-  text: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    textAlign: 'center',
-  },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  iconContainer: { marginRight: 8 },
+  text: { fontFamily: 'PlusJakartaSans_600SemiBold', textAlign: 'center' },
 });

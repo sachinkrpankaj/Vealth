@@ -1,13 +1,7 @@
 import React from 'react';
-import {
-  Text,
-  StyleSheet,
-  Pressable,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-} from 'react-native';
+import { Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle } from 'react-native';
 import { useTheme } from '../../theme';
+import { LiquidGlassCard } from './LiquidGlassCard';
 
 interface PrimaryButtonProps {
   title: string;
@@ -21,80 +15,35 @@ interface PrimaryButtonProps {
 }
 
 export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
-  title,
-  onPress,
-  disabled = false,
-  loading = false,
-  style,
-  textStyle,
-  icon,
+  title, onPress, disabled = false, loading = false, style, textStyle, icon,
   variant = 'primary',
 }) => {
-  const { colors, radii, spacing, typography } = useTheme();
-
-  let bgColor = colors.textPrimary;
-  let textColor = colors.background;
-
-  if (variant === 'positive') {
-    bgColor = colors.positive;
-    textColor = '#FFFFFF';
-  } else if (variant === 'negative') {
-    bgColor = colors.negative;
-    textColor = '#FFFFFF';
-  }
-
+  const { radii, spacing, typography } = useTheme();
+  const textColor = '#FFFFFF';
   return (
-    <Pressable
+    <LiquidGlassCard
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.button,
-        {
-          backgroundColor: bgColor,
-          borderRadius: radii.md,
-          paddingVertical: spacing.md - 2,
-          paddingHorizontal: spacing.lg,
-          opacity: disabled ? 0.4 : pressed ? 0.85 : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
-        },
-        style,
-      ]}
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
+      tone={variant === 'primary' ? 'emphasized' : variant}
+      radius={radii.md}
+      padding={0}
+      style={style}
+      contentStyle={[styles.button, { paddingVertical: spacing.md - 2, paddingHorizontal: spacing.lg }]}
     >
-      {loading ? (
-        <ActivityIndicator size="small" color={textColor} />
-      ) : (
+      {loading ? <ActivityIndicator size="small" color={textColor} /> : (
         <>
-          {icon ? <Text style={styles.iconContainer}>{icon}</Text> : null}
-          <Text
-            style={[
-              styles.text,
-              {
-                color: textColor,
-                fontSize: typography.fontSizes.body,
-              },
-              textStyle,
-            ]}
-          >
-            {title}
-          </Text>
+          {icon ? <View style={styles.iconContainer}>{icon}</View> : null}
+          <Text style={[styles.text, { color: textColor, fontSize: typography.fontSizes.body }, textStyle]}>{title}</Text>
         </>
       )}
-    </Pressable>
+    </LiquidGlassCard>
   );
 };
 
 const styles = StyleSheet.create({
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  iconContainer: {
-    marginRight: 8,
-  },
-  text: {
-    fontFamily: 'PlusJakartaSans_600SemiBold',
-    textAlign: 'center',
-  },
+  button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  iconContainer: { marginRight: 8 },
+  text: { fontFamily: 'PlusJakartaSans_600SemiBold', textAlign: 'center' },
 });

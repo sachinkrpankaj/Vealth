@@ -111,20 +111,44 @@ export function calculateAllAccountBalances(
 
 /**
  * Calculates the debt profile for a single person.
+ * Only outstanding debt affects due status; settled debt is ignored.
+ * Overpayments are prevented from converting into opposite debt types.
  */
 export function calculatePersonDebt(
-  person: Person,
+  person: Person | string,
   transactions: Transaction[],
   referenceDateStr?: string
 ): PersonDebtSummary {
+  const personObj: Person =
+    typeof person === 'string'
+      ? {
+          id: person,
+          name: person,
+          isArchived: false,
+          avatarColor: '#6366F1',
+          createdAt: '',
+          updatedAt: '',
+        }
+      : person;
+
   let owedToYou = 0; // Money person owes the user (receivable)
   let youOwe = 0;    // Money user owes person (payable)
-  let nearestDueDate: string | undefined = undefined;
   let lastActivityDate: string | undefined = undefined;
 
-  const activeTx = getActiveTransactions(transactions).filter(
-    (tx) => tx.personId === person.id
-  );
+  const activeTx = getActiveTransactions(transactions)
+    .filter((tx) => tx.personId === personObj.id)
+    .sort((a, b) => (a.date === b.date ? (a.createdAt || '').localeCompare(b.createdAt || '') : a.date.localeCompare(b.date)));
+
+  // Track individual debt tranches so payments extinguish debts in FIFO order.
+  // This ensures that when a past debt is repaid, its due date is fully settled and ignored.
+  interface DebtTranche {
+    id: string;
+    unpaidAmount: number;
+    dueDate?: string;
+  }
+
+  const outstandingLendTranches: DebtTranche[] = [];
+  const outstandingBorrowTranches: DebtTranche[] = [];
 
   for (const tx of activeTx) {
     const amount = Math.abs(Math.round(tx.amount));
@@ -133,65 +157,111 @@ export function calculatePersonDebt(
       lastActivityDate = tx.date;
     }
 
-    if (tx.dueDate) {
-      if (!nearestDueDate || tx.dueDate < nearestDueDate) {
-        nearestDueDate = tx.dueDate;
-      }
-    }
-
     switch (tx.type) {
       case 'LEND':
         owedToYou = addMinor(owedToYou, amount);
+        outstandingLendTranches.push({
+          id: tx.id,
+          unpaidAmount: amount,
+          dueDate: tx.dueDate,
+        });
         break;
-      case 'REPAYMENT_RECEIVED':
+
+      case 'REPAYMENT_RECEIVED': {
         owedToYou = subMinor(owedToYou, amount);
+        // Extinguish lend tranches FIFO
+        let rem = amount;
+        for (const tranche of outstandingLendTranches) {
+          if (rem <= 0) break;
+          const pay = Math.min(tranche.unpaidAmount, rem);
+          tranche.unpaidAmount = subMinor(tranche.unpaidAmount, pay);
+          rem = subMinor(rem, pay);
+        }
         break;
+      }
+
       case 'BORROW':
         youOwe = addMinor(youOwe, amount);
+        outstandingBorrowTranches.push({
+          id: tx.id,
+          unpaidAmount: amount,
+          dueDate: tx.dueDate,
+        });
         break;
-      case 'REPAYMENT_MADE':
+
+      case 'REPAYMENT_MADE': {
         youOwe = subMinor(youOwe, amount);
+        // Extinguish borrow tranches FIFO
+        let rem = amount;
+        for (const tranche of outstandingBorrowTranches) {
+          if (rem <= 0) break;
+          const pay = Math.min(tranche.unpaidAmount, rem);
+          tranche.unpaidAmount = subMinor(tranche.unpaidAmount, pay);
+          rem = subMinor(rem, pay);
+        }
         break;
+      }
     }
   }
 
-  // Handle over-repayment gracefully so it converts into the opposing balance
-  // instead of becoming an unrecoverable negative phantom balance
-  if (owedToYou < 0) {
-    youOwe = addMinor(youOwe, Math.abs(owedToYou));
-    owedToYou = 0;
-  }
-  if (youOwe < 0) {
-    owedToYou = addMinor(owedToYou, Math.abs(youOwe));
-    youOwe = 0;
-  }
+  // Prevent/reject invalid overpayments: clamp to zero, never convert to the opposite debt type
+  owedToYou = Math.max(0, owedToYou);
+  youOwe = Math.max(0, youOwe);
 
   const netBalance = subMinor(owedToYou, youOwe);
-
-  // Determine Due Date Status
   const today = referenceDateStr ?? new Date().toISOString().split('T')[0];
   let dueStatus: DueDateStatus = 'NO_DUE_DATE';
+  let nearestDueDate: string | undefined = undefined;
 
   if (netBalance === 0) {
+    // Completely settled: settled debt must be ignored!
     dueStatus = 'SETTLED';
-  } else if (nearestDueDate) {
-    if (nearestDueDate < today) {
-      dueStatus = 'OVERDUE';
-    } else if (nearestDueDate === today) {
-      dueStatus = 'DUE_TODAY';
-    } else {
-      const diffMs = new Date(nearestDueDate).getTime() - new Date(today).getTime();
-      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      if (diffDays <= 7) {
-        dueStatus = 'DUE_SOON';
+    nearestDueDate = undefined;
+  } else {
+    // Only outstanding tranches affect due date status
+    const eligibleTranches: DebtTranche[] = [];
+    if (owedToYou > 0) {
+      for (const t of outstandingLendTranches) {
+        if (t.unpaidAmount > 0 && t.dueDate) {
+          eligibleTranches.push(t);
+        }
+      }
+    }
+    if (youOwe > 0) {
+      for (const t of outstandingBorrowTranches) {
+        if (t.unpaidAmount > 0 && t.dueDate) {
+          eligibleTranches.push(t);
+        }
+      }
+    }
+
+    for (const t of eligibleTranches) {
+      if (t.dueDate) {
+        if (!nearestDueDate || t.dueDate < nearestDueDate) {
+          nearestDueDate = t.dueDate;
+        }
+      }
+    }
+
+    if (nearestDueDate) {
+      if (nearestDueDate < today) {
+        dueStatus = 'OVERDUE';
+      } else if (nearestDueDate === today) {
+        dueStatus = 'DUE_TODAY';
       } else {
-        dueStatus = 'NO_DUE_DATE';
+        const diffMs = new Date(nearestDueDate).getTime() - new Date(today).getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays <= 7) {
+          dueStatus = 'DUE_SOON';
+        } else {
+          dueStatus = 'NO_DUE_DATE';
+        }
       }
     }
   }
 
   return {
-    person,
+    person: personObj,
     owedToYou,
     youOwe,
     netBalance,
@@ -247,7 +317,7 @@ export function calculateTotalPhysicalAssets(assets: Asset[]): number {
 
 /**
  * Total standalone liabilities (personal loans, credit debt not in accounts).
- * Prevents double-counting if a credit card liability is already tracked via an account.
+ * Deduplicates credit-card liabilities by explicit IDs/relations only, never by name.
  */
 export function calculateTotalStandaloneLiabilities(
   liabilities: Liability[],
@@ -262,14 +332,21 @@ export function calculateTotalStandaloneLiabilities(
         accounts.some(
           (a) =>
             a.type === 'CREDIT_CARD' &&
-            (a.id === l.id || a.name.toLowerCase() === l.name.toLowerCase())
+            (a.id === l.id || (a as any).liabilityId === l.id || (l as any).accountId === a.id)
         )
       ) {
         return false;
       }
       return true;
     })
-    .reduce((acc, curr) => addMinor(acc, Math.round(curr.amount)), 0);
+    .reduce(
+      (acc, curr) =>
+        addMinor(
+          acc,
+          Math.round(curr.amount ?? (curr as any).remainingAmount ?? (curr as any).totalAmount ?? 0)
+        ),
+      0
+    );
 }
 
 /**
@@ -286,23 +363,44 @@ export function calculateTotalStandaloneLiabilities(
  * - Total Payables (Money user owes people)
  * - Standalone Liabilities (Personal loans, etc. - deduplicated)
  */
-export function calculateNetWorth(params: {
-  accounts: Account[];
-  people: Person[];
-  physicalAssets: Asset[];
-  standaloneLiabilities: Liability[];
-  transactions: Transaction[];
-  currentMonthStr?: string; // YYYY-MM
-  referenceDate?: Date;
-}): NetWorthSummary {
-  const {
-    accounts,
-    people,
-    physicalAssets,
-    standaloneLiabilities,
-    transactions,
-    currentMonthStr,
-  } = params;
+export function calculateNetWorth(
+  paramsOrTx:
+    | {
+        accounts: Account[];
+        people: Person[];
+        physicalAssets: Asset[];
+        standaloneLiabilities: Liability[];
+        transactions: Transaction[];
+        currentMonthStr?: string; // YYYY-MM
+        referenceDate?: Date;
+      }
+    | Transaction[],
+  accountsPos?: Account[],
+  peoplePos?: Person[],
+  physicalAssetsPos?: Asset[],
+  standaloneLiabilitiesPos?: Liability[]
+): NetWorthSummary {
+  let accounts: Account[] = [];
+  let people: Person[] = [];
+  let physicalAssets: Asset[] = [];
+  let standaloneLiabilities: Liability[] = [];
+  let transactions: Transaction[] = [];
+  let currentMonthStr: string | undefined;
+
+  if (Array.isArray(paramsOrTx)) {
+    transactions = paramsOrTx;
+    accounts = accountsPos || [];
+    people = peoplePos || [];
+    physicalAssets = physicalAssetsPos || [];
+    standaloneLiabilities = standaloneLiabilitiesPos || [];
+  } else {
+    accounts = paramsOrTx.accounts || [];
+    people = paramsOrTx.people || [];
+    physicalAssets = paramsOrTx.physicalAssets || [];
+    standaloneLiabilities = paramsOrTx.standaloneLiabilities || [];
+    transactions = paramsOrTx.transactions || [];
+    currentMonthStr = paramsOrTx.currentMonthStr;
+  }
 
   // Account balances
   const accountBalances = calculateAllAccountBalances(accounts, transactions);

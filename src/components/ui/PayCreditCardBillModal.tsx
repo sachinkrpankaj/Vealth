@@ -8,6 +8,8 @@ import {
   ScrollView,
   Alert,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { X, Landmark, PiggyBank, CircleDot, Check, CreditCard as CreditCardIcon } from 'lucide-react-native';
 import { Account, AccountType } from '../../domain/finance/types';
@@ -77,8 +79,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
     }
   }, [visible, unpaidBillAmount, creditCard?.id]);
 
-  if (!creditCard) return null;
-
+  // Hooks must run even while there is no selected card (the modal is mounted on Home).
   // Smooth slide-up and fade animation
   const slideAnim = useRef(new Animated.Value(280)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -104,6 +105,8 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
     }
   }, [visible]);
 
+  if (!creditCard) return null;
+
   const handleSmoothClose = (callback?: () => void) => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -128,8 +131,8 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       setError('Please enter an amount greater than 0');
       return;
     }
-    if (!selectedAccountId) {
-      setError('Please select an account to pay from');
+    if (!eligibleAccounts.some((account) => account.id === selectedAccountId)) {
+      setError('Please select an available account to pay from');
       return;
     }
 
@@ -166,7 +169,10 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       animationType="none"
       onRequestClose={() => handleSmoothClose()}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
         <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => handleSmoothClose()} />
         </Animated.View>
@@ -206,24 +212,15 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                 </Text>
               </View>
 
-              <Pressable
-                onPress={() => handleSmoothClose()}
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderRadius: radii.full,
-                    opacity: pressed ? 0.75 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => handleSmoothClose()} accessibilityLabel="Close bill payment"
+                radius={radii.full} padding={0} style={styles.closeBtn}>
                 <X size={18} color={colors.textPrimary} />
-              </Pressable>
+              </LiquidGlassCard>
             </View>
 
           <ScrollView
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingBottom: 16 }}
           >
             {/* Unpaid Bill summary pill */}
@@ -319,26 +316,17 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                     const Icon = getAccountIcon(acc.type);
 
                     return (
-                      <Pressable
+                      <LiquidGlassCard
                         key={acc.id}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                           setSelectedAccountId(acc.id);
                           if (error) setError(null);
                         }}
-                        style={({ pressed }) => [
-                          styles.accountOption,
-                          {
-                            backgroundColor: isSelected
-                              ? isDark
-                                ? 'rgba(212, 163, 115, 0.15)'
-                                : 'rgba(212, 163, 115, 0.1)'
-                              : colors.surface,
-                            borderColor: isSelected ? colors.gold : colors.border,
-                            borderRadius: radii.md,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
+                        accessibilityLabel={`Pay using ${acc.name}`}
+                        accessibilityState={{ selected: isSelected }}
+                        radius={radii.md} padding={0}
+                        style={[styles.accountOption, isSelected && { borderColor: colors.gold, borderWidth: 2 }]}
                       >
                         <View
                           style={[
@@ -388,7 +376,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                             <Check size={12} color="#000" strokeWidth={3} />
                           </View>
                         )}
-                      </Pressable>
+                      </LiquidGlassCard>
                     );
                   })}
                 </View>
@@ -405,12 +393,12 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
             title="Confirm & Deduct Bill"
             onPress={handleConfirm}
             loading={isSubmitting}
-            disabled={!selectedAccountId || paymentAmount <= 0 || isSubmitting}
+            disabled={!eligibleAccounts.some((account) => account.id === selectedAccountId) || paymentAmount <= 0 || isSubmitting}
             style={{ marginTop: 12 }}
           />
         </LiquidGlassCard>
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -432,7 +420,6 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxHeight: '90%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.5,

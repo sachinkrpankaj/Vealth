@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line } from 'react-native-svg';
-import { formatRupee, formatRupeeCompact } from '../../domain/finance/currency';
+import { formatRupee } from '../../domain/finance/currency';
 import { useTheme } from '../../theme';
 
 export interface ChartDataPoint {
@@ -21,11 +21,9 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   data,
   height = 180,
 }) => {
-  const { colors, radii, spacing } = useTheme();
+  const { colors } = useTheme();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-
-  const screenWidth = Dimensions.get('window').width;
-  const chartWidth = screenWidth - 32; // ScreenContainer horizontal padding (16 * 2)
+  const [chartWidth, setChartWidth] = useState(0);
 
   if (!data || data.length === 0) {
     return (
@@ -37,6 +35,10 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
     );
   }
 
+  // Wait for the plot's actual width (inside the card's padding) before building SVG coordinates.
+  // Until then, render the tooltip and labels without a path or touch targets.
+  const plotReady = chartWidth > 0;
+
   // Find min and max for scaling
   const values = data.map((d) => d.value);
   const rawMin = Math.min(...values);
@@ -45,109 +47,121 @@ export const NetWorthChart: React.FC<NetWorthChartProps> = ({
   const paddingY = 20;
   const availableHeight = height - paddingY * 2;
 
-  // Convert points to SVG coordinates
-  const points = data.map((d, index) => {
-    const x =
-      data.length > 1
-        ? (index / (data.length - 1)) * (chartWidth - 20) + 10
-        : chartWidth / 2;
+  // Keep the line and its active marker inside the measured plot, even at narrow widths.
+  const insetX = Math.min(10, chartWidth / 2);
+  const points = plotReady ? data.map((d, index) => {
+    const x = data.length > 1
+      ? (index / (data.length - 1)) * (chartWidth - insetX * 2) + insetX
+      : chartWidth / 2;
     const y = height - paddingY - ((d.value - rawMin) / range) * availableHeight;
-    return { x, y, data: d };
-  });
+    return { x, y };
+  }) : [];
 
-  // Build SVG Path (curved bezier path)
-  let linePath = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const midX = (prev.x + curr.x) / 2;
-    linePath += ` C ${midX} ${prev.y}, ${midX} ${curr.y}, ${curr.x} ${curr.y}`;
-  }
+  // Straight segments show the actual snapshots without smoothing away short-term changes.
+  const linePath = points.map((point, index) =>
+    `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
+  ).join(' ');
 
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+  const areaPath = points.length
+    ? `${linePath} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`
+    : '';
 
   const activePoint =
     selectedIndex !== null && points[selectedIndex]
       ? points[selectedIndex]
       : points[points.length - 1];
+  const activeData = selectedIndex !== null && data[selectedIndex]
+    ? data[selectedIndex]
+    : data[data.length - 1];
 
   return (
     <View style={styles.container}>
       {/* Tooltip / Active Point Indicator */}
       <View style={styles.tooltipRow}>
         <Text style={[styles.tooltipDate, { color: colors.textSecondary }]}>
-          {activePoint.data.date}
+          {activeData.date}
         </Text>
         <Text style={[styles.tooltipValue, { color: colors.textPrimary }]}>
-          {formatRupee(activePoint.data.value)}
+          {formatRupee(activeData.value)}
         </Text>
       </View>
 
-      {/* SVG Canvas */}
-      <Svg width={chartWidth} height={height} style={styles.svg}>
-        <Defs>
-          <LinearGradient id="gradientArea" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={colors.accent} stopOpacity="0.28" />
-            <Stop offset="1" stopColor={colors.accent} stopOpacity="0.0" />
-          </LinearGradient>
-        </Defs>
+      {/* Plot and touch targets share the same measured, clipped bounds. */}
+      <View
+        style={[styles.plot, { height }]}
+        onLayout={({ nativeEvent: { layout } }) => {
+          setChartWidth((previous) => previous === layout.width ? previous : layout.width);
+        }}
+      >
+        {plotReady && (
+          <Svg width={chartWidth} height={height}>
+            <Defs>
+              <LinearGradient id="gradientArea" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={colors.accent} stopOpacity="0.28" />
+                <Stop offset="1" stopColor={colors.accent} stopOpacity="0.0" />
+              </LinearGradient>
+            </Defs>
 
-        {/* Gradient fill underneath */}
-        <Path d={areaPath} fill="url(#gradientArea)" />
+            {/* Gradient fill underneath */}
+            <Path d={areaPath} fill="url(#gradientArea)" />
 
-        {/* Crisp curve line */}
-        <Path
-          d={linePath}
-          fill="none"
-          stroke={colors.accent}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Active Point Indicator Line & Dot */}
-        {activePoint ? (
-          <>
-            <Line
-              x1={activePoint.x}
-              y1={10}
-              x2={activePoint.x}
-              y2={height}
-              stroke={colors.border}
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
-            <Circle
-              cx={activePoint.x}
-              cy={activePoint.y}
-              r="5"
-              fill={colors.accent}
-              stroke={colors.surface}
+            {/* Crisp curve line */}
+            <Path
+              d={linePath}
+              fill="none"
+              stroke={colors.accent}
               strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
-          </>
-        ) : null}
-      </Svg>
 
-      {/* Interactive touch targets along x-axis */}
-      <View style={[StyleSheet.absoluteFill, styles.touchOverlay]} pointerEvents="box-none">
-        {points.map((p, index) => {
-          const stepWidth = chartWidth / points.length;
-          return (
-            <Pressable
-              key={index}
-              onPress={() => setSelectedIndex(index)}
-              style={[
-                styles.touchTarget,
-                {
-                  left: index * stepWidth,
-                  width: stepWidth,
-                  height: height,
-                },
-              ]}
-            />
-          );
-        })}
+            {/* Active Point Indicator Line & Dot */}
+            {activePoint ? (
+              <>
+                <Line
+                  x1={activePoint.x}
+                  y1={10}
+                  x2={activePoint.x}
+                  y2={height}
+                  stroke={colors.border}
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <Circle
+                  cx={activePoint.x}
+                  cy={activePoint.y}
+                  r="5"
+                  fill={colors.accent}
+                  stroke={colors.surface}
+                  strokeWidth="2.5"
+                />
+              </>
+            ) : null}
+          </Svg>
+        )}
+
+        {/* Interactive touch targets along x-axis */}
+        {plotReady && (
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {points.map((_, index) => {
+              const stepWidth = chartWidth / points.length;
+              return (
+                <Pressable
+                  key={index}
+                  onPress={() => setSelectedIndex(index)}
+                  style={[
+                    styles.touchTarget,
+                    {
+                      left: index * stepWidth,
+                      width: stepWidth,
+                      height,
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Date Labels below */}
@@ -187,11 +201,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
-  svg: {
-    overflow: 'visible',
-  },
-  touchOverlay: {
-    top: 30,
+  plot: {
+    overflow: 'hidden',
   },
   touchTarget: {
     position: 'absolute',

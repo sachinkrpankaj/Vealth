@@ -5,6 +5,7 @@ import { X } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../../src/theme';
 import { createAccount } from '../../src/database/repositories/accountRepository';
@@ -91,20 +92,10 @@ export default function AddAccountScreen() {
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Add Account</Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close"
+          radius={radii.full} padding={0} style={styles.closeBtn}>
           <X size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
       </View>
 
       {/* Account Type Selector */}
@@ -115,27 +106,19 @@ export default function AddAccountScreen() {
         contentContainerStyle={{ gap: 8, marginBottom: 16 }}
       >
         {ACCOUNT_TYPES.map((t) => (
-          <Pressable
-            key={t.type}
-            onPress={() => setType(t.type)}
-            style={[
-              styles.typePill,
-              {
-                backgroundColor: type === t.type ? colors.textPrimary : colors.surface,
-                borderColor: type === t.type ? colors.textPrimary : colors.border,
-                borderRadius: radii.md,
-              },
-            ]}
-          >
+          <LiquidGlassCard key={t.type} onPress={() => setType(t.type)}
+            accessibilityLabel={t.label} accessibilityState={{ selected: type === t.type }}
+            tone={type === t.type ? 'emphasized' : 'default'}
+            radius={radii.md} padding={0} style={styles.typePill}>
             <Text
               style={[
                 styles.typePillText,
-                { color: type === t.type ? colors.background : colors.textPrimary },
+                { color: type === t.type ? '#FFFFFF' : colors.textPrimary },
               ]}
             >
               {t.label}
             </Text>
-          </Pressable>
+          </LiquidGlassCard>
         ))}
       </ScrollView>
 
@@ -157,8 +140,32 @@ export default function AddAccountScreen() {
           onChangeText={(val) => {
             setName(val);
             if (error) setError(null);
+
+            const lower = val.toLowerCase();
+            const cardKeywords = [
+              'credit card',
+              'creditcard',
+              'millennia',
+              'regalia',
+              'simplyclick',
+              'simplysave',
+              'sapphiro',
+              'rubyx',
+              'coral',
+              'magnus',
+              'amex',
+              'flipkart card',
+              'amazon pay card',
+              'sbi card',
+              'hdfc card',
+              'icici card',
+              'axis card',
+            ];
+            if (cardKeywords.some((kw) => lower.includes(kw)) && (type === 'BANK' || type === 'INVESTMENT')) {
+              setType('CREDIT_CARD');
+            }
           }}
-          placeholder="e.g. SBI Savings, Cash in Pocket"
+          placeholder="e.g. SBI Savings, HDFC Millennia Credit Card"
           placeholderTextColor={colors.textMuted}
           style={[styles.textInput, { color: colors.textPrimary }]}
           autoFocus
@@ -188,30 +195,22 @@ export default function AddAccountScreen() {
           </Text>
           <View style={styles.daySelectorRow}>
             {[1, 5, 10, 15, 20, 25].map((d) => (
-              <Pressable
-                key={`bill-${d}`}
-                onPress={() => setBillingDay(d)}
-                style={[
-                  styles.dayPill,
-                  {
-                    backgroundColor: billingDay === d ? colors.gold : colors.surface,
-                    borderColor: billingDay === d ? colors.gold : colors.border,
-                    borderRadius: radii.sm,
-                  },
-                ]}
-              >
+              <LiquidGlassCard key={`bill-${d}`} onPress={() => setBillingDay(d)}
+                accessibilityLabel={`Billing day ${d}`} accessibilityState={{ selected: billingDay === d }}
+                tone={billingDay === d ? 'emphasized' : 'default'}
+                radius={radii.sm} padding={0} style={styles.dayPill}>
                 <Text
                   style={[
                     styles.dayPillText,
                     {
-                      color: billingDay === d ? '#000' : colors.textPrimary,
+                      color: billingDay === d ? '#FFFFFF' : colors.textPrimary,
                       fontWeight: billingDay === d ? '700' : '500',
                     },
                   ]}
                 >
                   {d}th
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             ))}
           </View>
           <View
@@ -252,30 +251,22 @@ export default function AddAccountScreen() {
           </Text>
           <View style={styles.daySelectorRow}>
             {[5, 10, 15, 20, 25, 28].map((d) => (
-              <Pressable
-                key={`due-${d}`}
-                onPress={() => setDueDay(d)}
-                style={[
-                  styles.dayPill,
-                  {
-                    backgroundColor: dueDay === d ? colors.gold : colors.surface,
-                    borderColor: dueDay === d ? colors.gold : colors.border,
-                    borderRadius: radii.sm,
-                  },
-                ]}
-              >
+              <LiquidGlassCard key={`due-${d}`} onPress={() => setDueDay(d)}
+                accessibilityLabel={`Payment due day ${d}`} accessibilityState={{ selected: dueDay === d }}
+                tone={dueDay === d ? 'emphasized' : 'default'}
+                radius={radii.sm} padding={0} style={styles.dayPill}>
                 <Text
                   style={[
                     styles.dayPillText,
                     {
-                      color: dueDay === d ? '#000' : colors.textPrimary,
+                      color: dueDay === d ? '#FFFFFF' : colors.textPrimary,
                       fontWeight: dueDay === d ? '700' : '500',
                     },
                   ]}
                 >
                   {d}th
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             ))}
           </View>
           <View

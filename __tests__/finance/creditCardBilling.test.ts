@@ -43,6 +43,16 @@ describe('Credit Card Billing & Net Worth Accounting Engine', () => {
     updatedAt: '2026-01-01',
   };
 
+  it('uses the last day of short months for a 31st billing cycle', () => {
+    const card = { ...creditCard, billingDay: 31 };
+    const febEnd = getCreditCardBillingInfo(card, [], new Date(2026, 1, 28));
+    expect(febEnd.lastBillingDate).toBe('2026-02-28');
+    expect(febEnd.nextBillingDate).toBe('2026-03-31');
+    const febBefore = getCreditCardBillingInfo(card, [], new Date(2026, 1, 27));
+    expect(febBefore.lastBillingDate).toBe('2026-01-31');
+    expect(febBefore.nextBillingDate).toBe('2026-02-28');
+  });
+
   it('formats ordinal days correctly', () => {
     expect(formatDayOrdinal(1)).toBe('1st');
     expect(formatDayOrdinal(2)).toBe('2nd');

@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { getSetting } from '../src/database/repositories/settingsRepository';
 import { useTheme } from '../src/theme';
-import { VaelthLogo } from '../src/components/ui/VaelthLogo';
+import { VealthLogo } from '../src/components/ui/VealthLogo';
 
 export default function Index() {
   const { colors, typography, spacing } = useTheme();
@@ -28,7 +28,7 @@ export default function Index() {
   if (!targetRoute) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <VaelthLogo size={72} variant="transparent" />
+        <VealthLogo size={72} />
         <Text style={[styles.brandTitle, { color: colors.textPrimary, marginTop: spacing.md }]}>
           Vaelth
         </Text>

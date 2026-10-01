@@ -11,7 +11,7 @@
  * Engineered with proper outer vs inner style separation so flexbox layouts,
  * pressables, and dock bars always lay out correctly.
  */
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,13 +19,10 @@ import {
   ViewStyle,
   Pressable,
   Platform,
+  Insets,
+  LayoutChangeEvent,
 } from 'react-native';
-import Svg, {
-  Defs,
-  LinearGradient,
-  Stop,
-  Rect,
-} from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useTheme } from '../../theme';
 
 // Layout style keys that strictly belong to the outermost container
@@ -75,6 +72,7 @@ const SURFACE_STYLE_KEYS = new Set([
   'borderTopRightRadius',
   'borderBottomLeftRadius',
   'borderBottomRightRadius',
+  // Background overrides are deliberately ignored: the shared glass fill must stay visible.
   'backgroundColor',
   'shadowColor',
   'shadowOffset',
@@ -113,37 +111,45 @@ function splitStyles(style?: StyleProp<ViewStyle>): {
 // SVG Prismatic & Specular Overlay
 // Draws: frosted glass fill + chromatic edge glow + top specular reflection
 // ─────────────────────────────────────────────────────────────────────────────
+export type GlassTone = 'default' | 'emphasized' | 'positive' | 'negative';
+
 export const LiquidGlassPrismOverlay: React.FC<{
   borderRadius: number;
   isDark: boolean;
-}> = React.memo(({ borderRadius: r, isDark }) => {
-  // Clamp radius for SVG primitives to prevent extreme aspect-ratio distortion on pills
-  const safeRadius = Math.min(r, 36);
+  tone?: GlassTone;
+}> = React.memo(({ borderRadius: r, isDark, tone = 'default' }) => {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setSize((previous) =>
+      previous.width === width && previous.height === height ? previous : { width, height }
+    );
+  }, []);
 
+  // Measure the actual surface, including pills and flex-driven cards, for Android SVG geometry.
+  const safeRadius = Math.min(r, size.width / 2, size.height / 2);
+  const tint = tone === 'positive' ? '#047857' : tone === 'negative' ? '#BE123C' : '#62519A';
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg
-        width="100%"
-        height="100%"
-        style={StyleSheet.absoluteFill}
-      >
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
+      {size.width > 0 && size.height > 0 && (
+        <Svg width={size.width} height={size.height}>
       <Defs>
         {/* Base frosted glass gradient */}
         <LinearGradient id="lgBaseFillDark" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#1E2235" stopOpacity="0.65" />
-          <Stop offset="50%" stopColor="#131622" stopOpacity="0.58" />
-          <Stop offset="100%" stopColor="#0B0D15" stopOpacity="0.72" />
+          <Stop offset="0%" stopColor={tone === 'default' ? '#30334B' : tint} stopOpacity={tone === 'default' ? 0.82 : 0.94} />
+          <Stop offset="55%" stopColor={tone === 'default' ? '#1A1D30' : tint} stopOpacity={tone === 'default' ? 0.84 : 0.82} />
+          <Stop offset="100%" stopColor={tone === 'default' ? '#111422' : '#191728'} stopOpacity="0.96" />
         </LinearGradient>
         <LinearGradient id="lgBaseFillLight" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.94" />
-          <Stop offset="50%" stopColor="#F8FAFF" stopOpacity="0.86" />
-          <Stop offset="100%" stopColor="#EFF3FB" stopOpacity="0.80" />
+          <Stop offset="0%" stopColor={tone === 'default' ? '#FFFFFF' : tint} stopOpacity={tone === 'default' ? 0.96 : 0.90} />
+          <Stop offset="55%" stopColor={tone === 'default' ? '#F8FAFF' : tint} stopOpacity={tone === 'default' ? 0.92 : 0.85} />
+          <Stop offset="100%" stopColor={tone === 'default' ? '#E8EDFA' : tint} stopOpacity={tone === 'default' ? 0.90 : 0.95} />
         </LinearGradient>
 
         {/* Specular highlight streak across top edge — full card coverage with smooth gradient fade */}
         <LinearGradient id="lgTopSpec" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={isDark ? "0.18" : "0.70"} />
-          <Stop offset="20%" stopColor="#FFFFFF" stopOpacity={isDark ? "0.05" : "0.18"} />
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.18 : 0.55) : 0.10} />
+          <Stop offset="20%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.05 : 0.12) : 0.02} />
           <Stop offset="45%" stopColor="#FFFFFF" stopOpacity="0" />
           <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
         </LinearGradient>
@@ -174,8 +180,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
       <Rect
         x="0"
         y="0"
-        width="100%"
-        height="100%"
+        width={size.width}
+        height={size.height}
         rx={safeRadius}
         ry={safeRadius}
         fill={isDark ? "url(#lgBaseFillDark)" : "url(#lgBaseFillLight)"}
@@ -185,8 +191,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
       <Rect
         x="0"
         y="0"
-        width="100%"
-        height="100%"
+        width={size.width}
+        height={size.height}
         rx={safeRadius}
         ry={safeRadius}
         fill="url(#lgPrismSheen)"
@@ -196,8 +202,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
       <Rect
         x="0"
         y="0"
-        width="100%"
-        height="100%"
+        width={size.width}
+        height={size.height}
         rx={safeRadius}
         ry={safeRadius}
         fill="url(#lgTopSpec)"
@@ -207,15 +213,16 @@ export const LiquidGlassPrismOverlay: React.FC<{
       <Rect
         x="0.5"
         y="0.5"
-        width="99.5%"
-        height="99.5%"
-        rx={safeRadius}
-        ry={safeRadius}
+        width={size.width - 1}
+        height={size.height - 1}
+        rx={Math.max(0, safeRadius - 0.5)}
+        ry={Math.max(0, safeRadius - 0.5)}
         fill="none"
         stroke={isDark ? "url(#lgRimStrokeDark)" : "url(#lgRimStrokeLight)"}
         strokeWidth="1"
       />
-    </Svg>
+        </Svg>
+      )}
     </View>
   );
 });
@@ -231,10 +238,17 @@ export interface LiquidGlassCardProps {
   radius?: number;
   /** Extra padding override. Defaults to 16. */
   padding?: number;
+  /** Emphasized and semantic actions retain a tinted, translucent glass fill. */
+  tone?: GlassTone;
   /** Whether to show the prismatic border overlay. Default true. */
   showPrism?: boolean;
+  disabled?: boolean;
   /** Pressable callback */
   onPress?: () => void;
+  hitSlop?: Insets | number;
+  accessibilityRole?: any;
+  accessibilityLabel?: string;
+  accessibilityState?: any;
 }
 
 export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
@@ -244,7 +258,13 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   radius = 18,
   padding = 16,
   showPrism = true,
+  tone = 'default',
+  disabled = false,
   onPress,
+  hitSlop,
+  accessibilityRole,
+  accessibilityLabel,
+  accessibilityState,
 }) => {
   const { isDark } = useTheme();
 
@@ -265,25 +285,19 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   const resolvedPadding = hasCustomPadding ? undefined : padding;
   const isFlexOuter = outerStyles.flex !== undefined;
 
+  const cardShadowStyle: ViewStyle = {
+    borderRadius: radius,
+  };
+
   const cardSurfaceStyle: ViewStyle = {
     borderRadius: radius,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.82)',
-    backgroundColor: isDark ? 'rgba(11, 13, 20, 0.42)' : 'rgba(255, 255, 255, 0.74)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.92)',
     overflow: 'hidden',
     position: 'relative',
-    ...Platform.select({
-      ios: {
-        shadowColor: isDark ? '#000000' : '#312E81',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: isDark ? 0.35 : 0.07,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: isDark ? 2 : 1,
-      },
-    }),
     ...surfaceStyles,
+    // Legacy screen-level opaque fills must not hide the glass gradient.
+    backgroundColor: isDark ? '#171929' : '#EDF1FA',
   };
 
   const surfaceHeight = outerStyles.height;
@@ -293,18 +307,20 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
       style={[
         styles.surfaceWrapper,
         cardSurfaceStyle,
+        outerStyles.minHeight !== undefined ? { minHeight: outerStyles.minHeight } : undefined,
+        outerStyles.maxHeight !== undefined ? { maxHeight: outerStyles.maxHeight } : undefined,
         surfaceHeight !== undefined ? { height: surfaceHeight as any } : undefined,
         isFlexOuter ? { flex: outerStyles.flex, height: '100%' } : undefined,
       ]}
     >
       {showPrism && (
-        <LiquidGlassPrismOverlay borderRadius={radius} isDark={isDark} />
+        <LiquidGlassPrismOverlay borderRadius={radius} isDark={isDark} tone={tone} />
       )}
       <View
         style={[
           styles.innerContent,
           surfaceHeight !== undefined ? { height: '100%' } : undefined,
-          isFlexOuter ? { flex: 1 } : undefined,
+          (isFlexOuter || outerStyles.minHeight !== undefined) ? { flex: 1 } : undefined,
           resolvedPadding !== undefined ? { padding: resolvedPadding } : undefined,
           innerStyles,
           contentStyle,
@@ -319,10 +335,17 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     return (
       <Pressable
         onPress={onPress}
+        disabled={disabled}
+        hitSlop={hitSlop}
+        accessibilityRole={accessibilityRole ?? 'button'}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={accessibilityState}
         style={({ pressed }) => [
           styles.pressableRoot,
+          cardShadowStyle,
           outerStyles,
-          pressed && styles.pressed,
+          disabled && styles.disabled,
+          pressed && !disabled && styles.pressed,
         ]}
       >
         {cardContent}
@@ -331,7 +354,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   }
 
   return (
-    <View style={[styles.viewRoot, outerStyles]}>
+    <View style={[styles.viewRoot, cardShadowStyle, outerStyles]}>
       {cardContent}
     </View>
   );
@@ -352,8 +375,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   pressed: {
-    opacity: 0.88,
+    opacity: 0.86,
     transform: [{ scale: 0.985 }],
+  },
+  disabled: {
+    opacity: 0.48,
   },
 });
 

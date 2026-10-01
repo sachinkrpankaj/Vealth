@@ -100,6 +100,37 @@ describe('Database Schema & Migration Engine', () => {
     expect(executedSql).toContain('PRAGMA foreign_keys = ON;');
   });
 
+  it('restores foreign-key enforcement if rebuilding transactions fails', async () => {
+    const executedSql: string[] = [];
+    const mockDb: any = {
+      execAsync: jest.fn(async (sql: string) => { executedSql.push(sql); }),
+      getAllAsync: jest.fn(async () => [{ table: 'accounts' }]),
+      withTransactionAsync: jest.fn(async (callback: () => Promise<void>) => {
+        await callback();
+        throw new Error('migration failed');
+      }),
+    };
+
+    await expect(migrateDatabase(mockDb)).rejects.toThrow('migration failed');
+    expect(executedSql.slice(-1)).toEqual(['PRAGMA foreign_keys = ON;']);
+  });
+
+  it('retries initialization after a failed database open', async () => {
+    jest.resetModules();
+    const { openDatabaseAsync } = require('expo-sqlite');
+    const { getDatabase } = require('../../src/database/db');
+    const mockDb = {
+      execAsync: jest.fn(async () => {}),
+      getAllAsync: jest.fn(async (sql: string) =>
+        sql.includes('foreign_key_list') ? [{ table: 'assets' }, { table: 'liabilities' }] : [{ count: 1 }]),
+    };
+    openDatabaseAsync.mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValue(mockDb);
+
+    await expect(getDatabase()).rejects.toThrow('temporary failure');
+    await expect(getDatabase()).resolves.toBe(mockDb);
+    expect(openDatabaseAsync).toHaveBeenCalledTimes(2);
+  });
+
   it('tolerates already existing columns without throwing', async () => {
     const mockDb: any = {
       execAsync: jest.fn(async (sql: string) => {

@@ -104,39 +104,32 @@ export function getCreditCardBillingInfo(
   const refDay = referenceDate.getDate();
   const refDateStr = toLocalIsoDate(refYear, refMonth, refDay);
 
-  // 1. Determine last billing date (most recent statement date <= referenceDate)
+  // Billing days beyond the length of a month occur on its final day.
   let lastBillingYear = refYear;
   let lastBillingMonth = refMonth;
-
-  if (refDay < billingDay) {
-    // Has not hit billing day in current month; last statement was previous month
+  const thisMonthBillingDay = Math.min(billingDay, getDaysInMonth(refYear, refMonth));
+  if (refDay < thisMonthBillingDay) {
     lastBillingMonth -= 1;
     if (lastBillingMonth < 0) {
       lastBillingMonth = 11;
       lastBillingYear -= 1;
     }
   }
+  const lastBillingDate = toLocalIsoDate(
+    lastBillingYear, lastBillingMonth,
+    Math.min(billingDay, getDaysInMonth(lastBillingYear, lastBillingMonth))
+  );
 
-  const daysInLastBillingMonth = getDaysInMonth(lastBillingYear, lastBillingMonth);
-  const clampedLastBillingDay = Math.min(billingDay, daysInLastBillingMonth);
-  const lastBillingDate = toLocalIsoDate(lastBillingYear, lastBillingMonth, clampedLastBillingDay);
-
-  // 2. Determine next billing date (> referenceDate)
-  let nextBillingYear = refYear;
-  let nextBillingMonth = refMonth;
-
-  if (refDay >= billingDay) {
-    // Current month's billing has occurred; next statement is next month
-    nextBillingMonth += 1;
-    if (nextBillingMonth > 11) {
-      nextBillingMonth = 0;
-      nextBillingYear += 1;
-    }
+  let nextBillingYear = lastBillingYear;
+  let nextBillingMonth = lastBillingMonth + 1;
+  if (nextBillingMonth > 11) {
+    nextBillingMonth = 0;
+    nextBillingYear += 1;
   }
-
-  const daysInNextBillingMonth = getDaysInMonth(nextBillingYear, nextBillingMonth);
-  const clampedNextBillingDay = Math.min(billingDay, daysInNextBillingMonth);
-  const nextBillingDate = toLocalIsoDate(nextBillingYear, nextBillingMonth, clampedNextBillingDay);
+  const nextBillingDate = toLocalIsoDate(
+    nextBillingYear, nextBillingMonth,
+    Math.min(billingDay, getDaysInMonth(nextBillingYear, nextBillingMonth))
+  );
 
   // 3. Determine due date for the statement generated on lastBillingDate
   let dueYear = lastBillingYear;
@@ -178,7 +171,7 @@ export function getCreditCardBillingInfo(
 
   // Net debt incurred on or before lastBillingDate
   let billedBalance = Math.round(account.openingBalance ?? 0);
-  let postBillingPayments = 0;
+  let postBillingCredits = 0;
 
   for (const tx of activeTx) {
     const amount = Math.abs(Math.round(tx.amount));
@@ -190,25 +183,31 @@ export function getCreditCardBillingInfo(
         } else if (['INCOME', 'BORROW', 'REPAYMENT_RECEIVED', 'ASSET_SALE'].includes(tx.type)) {
           billedBalance = addMinor(billedBalance, amount);
         }
+      } else {
+        // Credits/refunds posted after billing date reduce statement debt
+        if (['INCOME', 'REPAYMENT_RECEIVED', 'ASSET_SALE'].includes(tx.type)) {
+          postBillingCredits = addMinor(postBillingCredits, amount);
+        }
       }
     }
 
-    // Destination transfers (bill payments)
+    // Destination transfers (bill payments into card account)
     if (tx.destinationAccountId === account.id && tx.type === 'TRANSFER') {
       if (tx.date <= lastBillingDate) {
         billedBalance = addMinor(billedBalance, amount);
       } else {
-        postBillingPayments = addMinor(postBillingPayments, amount);
+        postBillingCredits = addMinor(postBillingCredits, amount);
       }
     }
   }
 
   const billedDebt = Math.max(0, -billedBalance);
-  // Any payments made after statement date reduce this billed statement debt
+  // Any payments and credits (refunds/transfers) made after statement date reduce this billed statement debt
   const unpaidBillAmount = Math.max(
     0,
-    Math.min(usedAmount, subMinor(billedDebt, postBillingPayments))
+    Math.min(usedAmount, subMinor(billedDebt, postBillingCredits))
   );
+  // Unbilled spend represents post-statement charges (cleanly partitioned without double counting)
   const unbilledAmount = Math.max(0, subMinor(usedAmount, unpaidBillAmount));
   const isBillActive = unpaidBillAmount > 0;
   const isOverdue = isBillActive && refDateStr > dueDate;

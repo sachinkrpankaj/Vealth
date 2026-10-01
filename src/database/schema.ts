@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL,
   type TEXT NOT NULL, -- 'INCOME' | 'EXPENSE'
   icon TEXT NOT NULL,
+  color TEXT,
   isDefault INTEGER NOT NULL DEFAULT 0,
+  isArchived INTEGER NOT NULL DEFAULT 0,
+  monthYear TEXT, -- e.g. '2026-10' for monthly General fallback, null for custom global categories
   createdAt TEXT NOT NULL
 );
 

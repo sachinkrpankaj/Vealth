@@ -13,6 +13,7 @@ module.exports = {
     '^expo-document-picker$': '<rootDir>/__mocks__/expo-document-picker.ts',
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
     '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
+    '^expo-local-authentication$': '<rootDir>/__mocks__/expo-local-authentication.ts',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {

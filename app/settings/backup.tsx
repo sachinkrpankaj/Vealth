@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, FileSpreadsheet, HardDriveDownload, HardDriveUpload, CheckCircle } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
 import { useTheme } from '../../src/theme';
@@ -81,20 +82,10 @@ export default function BackupScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Data & Backup</Text>
 

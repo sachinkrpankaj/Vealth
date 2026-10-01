@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { ArrowLeft, Plus, ShieldAlert, CreditCard, Landmark, CircleDot } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
@@ -21,15 +22,89 @@ function getLiabilityIcon(type: LiabilityType) {
   }
 }
 
+import { updateLiability, deleteLiability, archiveLiability } from '../../src/database/repositories/liabilityRepository';
+import { AmountInput } from '../../src/components/ui/AmountInput';
+import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { Modal, TextInput, Alert } from 'react-native';
+import { Trash2, Edit2, X } from 'lucide-react-native';
+
 export default function LiabilitiesListScreen() {
   const { colors, radii, spacing, typography } = useTheme();
   const { standaloneLiabilities, refresh } = useFinancialData();
+
+  const [selectedLiability, setSelectedLiability] = useState<Liability | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAmount, setEditAmount] = useState(0);
+  const [editNote, setEditNote] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
       refresh();
     }, [refresh])
   );
+
+  const handleOpenLiability = (item: Liability) => {
+    setSelectedLiability(item);
+    setEditName(item.name);
+    setEditAmount(item.amount);
+    setEditNote(item.note || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedLiability) return;
+    if (!editName.trim()) {
+      Alert.alert('Required', 'Please enter a liability name');
+      return;
+    }
+    if (editAmount <= 0) {
+      Alert.alert('Required', 'Please enter an obligation amount greater than zero');
+      return;
+    }
+    try {
+      setIsSaving(true);
+      await updateLiability(selectedLiability.id, {
+        name: editName.trim(),
+        amount: editAmount,
+        note: editNote.trim() || undefined,
+      });
+      await refresh();
+      setEditModalVisible(false);
+      setSelectedLiability(null);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to update liability');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!selectedLiability) return;
+    Alert.alert(
+      'Delete Liability',
+      `Are you sure you want to delete ${selectedLiability.name}? If it is referenced by past transactions, it will be safely archived to preserve records.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteLiability(selectedLiability.id);
+              await refresh();
+              setEditModalVisible(false);
+              setSelectedLiability(null);
+            } catch (e: any) {
+              Alert.alert('Delete Error', e?.message || 'Failed to delete liability');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const totalObligations = standaloneLiabilities.reduce(
     (acc, curr) => acc + curr.amount,
@@ -40,36 +115,17 @@ export default function LiabilitiesListScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Liabilities & Debt</Text>
 
-        <Pressable
-          onPress={() => router.push('/liabilities/add')}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.textPrimary,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <Plus size={18} color={colors.background} />
-        </Pressable>
+        <LiquidGlassCard onPress={() => router.push('/liabilities/add')} hitSlop={10}
+          accessibilityLabel="Add new liability" tone="emphasized" radius={radii.full} padding={0} style={styles.iconBtn}>
+          <Plus size={18} color="#FFFFFF" />
+        </LiquidGlassCard>
       </View>
 
       {/* Hero Card */}
@@ -104,7 +160,13 @@ export default function LiabilitiesListScreen() {
           renderItem={({ item }) => {
             const Icon = getLiabilityIcon(item.type);
             return (
-              <Card style={styles.card}>
+              <LiquidGlassCard
+                onPress={() => handleOpenLiability(item)}
+                radius={radii.md}
+                padding={0}
+                style={[styles.card, { backgroundColor: colors.surfaceElevated }]}
+                accessibilityLabel={`Manage liability ${item.name}`}
+              >
                 <View style={styles.row}>
                   <View
                     style={[
@@ -140,11 +202,94 @@ export default function LiabilitiesListScreen() {
                     <AmountText amount={item.amount} size="bodyLg" variant="negative" />
                   </View>
                 </View>
-              </Card>
+              </LiquidGlassCard>
             );
           }}
         />
       )}
+
+      {/* Liability Manage / Edit Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Manage Liability</Text>
+              <Pressable
+                onPress={() => setEditModalVisible(false)}
+                hitSlop={10}
+                accessibilityLabel="Close"
+              >
+                <X size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Liability Name</Text>
+            <View
+              style={[
+                styles.inputBox,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: radii.md,
+                  marginBottom: 14,
+                },
+              ]}
+            >
+              <TextInput
+                value={editName}
+                onChangeText={setEditName}
+                style={[styles.textInput, { color: colors.textPrimary }]}
+                placeholder="Liability name"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <AmountInput
+              label="Remaining Obligation"
+              value={editAmount}
+              onChangeAmount={setEditAmount}
+            />
+
+            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>Note</Text>
+            <View
+              style={[
+                styles.inputBox,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: radii.md,
+                  marginBottom: 20,
+                },
+              ]}
+            >
+              <TextInput
+                value={editNote}
+                onChangeText={setEditNote}
+                style={[styles.textInput, { color: colors.textPrimary }]}
+                placeholder="Optional note"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={{ gap: 10 }}>
+              <PrimaryButton
+                title="Save Changes"
+                onPress={handleSaveEdit}
+                loading={isSaving}
+              />
+              <SecondaryButton
+                title="Delete Liability"
+                onPress={handleDelete}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -206,5 +351,40 @@ const styles = StyleSheet.create({
   },
   amountCol: {
     alignItems: 'flex-end',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalCard: {
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  inputBox: {
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 48,
+    justifyContent: 'center',
+  },
+  textInput: {
+    fontSize: 14,
   },
 });

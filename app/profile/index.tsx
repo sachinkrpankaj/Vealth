@@ -26,7 +26,10 @@ import {
   Plus,
   ChevronRight,
   ShieldCheck,
+  CreditCard,
   TrendingUp,
+  PiggyBank,
+  CircleDot,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
@@ -38,6 +41,7 @@ import { useTheme } from '../../src/theme';
 import { useThemeStore } from '../../src/stores/useThemeStore';
 import { setSetting } from '../../src/database/repositories/settingsRepository';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { getCreditCardBillingInfo } from '../../src/domain/finance/creditCardBilling';
 
 export default function ProfileScreen() {
   const { colors, isDark, typography, radii, spacing } = useTheme();
@@ -46,6 +50,7 @@ export default function ProfileScreen() {
     userName,
     accounts,
     accountBalances,
+    transactions,
     physicalAssets,
     standaloneLiabilities,
     netWorth,
@@ -117,9 +122,12 @@ export default function ProfileScreen() {
         {/* 1. Header Row */}
         <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
           <LiquidGlassCard
-            radius={14}
-            padding={10}
+            radius={19}
+            padding={9}
             onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
             style={styles.headerBtn}
           >
             <ArrowLeft size={18} color={colors.textPrimary} strokeWidth={2.2} />
@@ -138,9 +146,12 @@ export default function ProfileScreen() {
           </Text>
 
           <LiquidGlassCard
-            radius={14}
-            padding={10}
+            radius={19}
+            padding={9}
             onPress={() => router.push('/settings')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
             style={styles.headerBtn}
           >
             <SettingsIcon size={18} color={colors.textPrimary} strokeWidth={2.2} />
@@ -194,33 +205,15 @@ export default function ProfileScreen() {
                       },
                     ]}
                   />
-                  <Pressable
-                    onPress={handleSaveName}
-                    disabled={isSavingName}
-                    style={({ pressed }) => [
-                      styles.actionIconBtn,
-                      {
-                        backgroundColor: colors.positive,
-                        opacity: pressed || isSavingName ? 0.7 : 1,
-                      },
-                    ]}
-                  >
+                  <LiquidGlassCard onPress={handleSaveName} disabled={isSavingName}
+                    accessibilityLabel="Save name" accessibilityState={{ disabled: isSavingName }}
+                    tone="positive" radius={radii.full} padding={0} style={styles.actionIconBtn}>
                     <Check size={16} color="#FFFFFF" strokeWidth={3} />
-                  </Pressable>
-                  <Pressable
-                    onPress={handleCancelEdit}
-                    style={({ pressed }) => [
-                      styles.actionIconBtn,
-                      {
-                        backgroundColor: colors.surfaceSubtle,
-                        borderColor: colors.border,
-                        borderWidth: 1,
-                        opacity: pressed ? 0.7 : 1,
-                      },
-                    ]}
-                  >
+                  </LiquidGlassCard>
+                  <LiquidGlassCard onPress={handleCancelEdit} accessibilityLabel="Cancel name edit"
+                    radius={radii.full} padding={0} style={styles.actionIconBtn}>
                     <X size={16} color={colors.textSecondary} strokeWidth={2.5} />
-                  </Pressable>
+                  </LiquidGlassCard>
                 </View>
               ) : (
                 <View style={styles.nameDisplayRow}>
@@ -236,22 +229,13 @@ export default function ProfileScreen() {
                   >
                     {userName || 'Vault Owner'}
                   </Text>
-                  <Pressable
+                  <LiquidGlassCard
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
                       setIsEditingName(true);
                     }}
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      styles.editPillBtn,
-                      {
-                        backgroundColor: isDark
-                          ? 'rgba(255, 255, 255, 0.08)'
-                          : 'rgba(99, 102, 241, 0.10)',
-                        borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(99, 102, 241, 0.25)',
-                        opacity: pressed ? 0.7 : 1,
-                      },
-                    ]}
+                    accessibilityLabel="Edit name" hitSlop={8}
+                    radius={radii.full} padding={0} style={styles.editPillBtn}
                   >
                     <Pencil
                       size={12}
@@ -269,7 +253,7 @@ export default function ProfileScreen() {
                     >
                       Edit
                     </Text>
-                  </Pressable>
+                  </LiquidGlassCard>
                 </View>
               )}
 
@@ -284,7 +268,7 @@ export default function ProfileScreen() {
                     },
                   ]}
                 >
-                  Private Portfolio • On-Device Encrypted
+                  Private Portfolio • Stored On Device
                 </Text>
               </View>
             </View>
@@ -296,21 +280,11 @@ export default function ProfileScreen() {
         <LiquidGlassCard style={styles.themeCard} radius={radii.xl} padding={10}>
           <View style={styles.themeOptionsGrid}>
             {/* Dark Mode Pill */}
-            <Pressable
-              onPress={() => handleThemeChange('dark')}
-              style={({ pressed }) => [
-                styles.themeOptionTile,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(129, 140, 248, 0.14)'
-                    : 'rgba(0, 0, 0, 0.02)',
-                  borderColor: isDark ? 'rgba(129, 140, 248, 0.45)' : 'rgba(0, 0, 0, 0.04)',
-                  borderWidth: 1,
-                  borderRadius: radii.lg,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
+            <LiquidGlassCard onPress={() => handleThemeChange('dark')}
+              accessibilityLabel="Dark Obsidian theme" accessibilityState={{ selected: isDark }}
+              radius={radii.lg} padding={0}
+              style={[styles.themeOptionTile, isDark && { borderColor: colors.accent, borderWidth: 2 }]}>
+
               <View style={[styles.themeIconWrap, { backgroundColor: '#1E1B4B' }]}>
                 <Moon size={18} color="#818CF8" strokeWidth={2.2} />
               </View>
@@ -343,24 +317,14 @@ export default function ProfileScreen() {
                   <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 </View>
               )}
-            </Pressable>
+            </LiquidGlassCard>
 
             {/* Light Mode Pill */}
-            <Pressable
-              onPress={() => handleThemeChange('light')}
-              style={({ pressed }) => [
-                styles.themeOptionTile,
-                {
-                  backgroundColor: !isDark
-                    ? 'rgba(99, 102, 241, 0.10)'
-                    : 'rgba(255, 255, 255, 0.03)',
-                  borderColor: !isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(255, 255, 255, 0.06)',
-                  borderWidth: 1,
-                  borderRadius: radii.lg,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
+            <LiquidGlassCard onPress={() => handleThemeChange('light')}
+              accessibilityLabel="Clean Light theme" accessibilityState={{ selected: !isDark }}
+              radius={radii.lg} padding={0}
+              style={[styles.themeOptionTile, !isDark && { borderColor: colors.accent, borderWidth: 2 }]}>
+
               <View style={[styles.themeIconWrap, { backgroundColor: '#FEF3C7' }]}>
                 <Sun size={18} color="#D97706" strokeWidth={2.2} />
               </View>
@@ -393,7 +357,7 @@ export default function ProfileScreen() {
                   <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 </View>
               )}
-            </Pressable>
+            </LiquidGlassCard>
           </View>
         </LiquidGlassCard>
 
@@ -436,36 +400,62 @@ export default function ProfileScreen() {
               >
                 Add your bank, cash wallets or investment accounts
               </Text>
-              <Pressable
-                onPress={() => router.push('/accounts/add')}
-                style={({ pressed }) => [
-                  styles.addAccountBtn,
-                  {
-                    backgroundColor: colors.textPrimary,
-                    borderRadius: radii.full,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
-                <Plus size={14} color={colors.background} strokeWidth={2.8} />
+              <LiquidGlassCard onPress={() => router.push('/accounts/add')}
+                accessibilityLabel="Add account" tone="emphasized"
+                radius={radii.full} padding={0} style={styles.addAccountBtn}>
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.8} />
                 <Text
                   style={[
                     styles.addAccountBtnText,
                     {
-                      color: colors.background,
+                      color: '#FFFFFF',
                       fontFamily: typography.fontFamilies.bold,
                     },
                   ]}
                 >
                   Add Account
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             </View>
           ) : (
             accounts.map((acc, index) => {
               const balance = accountBalances.get(acc.id) ?? acc.openingBalance;
               const isBank = acc.type === 'BANK';
-              const IconComponent = isBank ? Landmark : acc.type === 'CASH' ? Wallet : TrendingUp;
+              const isCash = acc.type === 'CASH';
+              const isCC = acc.type === 'CREDIT_CARD';
+              const isInvest = acc.type === 'INVESTMENT';
+
+              const IconComponent = isBank
+                ? Landmark
+                : isCash
+                ? Wallet
+                : isCC
+                ? CreditCard
+                : isInvest
+                ? TrendingUp
+                : CircleDot;
+
+              const badgeColor = isBank
+                ? '#6366F1'
+                : isCash
+                ? '#10B981'
+                : isCC
+                ? '#EC4899'
+                : isInvest
+                ? '#F59E0B'
+                : '#64748B';
+
+              const badgeBg = isBank
+                ? 'rgba(99, 102, 241, 0.12)'
+                : isCash
+                ? 'rgba(16, 185, 129, 0.12)'
+                : isCC
+                ? 'rgba(236, 72, 153, 0.12)'
+                : isInvest
+                ? 'rgba(245, 158, 11, 0.12)'
+                : 'rgba(100, 116, 139, 0.12)';
+
+              const ccInfo = isCC ? getCreditCardBillingInfo(acc, transactions) : null;
               const isLast = index === accounts.length - 1;
 
               return (
@@ -487,16 +477,14 @@ export default function ProfileScreen() {
                     style={[
                       styles.accountIconBadge,
                       {
-                        backgroundColor: isBank
-                          ? 'rgba(99, 102, 241, 0.12)'
-                          : 'rgba(16, 185, 129, 0.12)',
+                        backgroundColor: badgeBg,
                         borderRadius: radii.md,
                       },
                     ]}
                   >
                     <IconComponent
                       size={18}
-                      color={isBank ? '#6366F1' : '#10B981'}
+                      color={badgeColor}
                       strokeWidth={2.2}
                     />
                   </View>
@@ -523,16 +511,44 @@ export default function ProfileScreen() {
                         },
                       ]}
                     >
-                      {acc.type === 'BANK' ? 'Bank Account' : acc.type === 'CASH' ? 'Cash Wallet' : 'Investment'}
+                      {isBank
+                        ? 'Bank Account'
+                        : isCash
+                        ? 'Cash Wallet'
+                        : isCC
+                        ? 'Credit Card'
+                        : isInvest
+                        ? 'Investment'
+                        : 'Other Account'}
                     </Text>
                   </View>
 
                   <View style={{ alignItems: 'flex-end' }}>
-                    <AmountText
-                      amount={balance}
-                      size="bodyLg"
-                      variant={balance < 0 ? 'negative' : 'default'}
-                    />
+                    {isCC && ccInfo ? (
+                      <>
+                        <AmountText
+                          amount={ccInfo.remainingLimit}
+                          size="bodyLg"
+                          variant="default"
+                        />
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            color: colors.textMuted,
+                            fontFamily: typography.fontFamilies.medium,
+                            marginTop: 1,
+                          }}
+                        >
+                          Remaining
+                        </Text>
+                      </>
+                    ) : (
+                      <AmountText
+                        amount={balance}
+                        size="bodyLg"
+                        variant={balance < 0 ? 'negative' : 'default'}
+                      />
+                    )}
                   </View>
                 </Pressable>
               );
@@ -714,8 +730,6 @@ const styles = StyleSheet.create({
   headerBtn: {
     width: 38,
     height: 38,
-    borderRadius: 999,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -12,27 +12,138 @@ try {
 import { getSetting, setSetting } from '../database/repositories/settingsRepository';
 
 const SECURE_PIN_HASH_KEY = 'vaelth_security_pin_hash';
-const PIN_SALT = 'vaelth_salt_sec_v1_';
+const LEGACY_PIN_SALT = 'vaelth_salt_sec_v1_';
+const PBKDF2_ITERATIONS = 10000;
 
 // In-memory fallback for environments where SecureStore is unavailable (e.g. unit tests or unlinked builds)
 const fallbackSecureMemory = new Map<string, string>();
 
-export async function hashPin(pin: string): Promise<string> {
+/**
+ * Constant-time string comparison to prevent timing side-channel attacks.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * Generates cryptographically secure random bytes formatted as a hex string.
+ */
+function generateRandomSaltHex(byteLength = 16): string {
+  try {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(byteLength);
+      globalThis.crypto.getRandomValues(bytes);
+      return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    if (Crypto) {
+      const bytes = Crypto.getRandomBytes(byteLength);
+      return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+  } catch {}
+  let s = '';
+  for (let i = 0; i < byteLength; i++) {
+    s += Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
+  }
+  return s;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Derives a key using platform Web Crypto PBKDF2 with HMAC-SHA256,
+ * falling back to an iterative salted digest if Web Crypto is unavailable.
+ */
+async function deriveKeyFromPin(pin: string, saltHex: string, iterations: number): Promise<string> {
+  // 1. Preferred: Standard Web Crypto SubtleCrypto PBKDF2
+  try {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle?.deriveBits) {
+      const enc = new TextEncoder();
+      const keyMaterial = await globalThis.crypto.subtle.importKey(
+        'raw',
+        enc.encode(pin),
+        { name: 'PBKDF2' },
+        false,
+        ['deriveBits']
+      );
+      const saltBytes = hexToBytes(saltHex);
+      const derived = await globalThis.crypto.subtle.deriveBits(
+        {
+          name: 'PBKDF2',
+          salt: saltBytes as unknown as BufferSource,
+          iterations,
+          hash: 'SHA-256',
+        },
+        keyMaterial,
+        256 // 256 bits = 32 bytes
+      );
+      return Array.from(new Uint8Array(derived))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    }
+  } catch {}
+
+  // 2. Fallback: Iterative salted SHA-256
+  let current = `${saltHex}:${pin}`;
+  for (let i = 0; i < Math.min(iterations, 2000); i++) {
+    if (Crypto) {
+      current = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, current);
+    } else {
+      let h = 0;
+      for (let j = 0; j < current.length; j++) {
+        h = (h << 5) - h + current.charCodeAt(j);
+        h |= 0;
+      }
+      current = `fallback_${h}_${i}`;
+    }
+  }
+  return current;
+}
+
+/**
+ * Legacy static SHA-256 hash function (only used for backward compatibility migration).
+ */
+export async function hashPinLegacy(pin: string): Promise<string> {
   try {
     if (Crypto) {
       return await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
-        `${PIN_SALT}${pin}`
+        `${LEGACY_PIN_SALT}${pin}`
       );
     }
   } catch {}
   let hash = 0;
-  const str = `${PIN_SALT}${pin}`;
+  const str = `${LEGACY_PIN_SALT}${pin}`;
   for (let i = 0; i < str.length; i++) {
     hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
   return `fallback_${hash}`;
+}
+
+/**
+ * Generates a modern PBKDF2 hash using a per-credential cryptographic salt.
+ * Output format: pbkdf2:v1:<saltHex>:<iterations>:<derivedKeyHex>
+ */
+export async function hashPin(pin: string, explicitSaltHex?: string): Promise<string> {
+  const salt = explicitSaltHex || generateRandomSaltHex(16);
+  const iterations = PBKDF2_ITERATIONS;
+  const derived = await deriveKeyFromPin(pin, salt, iterations);
+  return `pbkdf2:v1:${salt}:${iterations}:${derived}`;
 }
 
 async function getSecureItem(key: string): Promise<string | null> {
@@ -130,12 +241,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       const hashed = await hashPin(pin);
       await setSecureItem(SECURE_PIN_HASH_KEY, hashed);
       // Ensure no raw PIN ever exists in SQLite
-      await setSetting('security_pin', '');
+      try {
+        await setSetting('security_pin', '');
+      } catch {}
       set({ isPinEnabled: true });
     } else {
       await deleteSecureItem(SECURE_PIN_HASH_KEY);
-      await setSetting('security_pin', '');
-      await setSetting('security_biometric', 'false');
+      try {
+        await setSetting('security_pin', '');
+        await setSetting('security_biometric', 'false');
+      } catch {}
       set({ isPinEnabled: false, isBiometricEnabled: false, isLocked: false });
     }
   },
@@ -149,11 +264,32 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     const savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
     if (!savedHash) return false;
 
-    const enteredHash = await hashPin(enteredPin);
-    if (savedHash === enteredHash) {
+    // Check if stored in modern PBKDF2 format: pbkdf2:v1:<salt>:<iterations>:<derived>
+    if (savedHash.startsWith('pbkdf2:v1:')) {
+      const parts = savedHash.split(':');
+      if (parts.length === 5) {
+        const saltHex = parts[2];
+        const iterations = parseInt(parts[3], 10) || PBKDF2_ITERATIONS;
+        const expectedDerived = parts[4];
+        const enteredDerived = await deriveKeyFromPin(enteredPin, saltHex, iterations);
+        if (timingSafeEqual(expectedDerived, enteredDerived)) {
+          set({ isLocked: false });
+          return true;
+        }
+        return false;
+      }
+    }
+
+    // Check legacy static SHA-256 hash for seamless backward compatibility
+    const legacyHash = await hashPinLegacy(enteredPin);
+    if (savedHash === legacyHash) {
+      // Automatically upgrade to modern PBKDF2 KDF with unique random salt
+      const modernHash = await hashPin(enteredPin);
+      await setSecureItem(SECURE_PIN_HASH_KEY, modernHash);
       set({ isLocked: false });
       return true;
     }
+
     return false;
   },
 

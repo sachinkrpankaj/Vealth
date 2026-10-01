@@ -108,6 +108,17 @@ describe('Backup & Restore Integrity Engine', () => {
       expect(validateBackupData(bad2).isValid).toBe(false);
     });
 
+    it('rejects malformed optional tables and corrupt monetary records before destructive restore', () => {
+      expect(validateBackupData({ ...validSampleBackup, data: { ...validSampleBackup.data, assets: undefined } }).isValid).toBe(false);
+      expect(validateBackupData({ ...validSampleBackup, data: { ...validSampleBackup.data, settings: [] } }).isValid).toBe(false);
+      expect(validateBackupData({ ...validSampleBackup, data: { ...validSampleBackup.data,
+        transactions: [{ ...validSampleBackup.data.transactions[0], amount: '5000000' }] } }).isValid).toBe(false);
+      expect(validateBackupData({ ...validSampleBackup, data: { ...validSampleBackup.data,
+        accounts: [...validSampleBackup.data.accounts, validSampleBackup.data.accounts[0]] } }).isValid).toBe(false);
+      expect(validateBackupData({ ...validSampleBackup, data: { ...validSampleBackup.data,
+        transactions: [{ ...validSampleBackup.data.transactions[0], accountId: 'missing' }] } }).isValid).toBe(false);
+    });
+
     it('verifies roundtrip serialization without precision loss or sensitive keys', () => {
       // JSON serialization & parsing simulation
       const serialized = JSON.stringify(validSampleBackup);

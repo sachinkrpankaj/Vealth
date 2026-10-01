@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, TrendingUp, ShieldCheck } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { CategoryBreakdownChart, CategoryBreakdownItem } from '../../src/components/charts/CategoryBreakdownChart';
@@ -96,20 +97,10 @@ export default function AnalyticsScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Financial Analytics</Text>
 

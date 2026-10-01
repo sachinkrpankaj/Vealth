@@ -6,7 +6,7 @@ import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
 import { PersonRow } from '../../src/components/ui/PersonRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
-import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../../src/components/ui/LiquidGlassCard';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -36,7 +36,7 @@ export default function MoneyScreen() {
   });
 
   return (
-    <ScreenContainer scrollable contentContainerStyle={styles.scrollContent}>
+    <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.scrollContent}>
       {/* 1. Header (matching Reference Image 1) */}
       <AppHeader
         title="credit & debt"
@@ -46,43 +46,36 @@ export default function MoneyScreen() {
       />
 
       {/* 2. Modern Segmented Switch */}
-      <View
-        style={[
-          styles.segmentedContainer,
-          {
-            backgroundColor: isDark
-              ? 'rgba(255, 255, 255, 0.07)'
-              : 'rgba(255, 255, 255, 0.70)',
-            borderColor: isDark
-              ? 'rgba(255, 255, 255, 0.12)'
-              : 'rgba(255, 255, 255, 0.85)',
-          },
-        ]}
-      >
+      <LiquidGlassCard radius={24} padding={4} contentStyle={styles.segmentedContainer}>
+        <View style={styles.segmentRow}>
+        {/* Each segment has its own measured glass layer. */}
+
         <Pressable
           onPress={() => {
             Haptics.selectionAsync().catch(() => {});
             setActiveTab('OWED_TO_ME');
           }}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'OWED_TO_ME' }}
+          accessibilityLabel="Credit to Collect tab"
           style={[
             styles.segmentButton,
             activeTab === 'OWED_TO_ME' && [
               styles.activeSegment,
               {
-                backgroundColor: isDark ? '#FFFFFF' : '#13131B',
+                backgroundColor: isDark ? '#171929' : '#EDF1FA',
               },
             ],
           ]}
         >
+          <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={activeTab === 'OWED_TO_ME' ? 'emphasized' : 'default'} />
           <Text
             style={[
               styles.segmentText,
               {
                 color:
                   activeTab === 'OWED_TO_ME'
-                    ? isDark
-                      ? '#090A0E'
-                      : '#FFFFFF'
+                    ? '#FFFFFF'
                     : colors.textSecondary,
                 fontFamily:
                   activeTab === 'OWED_TO_ME'
@@ -100,25 +93,27 @@ export default function MoneyScreen() {
             Haptics.selectionAsync().catch(() => {});
             setActiveTab('I_OWE');
           }}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'I_OWE' }}
+          accessibilityLabel="Debt I Owe tab"
           style={[
             styles.segmentButton,
             activeTab === 'I_OWE' && [
               styles.activeSegment,
               {
-                backgroundColor: isDark ? '#FFFFFF' : '#13131B',
+                backgroundColor: isDark ? '#171929' : '#EDF1FA',
               },
             ],
           ]}
         >
+          <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={activeTab === 'I_OWE' ? 'emphasized' : 'default'} />
           <Text
             style={[
               styles.segmentText,
               {
                 color:
                   activeTab === 'I_OWE'
-                    ? isDark
-                      ? '#090A0E'
-                      : '#FFFFFF'
+                    ? '#FFFFFF'
                     : colors.textSecondary,
                 fontFamily:
                   activeTab === 'I_OWE'
@@ -130,7 +125,8 @@ export default function MoneyScreen() {
             Debt
           </Text>
         </Pressable>
-      </View>
+        </View>
+      </LiquidGlassCard>
 
       {/* 3. Hero Total Summary Card with Giant Number */}
       <LiquidGlassCard style={styles.heroSummaryCard} radius={22} padding={18}>
@@ -266,7 +262,13 @@ export default function MoneyScreen() {
             </View>
           )}
         </View>
-        <Pressable onPress={() => router.push('/people')}>
+        <Pressable
+          onPress={() => router.push('/people')}
+          accessibilityRole="button"
+          accessibilityLabel="Manage People Directory"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={{ minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end' }}
+        >
           <Text
             style={[
               styles.seeAllText,
@@ -418,18 +420,11 @@ export default function MoneyScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 20,
     paddingHorizontal: 16,
   },
-  segmentedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    marginBottom: 16,
-    height: 48,
-  },
+  segmentedContainer: { height: 48 },
+  segmentRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   emptyCard: {
     marginTop: 4,
     marginBottom: 16,
@@ -440,6 +435,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   activeSegment: {
     shadowColor: '#000000',

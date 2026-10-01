@@ -95,3 +95,20 @@ export async function updateLiability(id: string, updates: Partial<Liability>): 
 export async function archiveLiability(id: string): Promise<void> {
   await updateLiability(id, { isArchived: true });
 }
+
+export async function deleteLiability(id: string): Promise<void> {
+  const db = await getDatabase();
+  const txRef = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE liabilityId = ? AND deletedAt IS NULL;',
+    [id]
+  );
+  if ((txRef?.count ?? 0) > 0) {
+    // Preserve transaction history by archiving
+    await db.runAsync('UPDATE liabilities SET isArchived = 1, updatedAt = ? WHERE id = ?;', [
+      new Date().toISOString(),
+      id,
+    ]);
+  } else {
+    await db.runAsync('DELETE FROM liabilities WHERE id = ?;', [id]);
+  }
+}

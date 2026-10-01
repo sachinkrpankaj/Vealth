@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { ArrowLeft, UserPlus } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { SearchBar } from '../../src/components/ui/SearchBar';
 import { PersonRow } from '../../src/components/ui/PersonRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -29,36 +30,17 @@ export default function PeopleListScreen() {
     <ScreenContainer>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.sm }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>People Directory</Text>
 
-        <Pressable
-          onPress={() => router.push('/people/add')}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.textPrimary,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
-          <UserPlus size={18} color={colors.background} />
-        </Pressable>
+        <LiquidGlassCard onPress={() => router.push('/people/add')} hitSlop={10}
+          accessibilityLabel="Add person" tone="emphasized" radius={radii.full} padding={0} style={styles.iconBtn}>
+          <UserPlus size={18} color="#FFFFFF" />
+        </LiquidGlassCard>
       </View>
 
       {/* Search */}

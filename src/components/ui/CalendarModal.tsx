@@ -271,53 +271,27 @@ export function CalendarModal({
                 </Text>
               </View>
 
-              <Pressable
-                onPress={() => handleSmoothClose()}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  {
-                    backgroundColor: colors.surfaceSubtle,
-                    borderRadius: radii.full,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => handleSmoothClose()} hitSlop={8} accessibilityLabel="Close calendar" radius={radii.full} padding={0} style={styles.closeBtn}>
                 <X size={16} color={colors.textSecondary} />
-              </Pressable>
+              </LiquidGlassCard>
             </View>
 
           {/* Month & Year Navigation Bar */}
           <View style={[styles.navBar, { borderBottomColor: colors.borderSubtle }]}>
-            <Pressable
-              onPress={handlePrevMonth}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.navArrowBtn,
-                {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                  opacity: pressed ? 0.6 : 1,
-                },
-              ]}
-            >
+            <LiquidGlassCard onPress={handlePrevMonth} hitSlop={8} accessibilityLabel="Previous month" radius={radii.full} padding={0} style={styles.navArrowBtn}>
               <ChevronLeft size={18} color={colors.textPrimary} />
-            </Pressable>
+            </LiquidGlassCard>
 
-            <Pressable
+            <LiquidGlassCard
               onPress={() => {
                 Haptics.selectionAsync().catch(() => {});
                 setShowFastPicker(!showFastPicker);
               }}
-              style={({ pressed }) => [
-                styles.monthYearSelectorBtn,
-                {
-                  backgroundColor: showFastPicker ? colors.goldBg : colors.surfaceSubtle,
-                  borderColor: showFastPicker ? colors.gold : colors.borderSubtle,
-                  borderRadius: radii.full,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
+              accessibilityLabel="Choose month and year"
+              radius={radii.full}
+              padding={0}
+              tone={showFastPicker ? 'emphasized' : 'default'}
+              style={styles.monthYearSelectorBtn}
             >
               <Text
                 style={[
@@ -338,22 +312,11 @@ export function CalendarModal({
                   transform: [{ rotate: showFastPicker ? '180deg' : '0deg' }],
                 }}
               />
-            </Pressable>
+            </LiquidGlassCard>
 
-            <Pressable
-              onPress={handleNextMonth}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.navArrowBtn,
-                {
-                  backgroundColor: colors.surfaceSubtle,
-                  borderRadius: radii.full,
-                  opacity: pressed ? 0.6 : 1,
-                },
-              ]}
-            >
+            <LiquidGlassCard onPress={handleNextMonth} hitSlop={8} accessibilityLabel="Next month" radius={radii.full} padding={0} style={styles.navArrowBtn}>
               <ChevronRight size={18} color={colors.textPrimary} />
-            </Pressable>
+            </LiquidGlassCard>
           </View>
 
           {/* Fast Month / Year Jump View */}
@@ -371,28 +334,22 @@ export function CalendarModal({
                 {Array.from({ length: 12 }).map((_, idx) => {
                   const isCurrentMonthActive = viewMonth === idx;
                   return (
-                    <Pressable
+                    <LiquidGlassCard
                       key={idx}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
                         setViewMonth(idx);
                       }}
-                      style={({ pressed }) => [
-                        styles.monthChip,
-                        {
-                          backgroundColor: isCurrentMonthActive
-                            ? colors.gold
-                            : colors.surfaceSubtle,
-                          borderRadius: radii.sm,
-                          opacity: pressed ? 0.75 : 1,
-                        },
-                      ]}
+                      radius={radii.sm}
+                      padding={0}
+                      tone={isCurrentMonthActive ? 'emphasized' : 'default'}
+                      style={styles.monthChip}
                     >
                       <Text
                         style={[
                           styles.monthChipText,
                           {
-                            color: isCurrentMonthActive ? '#090A0E' : colors.textPrimary,
+                            color: colors.textPrimary,
                             fontFamily: isCurrentMonthActive
                               ? typography.fontFamilies.bold
                               : typography.fontFamilies.medium,
@@ -401,7 +358,7 @@ export function CalendarModal({
                       >
                         {getMonthName(idx, true)}
                       </Text>
-                    </Pressable>
+                    </LiquidGlassCard>
                   );
                 })}
               </View>
@@ -426,27 +383,22 @@ export function CalendarModal({
                 {selectableYears.map((yr) => {
                   const isYrActive = viewYear === yr;
                   return (
-                    <Pressable
+                    <LiquidGlassCard
                       key={yr}
                       onPress={() => {
                         Haptics.selectionAsync().catch(() => {});
                         setViewYear(yr);
                       }}
-                      style={({ pressed }) => [
-                        styles.yearChip,
-                        {
-                          backgroundColor: isYrActive ? colors.gold : colors.surfaceSubtle,
-                          borderColor: isYrActive ? colors.gold : colors.borderSubtle,
-                          borderRadius: radii.sm,
-                          opacity: pressed ? 0.75 : 1,
-                        },
-                      ]}
+                      radius={radii.sm}
+                      padding={0}
+                      tone={isYrActive ? 'emphasized' : 'default'}
+                      style={styles.yearChip}
                     >
                       <Text
                         style={[
                           styles.yearChipText,
                           {
-                            color: isYrActive ? '#090A0E' : colors.textPrimary,
+                            color: colors.textPrimary,
                             fontFamily: isYrActive
                               ? typography.fontFamilies.bold
                               : typography.fontFamilies.medium,
@@ -455,23 +407,12 @@ export function CalendarModal({
                       >
                         {yr}
                       </Text>
-                    </Pressable>
+                    </LiquidGlassCard>
                   );
                 })}
               </ScrollView>
 
-              <Pressable
-                onPress={() => setShowFastPicker(false)}
-                style={({ pressed }) => [
-                  styles.closeFastPickerBtn,
-                  {
-                    backgroundColor: colors.surfaceElevated,
-                    borderColor: colors.border,
-                    borderRadius: radii.md,
-                    opacity: pressed ? 0.8 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => setShowFastPicker(false)} radius={radii.md} padding={0} style={styles.closeFastPickerBtn}>
                 <Text
                   style={[
                     styles.closeFastPickerBtnText,
@@ -480,7 +421,7 @@ export function CalendarModal({
                 >
                   Return to Calendar Grid
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             </View>
           ) : (
             <>
@@ -572,19 +513,7 @@ export function CalendarModal({
               {shortcuts.map((sc) => {
                 const isActive = tempSelectedDate === sc.dateStr;
                 return (
-                  <Pressable
-                    key={sc.label}
-                    onPress={() => handleShortcutPress(sc.dateStr)}
-                    style={({ pressed }) => [
-                      styles.shortcutChip,
-                      {
-                        backgroundColor: isActive ? colors.goldBg : colors.surfaceSubtle,
-                        borderColor: isActive ? colors.gold : colors.borderSubtle,
-                        borderRadius: radii.full,
-                        opacity: pressed ? 0.75 : 1,
-                      },
-                    ]}
-                  >
+                  <LiquidGlassCard key={sc.label} onPress={() => handleShortcutPress(sc.dateStr)} radius={radii.full} padding={0} tone={isActive ? 'emphasized' : 'default'} style={styles.shortcutChip}>
                     <Text
                       style={[
                         styles.shortcutText,
@@ -598,23 +527,12 @@ export function CalendarModal({
                     >
                       {sc.label}
                     </Text>
-                  </Pressable>
+                  </LiquidGlassCard>
                 );
               })}
 
               {allowClear && (
-                <Pressable
-                  onPress={handleClearPress}
-                  style={({ pressed }) => [
-                    styles.shortcutChip,
-                    {
-                      backgroundColor: colors.negativeBg,
-                      borderColor: colors.negative,
-                      borderRadius: radii.full,
-                      opacity: pressed ? 0.75 : 1,
-                    },
-                  ]}
-                >
+                <LiquidGlassCard onPress={handleClearPress} radius={radii.full} padding={0} tone="negative" style={styles.shortcutChip}>
                   <RotateCcw size={11} color={colors.negative} style={{ marginRight: 4 }} />
                   <Text
                     style={[
@@ -627,7 +545,7 @@ export function CalendarModal({
                   >
                     Clear
                   </Text>
-                </Pressable>
+                </LiquidGlassCard>
               )}
             </ScrollView>
           </View>
@@ -654,18 +572,7 @@ export function CalendarModal({
             </View>
 
             <View style={styles.footerButtons}>
-              <Pressable
-                onPress={() => handleSmoothClose()}
-                style={({ pressed }) => [
-                  styles.cancelBtn,
-                  {
-                    backgroundColor: colors.surfaceSubtle,
-                    borderColor: colors.border,
-                    borderRadius: radii.md,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => handleSmoothClose()} radius={radii.md} padding={0} style={styles.cancelBtn}>
                 <Text
                   style={[
                     styles.cancelBtnText,
@@ -674,21 +581,10 @@ export function CalendarModal({
                 >
                   Cancel
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
 
-              <Pressable
-                onPress={handleConfirm}
-                style={({ pressed }) => [
-                  styles.confirmBtn,
-                  {
-                    backgroundColor: colors.gold,
-                    borderRadius: radii.md,
-                    opacity: pressed ? 0.85 : 1,
-                    transform: [{ scale: pressed ? 0.98 : 1 }],
-                  },
-                ]}
-              >
-                <Check size={16} color="#090A0E" strokeWidth={2.8} />
+              <LiquidGlassCard onPress={handleConfirm} radius={radii.md} padding={0} tone="emphasized" style={styles.confirmBtn}>
+                <Check size={16} color={colors.textPrimary} strokeWidth={2.8} />
                 <Text
                   style={[
                     styles.confirmBtnText,
@@ -697,7 +593,7 @@ export function CalendarModal({
                 >
                   Done
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             </View>
           </View>
         </LiquidGlassCard>
@@ -927,6 +823,6 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     fontSize: 13,
-    color: '#090A0E',
+    color: '#FFFFFF',
   },
 });

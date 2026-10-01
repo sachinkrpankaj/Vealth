@@ -46,7 +46,7 @@ export async function createBackupData(): Promise<VaelthBackupData> {
     await Promise.all([
       getAllAccounts(true),
       getAllPeople(true),
-      getAllCategories(),
+      getAllCategories(true),
       getAllTransactions({ includeDeleted: true }),
       getAllAssets(true),
       getAllLiabilities(true),
@@ -108,8 +108,50 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   if (!parsed.schemaVersion || parsed.schemaVersion > 1) {
     return { isValid: false, error: 'Unsupported backup schema version.' };
   }
-  if (!parsed.data || !Array.isArray(parsed.data.accounts) || !Array.isArray(parsed.data.transactions)) {
+  const data = parsed.data;
+  if (!data || typeof data !== 'object' ||
+      !['accounts', 'people', 'categories', 'transactions', 'assets', 'liabilities'].every(
+        (key) => Array.isArray(data[key])
+      ) || !data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
     return { isValid: false, error: 'Backup is missing core financial records.' };
+  }
+
+  const validId = (value: any) => typeof value === 'string' && value.length > 0;
+  const validMoney = (value: any) => Number.isSafeInteger(value);
+  const validRecord = (record: any) => record && typeof record === 'object' &&
+    !Array.isArray(record) && validId(record.id) &&
+    typeof record.createdAt === 'string' && typeof record.updatedAt === 'string';
+  const hasUniqueIds = (rows: any[]) => new Set(rows.map((row) => row.id)).size === rows.length;
+  if (!data.accounts.every((a: any) => validRecord(a) && validMoney(a.openingBalance) &&
+      (a.creditLimit == null || validMoney(a.creditLimit)) && validId(a.name) && validId(a.type)) ||
+      !data.people.every((p: any) => validRecord(p) && validId(p.name) && validId(p.avatarColor)) ||
+      !data.categories.every((c: any) => c && typeof c === 'object' && validId(c.id) &&
+        validId(c.name) && validId(c.type) && validId(c.icon) && typeof c.createdAt === 'string') ||
+      !data.assets.every((a: any) => validRecord(a) && validId(a.name) && validId(a.category) &&
+        validMoney(a.currentValue) && validMoney(a.purchaseValue) && validId(a.purchaseDate)) ||
+      !data.liabilities.every((l: any) => validRecord(l) && validId(l.name) && validId(l.type) &&
+        validMoney(l.amount)) ||
+      !data.transactions.every((t: any) => validRecord(t) && validId(t.type) &&
+        validId(t.date) && validMoney(t.amount) && t.amount > 0) ||
+      ![data.accounts, data.people, data.categories, data.assets, data.liabilities, data.transactions]
+        .every(hasUniqueIds) ||
+      !Object.values(data.settings).every((v) => typeof v === 'string')) {
+    return { isValid: false, error: 'Backup contains invalid financial records.' };
+  }
+
+  const ids = (rows: any[]) => new Set(rows.map((row) => row.id));
+  const accountIds = ids(data.accounts);
+  const personIds = ids(data.people);
+  const categoryIds = ids(data.categories);
+  const assetIds = ids(data.assets);
+  const liabilityIds = ids(data.liabilities);
+  const exists = (id: any, known: Set<string>) => id == null || known.has(id);
+  if (!data.liabilities.every((l: any) => exists(l.personId, personIds)) ||
+      !data.transactions.every((t: any) =>
+        exists(t.accountId, accountIds) && exists(t.destinationAccountId, accountIds) &&
+        exists(t.personId, personIds) && exists(t.categoryId, categoryIds) &&
+        exists(t.assetId, assetIds) && exists(t.liabilityId, liabilityIds))) {
+    return { isValid: false, error: 'Backup contains missing financial references.' };
   }
   return { isValid: true };
 }
@@ -180,9 +222,19 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     // 3. Restore categories
     for (const c of categories) {
       await db.runAsync(
-        `INSERT INTO categories (id, name, type, icon, isDefault, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?);`,
-        [c.id, c.name, c.type, c.icon, c.isDefault ? 1 : 0, c.createdAt]
+        `INSERT INTO categories (id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          c.id,
+          c.name,
+          c.type,
+          c.icon,
+          c.color ?? null,
+          c.isDefault ? 1 : 0,
+          c.isArchived ? 1 : 0,
+          c.monthYear ?? null,
+          c.createdAt,
+        ]
       );
     }
 

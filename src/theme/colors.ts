@@ -41,8 +41,8 @@ export const darkColors: ColorTokens = {
   surfaceElevated: '#1C1B28',  // Elevated surface with royal indigo undertone
   surfaceSubtle: '#262438',    // Subtle interactive fill
   textPrimary: '#F8FAFC',      // Crisp clean white
-  textSecondary: '#9D9CAE',    // Subtle warm slate
-  textMuted: '#6B6A7E',        // Muted gray
+  textSecondary: '#B4B2C5',    // Subtle warm slate (high readability on dark obsidian)
+  textMuted: '#8E8D9E',        // Readable muted gray (WCAG AA compliant)
   border: 'rgba(255, 255, 255, 0.08)',
   borderSubtle: 'rgba(255, 255, 255, 0.04)',
   positive: '#10B981',         // Emerald green
@@ -78,8 +78,8 @@ export const lightColors: ColorTokens = {
   surfaceElevated: '#FFFFFF',  // Soft elevated surface
   surfaceSubtle: '#F0F2F8',    // Subtle interactive fill
   textPrimary: '#0F172A',      // Slate 900
-  textSecondary: '#475569',    // Slate 600
-  textMuted: '#94A3B8',        // Slate 400
+  textSecondary: '#334155',    // Slate 700 (high readability on alabaster canvas)
+  textMuted: '#64748B',        // Slate 500 (WCAG AA compliant)
   border: '#E8ECF4',          // Slate 200
   borderSubtle: '#F1F5F9',    // Slate 100
   positive: '#059669',         // Deep emerald

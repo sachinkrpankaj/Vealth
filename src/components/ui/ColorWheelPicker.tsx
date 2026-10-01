@@ -137,17 +137,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
         contentContainerStyle={styles.swatchRow}
       >
         {/* Colour Wheel Trigger Button - Prominently Placed First */}
-        <Pressable
-          onPress={openWheelModal}
-          style={({ pressed }) => [
-            styles.wheelButton,
-            {
-              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.9)',
-              borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(99, 102, 241, 0.3)',
-              transform: [{ scale: pressed ? 0.92 : 1 }],
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={openWheelModal} accessibilityLabel="Open color picker" radius={19} padding={0} style={styles.wheelButton}>
           {/* Rainbow ring overlay */}
           <Svg width={36} height={36} style={StyleSheet.absoluteFill}>
             <Defs>
@@ -169,7 +159,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
             />
           </Svg>
           <Palette size={16} color={isDark ? '#E0E7FF' : '#4F46E5'} strokeWidth={2.2} />
-        </Pressable>
+        </LiquidGlassCard>
 
         {/* Custom picked color badge if outside presets */}
         {isCustomColor && (
@@ -250,18 +240,9 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                   Color Wheel & Picker
                 </Text>
               </View>
-              <Pressable
-                onPress={() => setModalVisible(false)}
-                style={({ pressed }) => [
-                  styles.closeIconBtn,
-                  {
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
-              >
+              <LiquidGlassCard onPress={() => setModalVisible(false)} accessibilityLabel="Close color picker" radius={16} padding={0} style={styles.closeIconBtn}>
                 <X size={18} color={colors.textSecondary} />
-              </Pressable>
+              </LiquidGlassCard>
             </View>
 
             {/* Live Color Preview Chip */}
@@ -330,18 +311,9 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     },
                   ]}
                 />
-                <Pressable
-                  onPress={handleHexSubmit}
-                  style={({ pressed }) => [
-                    styles.applyHexBtn,
-                    {
-                      backgroundColor: tempColor,
-                      opacity: pressed ? 0.8 : 1,
-                    },
-                  ]}
-                >
+                <LiquidGlassCard onPress={handleHexSubmit} accessibilityLabel="Apply hex value" radius={8} padding={0} tone="emphasized" style={styles.applyHexBtn}>
                   <Check size={14} color="#FFFFFF" strokeWidth={3} />
-                </Pressable>
+                </LiquidGlassCard>
               </View>
             </View>
 
@@ -421,20 +393,10 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
             </View>
 
             {/* Confirm Button */}
-            <Pressable
-              onPress={handleConfirm}
-              style={({ pressed }) => [
-                styles.confirmBtn,
-                {
-                  backgroundColor: tempColor,
-                  opacity: pressed ? 0.85 : 1,
-                  transform: [{ scale: pressed ? 0.98 : 1 }],
-                },
-              ]}
-            >
+            <LiquidGlassCard onPress={handleConfirm} accessibilityLabel="Apply color" radius={23} padding={0} tone="emphasized" style={styles.confirmBtn}>
               <Sparkles size={16} color="#FFFFFF" strokeWidth={2.4} />
               <Text style={styles.confirmBtnText}>Apply Color</Text>
-            </Pressable>
+            </LiquidGlassCard>
           </LiquidGlassCard>
         </View>
       </Modal>

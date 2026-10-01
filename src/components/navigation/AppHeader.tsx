@@ -31,22 +31,8 @@ export function AppHeader({
 
   return (
     <View style={styles.container}>
-      {/* Profile Button — LiquidGlass pill */}
-      <Pressable
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-          onProfilePress?.();
-        }}
-        hitSlop={8}
-        style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-      >
-        <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-          <User size={18} color={colors.textPrimary} strokeWidth={2.2} />
-        </LiquidGlassCard>
-      </Pressable>
-
-      {/* Modern Lowercase Title */}
-      <View style={styles.titleContainer}>
+      {/* Absolute Centered Title - guarantees the title is exactly centered in the screen */}
+      <View style={styles.titleContainer} pointerEvents="none">
         <Text
           style={[
             styles.title,
@@ -61,9 +47,27 @@ export function AppHeader({
         </Text>
       </View>
 
+      {/* Profile Button — LiquidGlass pill on the left */}
+      <View style={styles.leftActionsRow}>
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            onProfilePress?.();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="User profile"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
+        >
+          <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
+            <User size={18} color={colors.textPrimary} strokeWidth={2.2} />
+          </LiquidGlassCard>
+        </Pressable>
+      </View>
+
       {/* Right Actions */}
       {rightComponent ? (
-        rightComponent
+        <View style={styles.rightActionsRow}>{rightComponent}</View>
       ) : actionIcon ? (
         <View style={styles.rightActionsRow}>
           <Pressable
@@ -71,7 +75,9 @@ export function AppHeader({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onActionPress?.();
             }}
-            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Action"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
           >
             <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
@@ -83,7 +89,9 @@ export function AppHeader({
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onRightPress?.();
             }}
-            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Settings and notifications"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
           >
             <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
@@ -101,27 +109,31 @@ export function AppHeader({
           </Pressable>
         </View>
       ) : (
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            onRightPress?.();
-          }}
-          hitSlop={8}
-          style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-        >
-          <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-            {rightIcon ? (
-              rightIcon
-            ) : (
-              <View style={styles.bellWrapper}>
-                <Bell size={18} color={colors.textPrimary} strokeWidth={2.2} />
-                {showNotificationDot && (
-                  <View style={[styles.notificationDot, { backgroundColor: colors.positive }]} />
-                )}
-              </View>
-            )}
-          </LiquidGlassCard>
-        </Pressable>
+        <View style={styles.rightActionsRow}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              onRightPress?.();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
+          >
+            <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
+              {rightIcon ? (
+                rightIcon
+              ) : (
+                <View style={styles.bellWrapper}>
+                  <Bell size={18} color={colors.textPrimary} strokeWidth={2.2} />
+                  {showNotificationDot && (
+                    <View style={[styles.notificationDot, { backgroundColor: colors.positive }]} />
+                  )}
+                </View>
+              )}
+            </LiquidGlassCard>
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -129,12 +141,19 @@ export function AppHeader({
 
 const styles = StyleSheet.create({
   container: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 0,
     paddingTop: 6,
     paddingBottom: 8,
+    minHeight: 48,
+  },
+  leftActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 2,
   },
   iconButton: {
     width: 38,
@@ -143,10 +162,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   titleContainer: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 96,
+    zIndex: 1,
   },
   title: {
     fontSize: 20,
@@ -169,5 +193,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    zIndex: 2,
   },
 });

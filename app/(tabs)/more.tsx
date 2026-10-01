@@ -13,10 +13,11 @@ import {
   Sparkles,
   ShieldCheck,
   User,
+  Layers,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
-import { VaelthLogo } from '../../src/components/ui/VaelthLogo';
+import { VealthLogo } from '../../src/components/ui/VealthLogo';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { useTheme } from '../../src/theme';
 import * as Haptics from 'expo-haptics';
@@ -56,6 +57,13 @@ export default function MoreScreen() {
   ];
 
   const analyticsSections = [
+    {
+      title: 'Spending Insights',
+      subtitle: 'Yearly & monthly trends, category drill-down',
+      icon: Layers,
+      color: '#F43F5E',
+      route: '/spending-insights',
+    },
     {
       title: 'Net Worth Trajectory',
       subtitle: 'Historical growth curve & asset ratios',
@@ -105,9 +113,12 @@ export default function MoreScreen() {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           router.push(item.route as any);
         }}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.title}, ${item.subtitle}`}
         style={({ pressed }) => [
           styles.itemRow,
           {
+            minHeight: 56,
             opacity: pressed ? 0.75 : 1,
             backgroundColor: pressed
               ? isDark
@@ -160,7 +171,7 @@ export default function MoreScreen() {
   };
 
   return (
-    <ScreenContainer scrollable contentContainerStyle={styles.scrollContent}>
+    <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.scrollContent}>
       {/* 1. Header (matching Reference Image 1) */}
       <AppHeader
         title="more"
@@ -246,7 +257,7 @@ export default function MoreScreen() {
 
       {/* Brand Footer */}
       <View style={styles.footerBrand}>
-        <VaelthLogo size={42} variant="transparent" />
+        <VealthLogo size={42} />
         <Text
           style={[
             styles.footerTitle,
@@ -273,7 +284,7 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 24,
     paddingHorizontal: 16,
   },
   sectionHeaderRow: {

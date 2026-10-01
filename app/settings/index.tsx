@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { useTheme } from '../../src/theme';
 import { typography } from '../../src/theme/typography';
@@ -27,20 +28,10 @@ export default function SettingsIndexScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Settings</Text>
 
@@ -87,30 +78,26 @@ export default function SettingsIndexScreen() {
           {/* Theme Mode Toggle Pills */}
           <View style={styles.pillGroup}>
             {(['dark', 'light'] as const).map((m) => (
-              <Pressable
+              <LiquidGlassCard
                 key={m}
                 onPress={() => {
                   setThemeMode(m);
                   setSetting('theme_mode', m).catch(() => {});
                 }}
-                style={[
-                  styles.themePill,
-                  {
-                    backgroundColor: themeMode === m ? colors.textPrimary : colors.surface,
-                    borderColor: colors.border,
-                    borderRadius: radii.sm,
-                  },
-                ]}
+                accessibilityLabel={`${m} theme`}
+                accessibilityState={{ selected: themeMode === m }}
+                tone={themeMode === m ? 'emphasized' : 'default'}
+                radius={radii.sm} padding={0} style={styles.themePill}
               >
                 <Text
                   style={[
                     styles.themePillText,
-                    { color: themeMode === m ? colors.background : colors.textSecondary },
+                    { color: themeMode === m ? '#FFFFFF' : colors.textSecondary },
                   ]}
                 >
                   {m.charAt(0).toUpperCase() + m.slice(1)}
                 </Text>
-              </Pressable>
+              </LiquidGlassCard>
             ))}
           </View>
         </View>

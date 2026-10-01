@@ -72,52 +72,38 @@ export function DatePickerField({
         </Text>
       ) : null}
 
-      <Pressable
-        onPress={handleOpen}
-        style={({ pressed }) => [
+      <View
+        style={[
           styles.inputBox,
           {
             backgroundColor: colors.surface,
             borderColor: error ? colors.negative : colors.border,
             borderRadius: radii.md,
-            opacity: pressed ? 0.85 : 1,
           },
         ]}
       >
-        <View style={styles.contentRow}>
+        <Pressable onPress={handleOpen} accessibilityRole="button" accessibilityLabel={label || 'Select date'} style={({ pressed }) => [styles.contentRow, { opacity: pressed ? 0.85 : 1 } ]}>
           <CalendarIcon
-            size={17}
+            size={16}
             color={hasValue ? colors.gold : colors.textMuted}
-            style={{ marginRight: 10 }}
+            style={{ marginRight: 8 }}
           />
 
           <View style={styles.textContainer}>
             {hasValue ? (
-              <View style={styles.valueRow}>
-                <Text
-                  style={[
-                    styles.valueText,
-                    {
-                      color: colors.textPrimary,
-                      fontFamily: typography.fontFamilies.medium,
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {displayString}
-                </Text>
-                <Text
-                  style={[
-                    styles.isoBadge,
-                    {
-                      color: colors.textMuted,
-                      fontFamily: typography.fontFamilies.regular,
-                    },
-                  ]}
-                >
-                  ({value})
-                </Text>
-              </View>
+              <Text
+                style={[
+                  styles.valueText,
+                  {
+                    color: colors.textPrimary,
+                    fontFamily: typography.fontFamilies.medium,
+                  },
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {displayString}
+              </Text>
             ) : (
               <Text
                 style={[
@@ -127,21 +113,22 @@ export function DatePickerField({
                     fontFamily: typography.fontFamilies.regular,
                   },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {placeholder}
               </Text>
             )}
           </View>
-        </View>
+        </Pressable>
 
         <View style={styles.rightActionsRow}>
-          {isClearable && hasValue && (
+          {isClearable && hasValue ? (
             <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                handleClear();
-              }}
+              onPress={handleClear}
               hitSlop={8}
+              accessibilityLabel="Clear date"
+              accessibilityRole="button"
               style={({ pressed }) => [
                 styles.clearBtn,
                 {
@@ -153,11 +140,13 @@ export function DatePickerField({
             >
               <X size={12} color={colors.textSecondary} />
             </Pressable>
+          ) : (
+            <Pressable onPress={handleOpen} accessibilityRole="button" accessibilityLabel="Open calendar" hitSlop={8}>
+              <ChevronDown size={14} color={colors.textMuted} />
+            </Pressable>
           )}
-
-          <ChevronDown size={15} color={colors.textMuted} style={{ marginLeft: 4 }} />
         </View>
-      </Pressable>
+      </View>
 
       {error ? (
         <Text style={[styles.errorText, { color: colors.negative }]}>{error}</Text>
@@ -191,7 +180,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     height: 48,
     borderWidth: 1,
   },
@@ -199,28 +188,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 8,
+    marginRight: 6,
+    minWidth: 0,
   },
   textContainer: {
     flex: 1,
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   valueText: {
-    fontSize: 14,
-  },
-  isoBadge: {
-    fontSize: 12,
+    fontSize: 13,
   },
   placeholderText: {
-    fontSize: 14,
+    fontSize: 13,
   },
   rightActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
   },
   clearBtn: {
     width: 20,

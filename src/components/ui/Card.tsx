@@ -1,12 +1,11 @@
 /**
  * Card — Vaelth UI primitive
  *
- * variant="glass"  → Authentic liquid glass (BlurView + prismatic SVG border)
- * variant="solid"  → Opaque elevated surface
- * variant="subtle" → Flat subtle surface
+ * All legacy variants resolve to the shared prismatic glass surface.
+ * Existing variant props are preserved for caller compatibility.
  */
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle, Pressable } from 'react-native';
+import { StyleProp, ViewStyle } from 'react-native';
 import { useTheme } from '../../theme';
 import { LiquidGlassCard } from './LiquidGlassCard';
 
@@ -46,12 +45,3 @@ export const Card: React.FC<CardProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  base: {
-    overflow: 'hidden',
-  },
-  pressed: {
-    opacity: 0.87,
-    transform: [{ scale: 0.985 }],
-  },
-});

@@ -35,8 +35,12 @@ export interface Category {
   name: string;
   type: CategoryType;
   icon: string;
+  color?: string;
   isDefault: boolean;
+  isArchived?: boolean;
+  monthYear?: string | null; // e.g. '2026-10' for monthly General, null for custom global categories
   createdAt: string;
+  updatedAt?: string;
 }
 
 export type TransactionType =
@@ -59,7 +63,7 @@ export interface Transaction {
   accountId?: string; // Source or primary account
   destinationAccountId?: string; // For transfers
   personId?: string; // Target person for LEND, BORROW, REPAYMENTS
-  categoryId?: string;
+  categoryId?: string | null;
   assetId?: string;
   liabilityId?: string;
   note?: string;

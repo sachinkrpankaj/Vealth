@@ -93,3 +93,20 @@ export async function updateAsset(id: string, updates: Partial<Asset>): Promise<
 export async function archiveAsset(id: string): Promise<void> {
   await updateAsset(id, { isArchived: true });
 }
+
+export async function deleteAsset(id: string): Promise<void> {
+  const db = await getDatabase();
+  const txRef = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE assetId = ? AND deletedAt IS NULL;',
+    [id]
+  );
+  if ((txRef?.count ?? 0) > 0) {
+    // Preserve transaction history by archiving
+    await db.runAsync('UPDATE assets SET isArchived = 1, updatedAt = ? WHERE id = ?;', [
+      new Date().toISOString(),
+      id,
+    ]);
+  } else {
+    await db.runAsync('DELETE FROM assets WHERE id = ?;', [id]);
+  }
+}

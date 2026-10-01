@@ -17,16 +17,52 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('ALTER TABLE accounts ADD COLUMN dueDay INTEGER;');
   } catch {}
 
+  try {
+    await db.execAsync('ALTER TABLE categories ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE categories ADD COLUMN monthYear TEXT;');
+  } catch {}
+  try {
+    await db.execAsync('ALTER TABLE categories ADD COLUMN color TEXT;');
+  } catch {}
+
+  // Auto-repair accounts mistakenly set to non-CREDIT_CARD if their name indicates a Credit Card (e.g. 'HDFC Millennia Credit Card')
+  try {
+    await db.execAsync(`
+      UPDATE accounts
+      SET type = 'CREDIT_CARD',
+          creditLimit = CASE WHEN creditLimit IS NULL OR creditLimit <= 0 THEN 5000000 ELSE creditLimit END,
+          billingDay = CASE WHEN billingDay IS NULL THEN 15 ELSE billingDay END,
+          dueDay = CASE WHEN dueDay IS NULL THEN 5 ELSE dueDay END
+      WHERE (
+        name LIKE '%Credit Card%' OR
+        name LIKE '%credit card%' OR
+        name LIKE '%Millennia Credit%' OR
+        name LIKE '%millennia credit%'
+      ) AND type != 'CREDIT_CARD';
+    `);
+  } catch {}
+
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
-  const fkRows = await db.getAllAsync<{ table: string }>('PRAGMA foreign_key_list(transactions);');
-  const hasAssetFk = fkRows.some((r) => r.table === 'assets');
-  const hasLiabilityFk = fkRows.some((r) => r.table === 'liabilities');
+  let fkRows: Array<{ table: string }> = [];
+  try {
+    fkRows = await db.getAllAsync<{ table: string }>('PRAGMA foreign_key_list(transactions);');
+  } catch {}
+
+  const hasAssetFk = fkRows.some((r) => r.table?.toLowerCase() === 'assets');
+  const hasLiabilityFk = fkRows.some((r) => r.table?.toLowerCase() === 'liabilities');
 
   if (!hasAssetFk || !hasLiabilityFk) {
     await db.execAsync('PRAGMA foreign_keys = OFF;');
-    await db.withTransactionAsync(async () => {
-      // Nullify any dangling assetId or liabilityId that do not exist in target tables
+    try {
+      await db.withTransactionAsync(async () => {
+      // Nullify any dangling foreign key references that do not exist in target tables
       await db.execAsync(`
+        UPDATE transactions SET accountId = NULL WHERE accountId IS NOT NULL AND accountId NOT IN (SELECT id FROM accounts);
+        UPDATE transactions SET destinationAccountId = NULL WHERE destinationAccountId IS NOT NULL AND destinationAccountId NOT IN (SELECT id FROM accounts);
+        UPDATE transactions SET personId = NULL WHERE personId IS NOT NULL AND personId NOT IN (SELECT id FROM people);
+        UPDATE transactions SET categoryId = NULL WHERE categoryId IS NOT NULL AND categoryId NOT IN (SELECT id FROM categories);
         UPDATE transactions SET assetId = NULL WHERE assetId IS NOT NULL AND assetId NOT IN (SELECT id FROM assets);
         UPDATE transactions SET liabilityId = NULL WHERE liabilityId IS NOT NULL AND liabilityId NOT IN (SELECT id FROM liabilities);
       `);
@@ -76,8 +112,10 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
         CREATE INDEX IF NOT EXISTS idx_transactions_assetId ON transactions(assetId);
         CREATE INDEX IF NOT EXISTS idx_transactions_liabilityId ON transactions(liabilityId);
       `);
-    });
-    await db.execAsync('PRAGMA foreign_keys = ON;');
+      });
+    } finally {
+      await db.execAsync('PRAGMA foreign_keys = ON;');
+    }
   }
 }
 
@@ -123,6 +161,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     return db;
   })();
 
+  // A failed open/migration must not permanently poison future attempts.
+  initPromise.catch(() => { initPromise = null; });
   return initPromise;
 }
 

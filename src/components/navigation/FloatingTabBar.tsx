@@ -9,7 +9,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Home, HandCoins, ArrowLeftRight, SlidersHorizontal } from 'lucide-react-native';
 import { useTheme } from '../../theme';
-import { LiquidGlassCard } from '../ui/LiquidGlassCard';
+import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../ui/LiquidGlassCard';
 
 export interface FloatingTabBarProps {
   state: {
@@ -101,24 +101,29 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
           const isFocused = state.index === index;
           const IconComponent = TAB_ICONS[route.name] || Home;
 
+          const tabLabel = route.name.charAt(0).toUpperCase() + route.name.slice(1);
+
           return (
             <Pressable
               key={route.key}
               onPress={() => handleTabPress(route.name, route.key, isFocused)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={`${tabLabel} tab`}
               style={({ pressed }) => [
                 styles.squircleButton,
                 isFocused
                   ? [
                       styles.activeSquircle,
                       {
-                        backgroundColor: isDark ? '#FFFFFF' : '#13131B',
+                        backgroundColor: isDark ? '#171929' : '#EDF1FA',
                         shadowColor: isDark ? '#FFFFFF' : '#000000',
                       },
                     ]
                   : [
                       styles.inactiveSquircle,
                       {
-                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.025)',
+                        backgroundColor: isDark ? '#171929' : '#EDF1FA',
                       },
                     ],
                 {
@@ -127,16 +132,11 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
+              <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
               <IconComponent
                 size={22}
                 color={
-                  isFocused
-                    ? isDark
-                      ? '#090A0E'
-                      : '#FFFFFF'
-                    : isDark
-                    ? '#8A899C'
-                    : '#64748B'
+                  isFocused ? '#FFFFFF' : colors.textSecondary
                 }
                 strokeWidth={isFocused ? 2.5 : 2.0}
               />
@@ -169,6 +169,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
   },
   activeSquircle: {
     elevation: 6,

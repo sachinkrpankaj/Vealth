@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ChevronRight,
@@ -22,6 +22,7 @@ import {
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
+  Activity,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
@@ -41,6 +42,8 @@ import * as Haptics from 'expo-haptics';
 
 export default function HomeScreen() {
   const { colors, typography, radii, isDark } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  const isNarrow = screenWidth < 360;
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState<Account | null>(null);
   const [isPayBillModalVisible, setIsPayBillModalVisible] = useState(false);
@@ -106,6 +109,44 @@ export default function HomeScreen() {
     duration: 850,
   });
 
+  const solvencyStatus = React.useMemo(() => {
+    const val = animatedSolvency.displayValue;
+    if (val >= 80) {
+      return {
+        label: 'Optimal',
+        color: colors.positive,
+        gradient: ['#10B981', '#059669'] as [string, string],
+        bg: isDark ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.10)',
+        border: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(16, 185, 129, 0.18)',
+      };
+    }
+    if (val >= 65) {
+      return {
+        label: 'Good',
+        color: '#10B981',
+        gradient: ['#34D399', '#059669'] as [string, string],
+        bg: isDark ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.10)',
+        border: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(16, 185, 129, 0.18)',
+      };
+    }
+    if (val >= 50) {
+      return {
+        label: 'Moderate',
+        color: colors.warning,
+        gradient: ['#F59E0B', '#D97706'] as [string, string],
+        bg: isDark ? 'rgba(245, 158, 11, 0.14)' : 'rgba(245, 158, 11, 0.10)',
+        border: isDark ? 'rgba(245, 158, 11, 0.28)' : 'rgba(245, 158, 11, 0.18)',
+      };
+    }
+    return {
+      label: 'At Risk',
+      color: colors.negative,
+      gradient: ['#EF4444', '#DC2626'] as [string, string],
+      bg: isDark ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.10)',
+      border: isDark ? 'rgba(239, 68, 68, 0.28)' : 'rgba(239, 68, 68, 0.18)',
+    };
+  }, [animatedSolvency.displayValue, colors, isDark]);
+
   // Breakdown figures for Financial Flow
   const cashBalance = accounts
     .filter((a) => a.type === 'CASH')
@@ -115,7 +156,7 @@ export default function HomeScreen() {
     .reduce((sum, a) => sum + (accountBalances.get(a.id) ?? 0), 0);
 
   return (
-    <ScreenContainer scrollable contentContainerStyle={styles.scrollContent}>
+    <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.scrollContent}>
       {/* 1. Header (matching Reference Image 1) */}
       <AppHeader
         title="vaelth"
@@ -139,8 +180,10 @@ export default function HomeScreen() {
       <View style={styles.heroSection}>
         <Pressable
           onPress={() => router.push('/net-worth')}
+          accessibilityRole="button"
+          accessibilityLabel="Total Net Worth, See more"
           style={styles.contextSubLabelRow}
-          hitSlop={8}
+          hitSlop={12}
         >
           <Text
             style={[
@@ -218,46 +261,74 @@ export default function HomeScreen() {
         <LiquidGlassCard
           style={styles.gaugeTile}
           contentStyle={styles.gaugeTileContent}
-          radius={22}
+          radius={20}
           padding={12}
           onPress={() => router.push('/analytics')}
         >
-          <RadialArcGauge
-            percentage={animatedSolvency.displayValue}
-            size={110}
-            strokeWidth={8}
-            color={
-              animatedSolvency.displayValue >= 80
-                ? colors.positive
-                : animatedSolvency.displayValue >= 50
-                ? colors.warning
-                : colors.negative
-            }
-            trackColor={
-              isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(16, 185, 129, 0.14)'
-            }
-          />
-          <View style={styles.gaugeLabelBox}>
+          {/* Header matching Right Column cards */}
+          <View style={styles.gaugeTileHeader}>
             <Text
               style={[
-                styles.gaugeTileTitle,
+                styles.statTileLabel,
                 {
-                  color: colors.textPrimary,
-                  fontFamily: typography.fontFamilies.bold,
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.medium,
                 },
               ]}
             >
               Solvency
             </Text>
+            <View style={[styles.gaugeHeaderIconWrap, { backgroundColor: solvencyStatus.bg }]}>
+              <Activity size={13} color={solvencyStatus.color} strokeWidth={2.4} />
+            </View>
+          </View>
+
+          {/* Center Arc Gauge */}
+          <View style={styles.gaugeCenterWrap}>
+            <RadialArcGauge
+              percentage={animatedSolvency.displayValue}
+              size={isNarrow ? 88 : 98}
+              strokeWidth={isNarrow ? 6.5 : 7.5}
+              color={solvencyStatus.color}
+              gradientColors={solvencyStatus.gradient}
+              trackColor={
+                isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)'
+              }
+            />
+          </View>
+
+          {/* Footer Status Pill */}
+          <View style={styles.gaugeFooterRow}>
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  backgroundColor: solvencyStatus.bg,
+                  borderColor: solvencyStatus.border,
+                },
+              ]}
+            >
+              <View style={[styles.statusDot, { backgroundColor: solvencyStatus.color }]} />
+              <Text
+                style={[
+                  styles.statusPillText,
+                  {
+                    color: solvencyStatus.color,
+                    fontFamily: typography.fontFamilies.semibold,
+                  },
+                ]}
+              >
+                {solvencyStatus.label}
+              </Text>
+            </View>
             <Text
               style={[
-                styles.gaugeTileSub,
+                styles.gaugeFooterHint,
                 {
                   color: colors.textMuted,
                   fontFamily: typography.fontFamilies.medium,
                 },
               ]}
-              numberOfLines={1}
             >
               Health Score
             </Text>
@@ -363,7 +434,13 @@ export default function HomeScreen() {
         >
           Accounts & Wallets
         </Text>
-        <Pressable onPress={() => router.push('/accounts')} hitSlop={8}>
+        <Pressable
+          onPress={() => router.push('/accounts')}
+          accessibilityRole="button"
+          accessibilityLabel="Manage all accounts"
+          style={styles.manageTouchTarget}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text
             style={[
               styles.seeAllText,
@@ -407,32 +484,25 @@ export default function HomeScreen() {
                 Track your bank, cash & investments
               </Text>
             </View>
-            <Pressable
+            <LiquidGlassCard
               onPress={() => router.push('/accounts/add')}
-              style={({ pressed }) => [
-                styles.emptyAddBtn,
-                {
-                  backgroundColor: colors.textPrimary,
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
+              accessibilityLabel="Add account"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              radius={18}
+              tone="emphasized"
+              padding={0}
+              contentStyle={styles.emptyAddBtn}
             >
-              <Plus size={14} color={colors.background} strokeWidth={3} />
-              <Text
-                style={[
-                  styles.emptyAddBtnText,
-                  { color: colors.background, fontFamily: typography.fontFamilies.bold },
-                ]}
-              >
-                Add
-              </Text>
-            </Pressable>
+              <Plus size={14} color="#FFFFFF" strokeWidth={3} />
+              <Text style={[styles.emptyAddBtnText, { color: '#FFFFFF', fontFamily: typography.fontFamilies.bold }]}>Add</Text>
+            </LiquidGlassCard>
           </View>
         </LiquidGlassCard>
       ) : (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.accountsScrollView}
           contentContainerStyle={styles.accountsScrollContent}
         >
           {accounts.map((acc) => {
@@ -496,17 +566,19 @@ export default function HomeScreen() {
                   variant={!isCC && balance < 0 ? 'negative' : 'default'}
                   style={styles.accountCardBalance}
                 />
-                {isCC && ccInfo ? (
-                  <Text
-                    style={[
-                      styles.accountCardSubLabel,
-                      { color: colors.textMuted, fontFamily: typography.fontFamilies.medium },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    Remaining Limit
-                  </Text>
-                ) : null}
+                <Text
+                  style={[
+                    styles.accountCardSubLabel,
+                    {
+                      color: colors.textMuted,
+                      fontFamily: typography.fontFamilies.medium,
+                      opacity: isCC && ccInfo ? 1 : 0,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {isCC && ccInfo ? 'Remaining Limit' : ' '}
+                </Text>
 
                 <View style={[styles.accountColorStripe, { backgroundColor: accColor }]} />
               </LiquidGlassCard>
@@ -558,7 +630,13 @@ export default function HomeScreen() {
                 Credit Cards & Limits
               </Text>
             </View>
-            <Pressable onPress={() => router.push('/accounts')} hitSlop={8}>
+            <Pressable
+              onPress={() => router.push('/accounts')}
+              accessibilityRole="button"
+              accessibilityLabel="Manage credit cards"
+              style={styles.manageTouchTarget}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
               <Text
                 style={[
                   styles.seeAllText,
@@ -578,9 +656,13 @@ export default function HomeScreen() {
             .map((card) => {
               const info = getCreditCardBillingInfo(card, transactions);
               const cardColor = card.color || '#D4A373';
+              const usedAmount = Math.max(0, info.usedAmount);
+              const creditLimit = Math.max(0, info.creditLimit);
               const utilPercent =
-                info.creditLimit > 0
-                  ? Math.min(100, Math.round((info.usedAmount / info.creditLimit) * 100))
+                creditLimit > 0
+                  ? Math.max(0, Math.min(100, Math.round((usedAmount / creditLimit) * 100)))
+                  : usedAmount > 0
+                  ? 100
                   : 0;
 
               return (
@@ -656,7 +738,7 @@ export default function HomeScreen() {
                           { color: colors.textMuted, fontFamily: typography.fontFamilies.medium },
                         ]}
                       >
-                        of {formatRupee(info.creditLimit)} limit
+                        of {formatRupee(info.creditLimit)} limit ({utilPercent}% used)
                       </Text>
                     </View>
 
@@ -676,12 +758,13 @@ export default function HomeScreen() {
                           styles.ccProgressBarFill,
                           {
                             width: `${utilPercent}%`,
+                            minWidth: utilPercent > 0 ? 4 : 0,
                             backgroundColor:
-                              utilPercent > 75
+                              utilPercent >= 80
                                 ? colors.negative
-                                : utilPercent > 40
+                                : utilPercent >= 40
                                 ? colors.warning
-                                : colors.gold,
+                                : colors.positive,
                           },
                         ]}
                       />
@@ -737,11 +820,15 @@ export default function HomeScreen() {
                           setActiveBillAmount(info.unpaidBillAmount);
                           setIsPayBillModalVisible(true);
                         }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark bill of ${formatRupee(info.unpaidBillAmount)} as paid`}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         style={({ pressed }) => [
                           styles.markPaidBtn,
                           {
                             backgroundColor: colors.textPrimary,
                             borderRadius: radii.full,
+                            minHeight: 44,
                             opacity: pressed ? 0.8 : 1,
                           },
                         ]}
@@ -826,12 +913,15 @@ export default function HomeScreen() {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             router.push('/transaction/add');
           }}
-          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Record new transaction entry"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           style={({ pressed }) => [
             styles.recordHeaderPill,
             {
               backgroundColor: isDark ? 'rgba(217, 119, 6, 0.14)' : 'rgba(217, 119, 6, 0.10)',
               borderColor: isDark ? 'rgba(217, 119, 6, 0.28)' : 'rgba(217, 119, 6, 0.20)',
+              minHeight: 36,
               opacity: pressed ? 0.75 : 1,
               transform: [{ scale: pressed ? 0.95 : 1 }],
             },
@@ -1185,12 +1275,15 @@ export default function HomeScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               router.push('/transaction/add');
             }}
-            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Record transaction"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={({ pressed }) => [
               styles.recordSmallBtn,
               {
                 backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
                 borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+                minHeight: 36,
                 opacity: pressed ? 0.75 : 1,
               },
             ]}
@@ -1211,8 +1304,10 @@ export default function HomeScreen() {
           {recentTransactions.length > 0 && (
             <Pressable
               onPress={() => router.push('/(tabs)/transactions')}
-              hitSlop={8}
-              style={styles.seeAllRow}
+              accessibilityRole="button"
+              accessibilityLabel="See all recent transactions"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={[styles.seeAllRow, { minHeight: 44, justifyContent: 'center' }]}
             >
               <Text
                 style={[
@@ -1279,7 +1374,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 170,
+    paddingBottom: 20,
     paddingHorizontal: 16,
   },
   heroSection: {
@@ -1330,23 +1425,56 @@ const styles = StyleSheet.create({
   },
   gaugeTileContent: {
     flex: 1,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  gaugeTileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  gaugeHeaderIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
   },
-  gaugeLabelBox: {
+  gaugeCenterWrap: {
     alignItems: 'center',
-    marginTop: 6,
+    justifyContent: 'center',
+    marginVertical: 2,
   },
-  gaugeTileTitle: {
-    fontSize: 15,
+  gaugeFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 2,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4.5,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  statusPillText: {
+    fontSize: 10.5,
     letterSpacing: -0.2,
   },
-  gaugeTileSub: {
-    fontSize: 11,
-    marginTop: 2,
-    textAlign: 'center',
+  gaugeFooterHint: {
+    fontSize: 10.5,
+    letterSpacing: -0.1,
   },
   rightStackCol: {
     flex: 1,
@@ -1391,6 +1519,12 @@ const styles = StyleSheet.create({
   seeAllText: {
     fontSize: 13,
   },
+  manageTouchTarget: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
   emptyAccountsCard: {
     marginBottom: 6,
   },
@@ -1424,13 +1558,17 @@ const styles = StyleSheet.create({
   emptyAddBtnText: {
     fontSize: 12,
   },
+  accountsScrollView: {
+    marginHorizontal: -16,
+  },
   accountsScrollContent: {
+    paddingHorizontal: 16,
     gap: 12,
     paddingBottom: 4,
   },
   accountCard: {
     width: 155,
-    minHeight: 110,
+    height: 134,
     justifyContent: 'space-between',
   },
   accountCardTop: {
@@ -1471,7 +1609,7 @@ const styles = StyleSheet.create({
   },
   addAccountCard: {
     width: 105,
-    minHeight: 110,
+    height: 134,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,

@@ -19,15 +19,18 @@ import {
   ShoppingBag,
   Info,
   Check,
+  Tag,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { Badge } from '../../src/components/ui/Badge';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
+import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
 import { useTheme } from '../../src/theme';
 import {
   getTransactionById,
@@ -38,9 +41,10 @@ import {
 import { getAccountById } from '../../src/database/repositories/accountRepository';
 import { getPersonById } from '../../src/database/repositories/personRepository';
 import { getAssetById } from '../../src/database/repositories/assetRepository';
+import { getCategoryById } from '../../src/database/repositories/categoryRepository';
 import { calculateFinancialEffect } from '../../src/domain/finance/accountingRules';
 import { calculatePersonDebt } from '../../src/domain/finance/financialEngine';
-import { Transaction, Account, Person, Asset } from '../../src/domain/finance/types';
+import { Transaction, Account, Person, Asset, Category } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
 
 export default function TransactionDetailScreen() {
@@ -52,6 +56,7 @@ export default function TransactionDetailScreen() {
   const [destAccount, setDestAccount] = useState<Account | null>(null);
   const [person, setPerson] = useState<Person | null>(null);
   const [asset, setAsset] = useState<Asset | null>(null);
+  const [category, setCategory] = useState<Category | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Edit Mode state
@@ -59,6 +64,7 @@ export default function TransactionDetailScreen() {
   const [editAmount, setEditAmount] = useState(0);
   const [editNote, setEditNote] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editCategory, setEditCategory] = useState<string | null>(null);
 
   const loadData = async () => {
     if (!id) return;
@@ -70,6 +76,14 @@ export default function TransactionDetailScreen() {
         setEditAmount(tx.amount);
         setEditNote(tx.note || '');
         setEditDate(tx.date);
+        setEditCategory(tx.categoryId || null);
+
+        if (tx.categoryId) {
+          const cat = await getCategoryById(tx.categoryId);
+          setCategory(cat);
+        } else {
+          setCategory(null);
+        }
 
         if (tx.accountId) {
           const acc = await getAccountById(tx.accountId);
@@ -144,11 +158,23 @@ export default function TransactionDetailScreen() {
       }
     }
 
+    // Enforce asset valuation bounds check on edit
+    if (transaction.type === 'ASSET_SALE' && asset) {
+      const maxPossible = asset.currentValue + transaction.amount;
+      if (editAmount > maxPossible) {
+        Alert.alert(
+          'Valuation Limit',
+          `Sale amount (${formatRupee(editAmount)}) cannot exceed available asset valuation (${formatRupee(maxPossible)}).`
+        );
+        return;
+      }
+    }
     try {
       await updateTransaction(transaction.id, {
         amount: editAmount,
         note: editNote.trim() || undefined,
         date: editDate.trim() || transaction.date,
+        categoryId: transaction.type === 'EXPENSE' ? (editCategory || null) : (transaction.categoryId ?? null),
       });
       setIsEditing(false);
       await loadData();
@@ -179,53 +205,17 @@ export default function TransactionDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back" radius={radii.full} padding={0} style={styles.backBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => setIsEditing(!isEditing)}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              {
-                backgroundColor: isEditing ? colors.textPrimary : colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Edit2
-              size={16}
-              color={isEditing ? colors.background : colors.textPrimary}
-            />
-          </Pressable>
-          <Pressable
-            onPress={handleDelete}
-            style={({ pressed }) => [
-              styles.actionBtn,
-              {
-                backgroundColor: colors.negativeBg,
-                borderColor: colors.negative,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Trash2 size={16} color={colors.negative} />
-          </Pressable>
+          <LiquidGlassCard onPress={() => setIsEditing(!isEditing)} hitSlop={10} accessibilityLabel={isEditing ? 'Cancel editing' : 'Edit transaction'} radius={radii.full} padding={0} tone={isEditing ? 'emphasized' : 'default'} style={styles.actionBtn}>
+            <Edit2 size={16} color={colors.textPrimary} />
+          </LiquidGlassCard>
+          <LiquidGlassCard onPress={handleDelete} hitSlop={10} accessibilityLabel="Delete transaction" radius={radii.full} padding={0} tone="negative" style={styles.actionBtn}>
+            <Trash2 size={16} color={colors.textPrimary} />
+          </LiquidGlassCard>
         </View>
       </View>
 
@@ -268,6 +258,14 @@ export default function TransactionDetailScreen() {
               style={{ marginBottom: 0 }}
             />
 
+            {transaction.type === 'EXPENSE' ? (
+              <CategoryPickerField
+                selectedCategoryId={editCategory}
+                onSelectCategory={setEditCategory}
+                allowHistoricalMonth={transaction.date.slice(0, 7)}
+              />
+            ) : null}
+
             <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>
               Note
             </Text>
@@ -307,6 +305,16 @@ export default function TransactionDetailScreen() {
             {transaction.date}
           </Text>
         </View>
+
+        {transaction.type === 'EXPENSE' ? (
+          <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>
+            <Tag size={18} color={colors.textMuted} style={styles.metaIcon} />
+            <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>Category</Text>
+            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+              {category ? category.name : 'Uncategorized'}
+            </Text>
+          </View>
+        ) : null}
 
         {account ? (
           <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>

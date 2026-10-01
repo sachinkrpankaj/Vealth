@@ -8,7 +8,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -23,15 +23,18 @@ import {
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
-import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
-import { Card } from '../../src/components/ui/Card';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { createTransaction } from '../../src/database/repositories/transactionRepository';
+import { getAssetById, updateAsset } from '../../src/database/repositories/assetRepository';
 import { TransactionType } from '../../src/domain/finance/types';
-import { validateTransactionRequiredFields } from '../../src/domain/finance/validator';
+import { validateTransactionRequiredFields, validateRepaymentAmount } from '../../src/domain/finance/validator';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
+
 
 interface TypeOption {
   type: TransactionType;
@@ -127,6 +130,11 @@ export default function AddTransactionScreen() {
 
   const { accounts, people, personDebts, physicalAssets, refresh } = useFinancialData();
 
+  // Nested add-person/add-asset routes return to this mounted form; reload their new entries.
+  useFocusEffect(React.useCallback(() => {
+    refresh();
+  }, [refresh]));
+
   const initialType: TransactionType = (params.defaultType as TransactionType) || 'EXPENSE';
   const [selectedType, setSelectedType] = useState<TransactionType>(initialType);
   const [amount, setAmount] = useState<number>(0);
@@ -136,6 +144,7 @@ export default function AddTransactionScreen() {
   const [destinationAccount, setDestinationAccount] = useState<string>('');
   const [selectedPerson, setSelectedPerson] = useState<string>(params.personId || '');
   const [selectedAsset, setSelectedAsset] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState('');
@@ -147,14 +156,15 @@ export default function AddTransactionScreen() {
     if (!selectedAccount && accounts.length > 0) {
       setSelectedAccount(accounts[0].id);
     }
-    if (selectedType === 'TRANSFER' && accounts.length > 1 && !destinationAccount) {
+    if (selectedType === 'TRANSFER' && accounts.length > 1 &&
+        (!destinationAccount || destinationAccount === selectedAccount)) {
       const second = accounts.find((a) => a.id !== selectedAccount);
       if (second) setDestinationAccount(second.id);
     }
     if ((selectedType === 'ASSET_PURCHASE' || selectedType === 'ASSET_SALE') && physicalAssets.length > 0 && !selectedAsset) {
       setSelectedAsset(physicalAssets[0].id);
     }
-  }, [accounts, selectedType, physicalAssets]);
+  }, [accounts, selectedType, physicalAssets, selectedAccount, destinationAccount, selectedAsset]);
 
   // Outstanding amount lookup for repayments
   const outstandingInfo = React.useMemo(() => {
@@ -218,6 +228,7 @@ export default function AddTransactionScreen() {
         accountId: selectedAccount || undefined,
         destinationAccountId:
           selectedType === 'TRANSFER' ? destinationAccount || undefined : undefined,
+        categoryId: selectedType === 'EXPENSE' ? (selectedCategory || undefined) : undefined,
         personId:
           selectedType === 'LEND' ||
           selectedType === 'BORROW' ||
@@ -233,6 +244,27 @@ export default function AddTransactionScreen() {
         dueDate: dueDate.trim() || undefined,
       });
 
+      // Update target asset state so net worth doesn't double-count sold assets alongside received cash
+      if (selectedType === 'ASSET_SALE' && selectedAsset) {
+        const asset = await getAssetById(selectedAsset);
+        if (asset) {
+          if (amount >= asset.currentValue) {
+            // Full liquidation: archive the asset so it is excluded from physical assets
+            await updateAsset(selectedAsset, { isArchived: true, currentValue: 0 });
+          } else {
+            // Partial liquidation: decrease remaining value
+            await updateAsset(selectedAsset, {
+              currentValue: Math.max(0, asset.currentValue - amount),
+            });
+          }
+        }
+      } else if (selectedType === 'ASSET_PURCHASE' && selectedAsset) {
+        const asset = await getAssetById(selectedAsset);
+        if (asset && asset.isArchived) {
+          await updateAsset(selectedAsset, { isArchived: false });
+        }
+      }
+
       await refresh();
       router.back();
     } catch (e: any) {
@@ -247,27 +279,15 @@ export default function AddTransactionScreen() {
       {/* Modal Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Record Transaction</Text>
-        <Pressable
+        <LiquidGlassCard
           onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/(tabs)/home');
-            }
+            if (router.canGoBack()) router.back();
+            else router.replace('/(tabs)/home');
           }}
-          hitSlop={12}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+          hitSlop={10} accessibilityLabel="Close transaction form"
+          radius={radii.full} padding={0} style={styles.closeBtn}>
           <X size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
       </View>
 
       {/* Transaction Type Selector Pills */}
@@ -280,27 +300,22 @@ export default function AddTransactionScreen() {
         {TRANSACTION_TYPES.map((t) => {
           const isSelected = selectedType === t.type;
           return (
-            <Pressable
-              key={t.type}
-              onPress={() => setSelectedType(t.type)}
-              style={[
-                styles.typePill,
-                {
-                  backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                  borderColor: isSelected ? colors.textPrimary : colors.border,
-                  borderRadius: radii.md,
-                },
-              ]}
-            >
+            <LiquidGlassCard
+              key={t.type} onPress={() => setSelectedType(t.type)}
+              accessibilityState={{ selected: isSelected }}
+              accessibilityLabel={`${t.label} transaction type`}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+              tone={isSelected ? 'emphasized' : 'default'}
+              radius={radii.md} padding={0} style={styles.typePill}>
               <Text
                 style={[
                   styles.typePillText,
-                  { color: isSelected ? colors.background : colors.textPrimary },
+                  { color: isSelected ? '#FFFFFF' : colors.textPrimary },
                 ]}
               >
                 {t.label}
               </Text>
-            </Pressable>
+            </LiquidGlassCard>
           );
         })}
       </ScrollView>
@@ -581,6 +596,16 @@ export default function AddTransactionScreen() {
                 );
               })}
           </ScrollView>
+        </View>
+      ) : null}
+
+      {/* Category Selector (Optional for Expense) */}
+      {selectedType === 'EXPENSE' ? (
+        <View style={styles.formSection}>
+          <CategoryPickerField
+            selectedCategoryId={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+          />
         </View>
       ) : null}
 

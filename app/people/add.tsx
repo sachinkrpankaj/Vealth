@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { X, CheckCircle2, ArrowRight } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { Avatar } from '../../src/components/ui/Avatar';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../../src/theme';
@@ -37,7 +38,7 @@ export default function AddPersonScreen() {
     let timer: any;
     if (isSuccess) {
       timer = setTimeout(() => {
-        router.replace('/(tabs)/money');
+        navigateBack();
       }, 1200);
     }
     return () => {
@@ -45,8 +46,12 @@ export default function AddPersonScreen() {
     };
   }, [isSuccess]);
 
-  const navigateToCredit = () => {
-    router.replace('/(tabs)/money');
+  const navigateBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/money');
+    }
   };
 
   const handleSubmit = async () => {
@@ -108,8 +113,8 @@ export default function AddPersonScreen() {
 
           <View style={{ width: '100%', marginTop: 32, gap: 12 }}>
             <PrimaryButton
-              title="Back to Credit Section"
-              onPress={navigateToCredit}
+              title="Done"
+              onPress={navigateBack}
             />
           </View>
         </View>
@@ -122,20 +127,10 @@ export default function AddPersonScreen() {
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Add Person</Text>
-        <Pressable
-          onPress={navigateToCredit}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={navigateBack} hitSlop={10} accessibilityLabel="Close"
+          radius={radii.full} padding={0} style={styles.closeBtn}>
           <X size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
       </View>
 
       {/* Avatar Preview */}

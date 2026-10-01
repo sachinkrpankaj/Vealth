@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
-import { ArrowLeft, Trash2, Plus, CreditCard, AlertTriangle } from 'lucide-react-native';
+import { ArrowLeft, Trash2, Plus, CreditCard, AlertTriangle, Pencil } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
@@ -66,6 +67,15 @@ export default function AccountDetailScreen() {
   );
 
   const handleArchive = () => {
+    if (balance !== 0) {
+      Alert.alert(
+        'Non-zero Balance',
+        `This account has an active balance of ${formatRupee(balance)}. Please transfer or settle the balance before archiving to keep your records accurate.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     Alert.alert(
       'Archive Account',
       `Are you sure you want to archive ${account?.name}? Transaction history will remain intact.`,
@@ -100,55 +110,30 @@ export default function AccountDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.iconBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
+          radius={radii.full} padding={0} style={styles.iconBtn}>
           <ArrowLeft size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
 
         <View style={styles.headerActions}>
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: '/transaction/add',
-                params: { accountId: account.id },
-              })
-            }
-            style={({ pressed }) => [
-              styles.iconBtn,
-              {
-                backgroundColor: colors.textPrimary,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
-            <Plus size={18} color={colors.background} />
-          </Pressable>
+          <LiquidGlassCard
+            onPress={() => router.push({ pathname: '/transaction/add', params: { accountId: account.id } })}
+            hitSlop={10} accessibilityLabel="Add transaction for this account"
+            tone="emphasized" radius={radii.full} padding={0} style={styles.iconBtn}>
+            <Plus size={18} color="#FFFFFF" />
+          </LiquidGlassCard>
 
-          <Pressable
-            onPress={handleArchive}
-            style={({ pressed }) => [
-              styles.iconBtn,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.full,
-                opacity: pressed ? 0.75 : 1,
-              },
-            ]}
-          >
+          <LiquidGlassCard
+            onPress={() => router.push(`/accounts/${account.id}/edit`)}
+            hitSlop={10} accessibilityLabel="Edit account details"
+            radius={radii.full} padding={0} style={styles.iconBtn}>
+            <Pencil size={16} color={colors.textPrimary} />
+          </LiquidGlassCard>
+
+          <LiquidGlassCard onPress={handleArchive} hitSlop={10}
+            accessibilityLabel="Delete or archive account" radius={radii.full} padding={0} style={styles.iconBtn}>
             <Trash2 size={16} color={colors.textMuted} />
-          </Pressable>
+          </LiquidGlassCard>
         </View>
       </View>
 
@@ -236,29 +221,22 @@ export default function AccountDetailScreen() {
                     </Text>
                   </View>
 
-                  <Pressable
+                  <LiquidGlassCard
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                       setIsPayModalVisible(true);
                     }}
-                    style={({ pressed }) => [
-                      styles.ccPayBtn,
-                      {
-                        backgroundColor: colors.textPrimary,
-                        borderRadius: radii.full,
-                        opacity: pressed ? 0.8 : 1,
-                      },
-                    ]}
-                  >
+                    accessibilityLabel="Pay credit card bill" tone="emphasized"
+                    radius={radii.full} padding={0} style={styles.ccPayBtn}>
                     <Text
                       style={[
                         styles.ccPayBtnText,
-                        { color: colors.background, fontFamily: typography.fontFamilies.bold },
+                        { color: '#FFFFFF', fontFamily: typography.fontFamilies.bold },
                       ]}
                     >
                       Pay Bill
                     </Text>
-                  </Pressable>
+                  </LiquidGlassCard>
                 </View>
               ) : null}
             </Card>

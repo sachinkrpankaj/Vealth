@@ -5,6 +5,7 @@ import { X, Calendar } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
 import { useTheme } from '../../src/theme';
 import { createLiability } from '../../src/database/repositories/liabilityRepository';
@@ -65,20 +66,10 @@ export default function AddLiabilityScreen() {
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Record Liability</Text>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.closeBtn,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderRadius: radii.full,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-        >
+        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close"
+          radius={radii.full} padding={0} style={styles.closeBtn}>
           <X size={18} color={colors.textPrimary} />
-        </Pressable>
+        </LiquidGlassCard>
       </View>
 
       {/* Type Selector */}
@@ -89,27 +80,19 @@ export default function AddLiabilityScreen() {
         contentContainerStyle={{ gap: 8, marginBottom: 16 }}
       >
         {LIABILITY_TYPES.map((t) => (
-          <Pressable
-            key={t.type}
-            onPress={() => setType(t.type)}
-            style={[
-              styles.typePill,
-              {
-                backgroundColor: type === t.type ? colors.textPrimary : colors.surface,
-                borderColor: type === t.type ? colors.textPrimary : colors.border,
-                borderRadius: radii.md,
-              },
-            ]}
-          >
+          <LiquidGlassCard key={t.type} onPress={() => setType(t.type)}
+            accessibilityLabel={t.label} accessibilityState={{ selected: type === t.type }}
+            tone={type === t.type ? 'emphasized' : 'default'}
+            radius={radii.md} padding={0} style={styles.typePill}>
             <Text
               style={[
                 styles.typePillText,
-                { color: type === t.type ? colors.background : colors.textPrimary },
+                { color: type === t.type ? '#FFFFFF' : colors.textPrimary },
               ]}
             >
               {t.label}
             </Text>
-          </Pressable>
+          </LiquidGlassCard>
         ))}
       </ScrollView>
 

@@ -4,7 +4,7 @@ import { Lock, Fingerprint, Delete } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSecurityStore } from '../../stores/useSecurityStore';
 import { useTheme } from '../../theme';
-import { VaelthLogo } from '../ui/VaelthLogo';
+import { VealthLogo } from '../ui/VealthLogo';
 
 export const SecurityLockScreen: React.FC = () => {
   const { colors, typography, radii } = useTheme();
@@ -66,7 +66,7 @@ export const SecurityLockScreen: React.FC = () => {
     <Modal visible={isLocked} animationType="fade" transparent={false}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <VaelthLogo size={64} variant="transparent" style={{ marginBottom: 12 }} />
+          <VealthLogo size={64} style={{ marginBottom: 12 }} />
           <Text
             style={[
               styles.title,

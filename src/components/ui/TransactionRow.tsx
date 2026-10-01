@@ -15,6 +15,8 @@ import { Transaction, TransactionType } from '../../domain/finance/types';
 import { AmountText, AmountVariant } from './AmountText';
 import { useTheme } from '../../theme';
 
+import { formatDisplayDate } from '../../utils/dateUtils';
+
 interface TransactionRowProps {
   transaction: Transaction;
   accountName?: string;
@@ -132,6 +134,19 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({
     subtitle = personName;
   }
 
+  // Never fall back to transaction.date (which causes duplicate dates)
+  if (!subtitle) {
+    if (categoryName && title !== categoryName) {
+      subtitle = categoryName;
+    } else if (transaction.note && title !== transaction.note) {
+      subtitle = transaction.note;
+    } else {
+      subtitle = transaction.type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+  }
+
+  const formattedDate = formatDisplayDate(transaction.date, { includeRelative: false, shortYear: true }) || transaction.date;
+
   let iconBg = colors.surfaceSubtle;
   let iconColor = colors.textSecondary;
   if (variant === 'positive') {
@@ -145,11 +160,14 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}, ${formattedDate}`}
       style={({ pressed }) => [
         styles.container,
         {
           paddingVertical: 12,
           paddingHorizontal: 16,
+          minHeight: 56,
           opacity: pressed ? 0.75 : 1,
         },
         style,
@@ -191,7 +209,7 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({
           ]}
           numberOfLines={1}
         >
-          {subtitle || transaction.date}
+          {subtitle}
         </Text>
       </View>
 
@@ -202,7 +220,7 @@ export const TransactionRow: React.FC<TransactionRowProps> = ({
           variant={variant}
           showSign={showSign}
         />
-        <Text style={[styles.date, { color: colors.textMuted }]}>{transaction.date}</Text>
+        <Text style={[styles.date, { color: colors.textMuted }]}>{formattedDate}</Text>
       </View>
     </Pressable>
   );
@@ -221,6 +239,7 @@ const styles = StyleSheet.create({
   },
   details: {
     flex: 1,
+    minWidth: 0,
     marginRight: 12,
   },
   title: {
@@ -232,6 +251,7 @@ const styles = StyleSheet.create({
   },
   amountContainer: {
     alignItems: 'flex-end',
+    flexShrink: 0,
   },
   date: {
     fontSize: 11,

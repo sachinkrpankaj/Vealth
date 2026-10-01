@@ -21,24 +21,19 @@ export function validateRepaymentAmount(
     | {
         amountPaise: number;
         outstandingPaise: number;
-        allowOverpayment?: boolean;
       }
     | number,
-  outstandingPaiseArg?: number,
-  allowOverpaymentArg?: boolean
+  outstandingPaiseArg?: number
 ): ValidationResult {
   let amountPaise: number;
   let outstandingPaise: number;
-  let allowOverpayment = false;
 
   if (typeof paramsOrAmount === 'object' && paramsOrAmount !== null) {
     amountPaise = paramsOrAmount.amountPaise;
     outstandingPaise = paramsOrAmount.outstandingPaise;
-    allowOverpayment = !!paramsOrAmount.allowOverpayment;
   } else {
     amountPaise = paramsOrAmount;
     outstandingPaise = outstandingPaiseArg ?? 0;
-    allowOverpayment = !!allowOverpaymentArg;
   }
 
   const baseCheck = validateAmount(amountPaise);
@@ -48,7 +43,7 @@ export function validateRepaymentAmount(
     return { isValid: false, error: 'There is no outstanding balance recorded to repay.' };
   }
 
-  if (!allowOverpayment && amountPaise > outstandingPaise) {
+  if (amountPaise > outstandingPaise) {
     return {
       isValid: false,
       error: `Repayment amount (${formatRupee(amountPaise)}) exceeds the outstanding balance (${formatRupee(outstandingPaise)}).`,
