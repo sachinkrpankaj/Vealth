@@ -109,6 +109,35 @@ CREATE TABLE IF NOT EXISTS app_settings (
   value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS shopping_lists (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  isArchived INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS shopping_items (
+  id TEXT PRIMARY KEY,
+  listId TEXT NOT NULL,
+  name TEXT NOT NULL,
+  note TEXT,
+  productUrl TEXT,
+  estimatedPrice INTEGER,
+  status TEXT NOT NULL DEFAULT 'PENDING',
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  purchasedAt TEXT,
+  purchasePrice INTEGER,
+  purchaseAccountId TEXT,
+  transactionId TEXT,
+  categoryId TEXT,
+  FOREIGN KEY (listId) REFERENCES shopping_lists(id) ON DELETE CASCADE,
+  FOREIGN KEY (purchaseAccountId) REFERENCES accounts(id) ON DELETE SET NULL,
+  FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE SET NULL,
+  FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_accountId ON transactions(accountId);
@@ -117,4 +146,8 @@ CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)
 CREATE INDEX IF NOT EXISTS idx_transactions_assetId ON transactions(assetId);
 CREATE INDEX IF NOT EXISTS idx_transactions_liabilityId ON transactions(liabilityId);
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON net_worth_snapshots(date);
+CREATE INDEX IF NOT EXISTS idx_shopping_items_listId ON shopping_items(listId);
+CREATE INDEX IF NOT EXISTS idx_shopping_items_status ON shopping_items(status);
+CREATE INDEX IF NOT EXISTS idx_shopping_items_transactionId ON shopping_items(transactionId);
+CREATE INDEX IF NOT EXISTS idx_shopping_lists_isArchived ON shopping_lists(isArchived);
 `;

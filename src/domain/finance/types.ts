@@ -139,3 +139,40 @@ export interface FinancialEffect {
   netWorthDelta: number;
   descriptionLines: string[];
 }
+
+export type ShoppingItemStatus = 'PENDING' | 'PURCHASED' | 'DISCARDED';
+
+export interface ShoppingList {
+  id: string;
+  name: string;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShoppingItem {
+  id: string;
+  listId: string;
+  name: string;
+  note?: string | null;
+  productUrl?: string | null;
+  estimatedPrice?: number | null; // in paise
+  status: ShoppingItemStatus;
+  createdAt: string;
+  updatedAt: string;
+  purchasedAt?: string | null; // ISO / local date
+  purchasePrice?: number | null; // in paise
+  purchaseAccountId?: string | null;
+  transactionId?: string | null;
+  categoryId?: string | null;
+}
+
+export interface ShoppingListSummary {
+  list: ShoppingList;
+  pendingCount: number;
+  purchasedCount: number;
+  discardedCount: number;
+  estimatedPendingTotal: number; // in paise
+  purchasedTotal: number; // in paise
+}
+

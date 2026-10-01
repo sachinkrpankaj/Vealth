@@ -13,7 +13,8 @@ import { getAllAssets } from '../database/repositories/assetRepository';
 import { getAllLiabilities } from '../database/repositories/liabilityRepository';
 import { getSettingsMap } from '../database/repositories/settingsRepository';
 import { getAllSnapshots, NetWorthSnapshotRecord } from '../database/repositories/snapshotRepository';
-import { Account, Person, Category, Transaction, Asset, Liability } from '../domain/finance/types';
+import { getAllShoppingLists, getAllShoppingItems } from '../database/repositories/shoppingRepository';
+import { Account, Person, Category, Transaction, Asset, Liability, ShoppingList, ShoppingItem } from '../domain/finance/types';
 import { formatDateIso } from './dateUtils';
 
 export interface VaelthBackupData {
@@ -29,6 +30,8 @@ export interface VaelthBackupData {
     liabilities: Liability[];
     snapshots?: NetWorthSnapshotRecord[];
     settings: Record<string, string>;
+    shoppingLists?: ShoppingList[];
+    shoppingItems?: ShoppingItem[];
   };
 }
 
@@ -45,17 +48,29 @@ export function isSecurityKey(key: string): boolean {
 }
 
 export async function createBackupData(): Promise<VaelthBackupData> {
-  const [accounts, people, categories, transactions, assets, liabilities, snapshots, allSettings] =
-    await Promise.all([
-      getAllAccounts(true),
-      getAllPeople(true),
-      getAllCategories(true),
-      getAllTransactions({ includeDeleted: true }),
-      getAllAssets(true),
-      getAllLiabilities(true),
-      getAllSnapshots(),
-      getSettingsMap(),
-    ]);
+  const [
+    accounts,
+    people,
+    categories,
+    transactions,
+    assets,
+    liabilities,
+    snapshots,
+    allSettings,
+    shoppingLists,
+    shoppingItems,
+  ] = await Promise.all([
+    getAllAccounts(true),
+    getAllPeople(true),
+    getAllCategories(true),
+    getAllTransactions({ includeDeleted: true }),
+    getAllAssets(true),
+    getAllLiabilities(true),
+    getAllSnapshots(),
+    getSettingsMap(),
+    getAllShoppingLists(true),
+    getAllShoppingItems(),
+  ]);
 
   // Strip all sensitive security / PIN / auth keys from exported settings
   const sanitizedSettings: Record<string, string> = {};
@@ -78,6 +93,8 @@ export async function createBackupData(): Promise<VaelthBackupData> {
       liabilities,
       snapshots,
       settings: sanitizedSettings,
+      shoppingLists,
+      shoppingItems,
     },
   };
 }
@@ -281,6 +298,42 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   ) {
     return { isValid: false, error: 'Backup contains missing financial references.' };
   }
+  const VALID_SHOPPING_STATUSES = new Set(['PENDING', 'PURCHASED', 'DISCARDED']);
+  if (data.shoppingLists) {
+    if (
+      !Array.isArray(data.shoppingLists) ||
+      !data.shoppingLists.every(
+        (l: any) =>
+          validRecord(l) &&
+          validId(l.name) &&
+          typeof l.isArchived === 'boolean'
+      ) ||
+      !hasUniqueIds(data.shoppingLists)
+    ) {
+      return { isValid: false, error: 'Backup contains invalid shopping list records.' };
+    }
+  }
+
+  if (data.shoppingItems) {
+    const listIds = data.shoppingLists ? ids(data.shoppingLists) : new Set<string>();
+    if (
+      !Array.isArray(data.shoppingItems) ||
+      !data.shoppingItems.every(
+        (i: any) =>
+          validRecord(i) &&
+          validId(i.listId) &&
+          validId(i.name) &&
+          VALID_SHOPPING_STATUSES.has(i.status) &&
+          (i.estimatedPrice == null || validMoney(i.estimatedPrice)) &&
+          (i.purchasePrice == null || validMoney(i.purchasePrice)) &&
+          (!data.shoppingLists || listIds.has(i.listId))
+      ) ||
+      !hasUniqueIds(data.shoppingItems)
+    ) {
+      return { isValid: false, error: 'Backup contains invalid shopping item records.' };
+    }
+  }
+
   return { isValid: true };
 }
 
@@ -293,6 +346,8 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
   await executeInTransaction(async (db) => {
     // Clear existing data safely inside transaction respecting foreign keys
     await db.execAsync(`
+      DELETE FROM shopping_items;
+      DELETE FROM shopping_lists;
       DELETE FROM transactions;
       DELETE FROM liabilities;
       DELETE FROM assets;
@@ -469,6 +524,46 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
             [k, v]
           );
         }
+      }
+    }
+
+    // 9. Restore shopping lists
+    if (backup.data.shoppingLists && Array.isArray(backup.data.shoppingLists)) {
+      for (const list of backup.data.shoppingLists) {
+        await db.runAsync(
+          `INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
+           VALUES (?, ?, ?, ?, ?);`,
+          [list.id, list.name, list.isArchived ? 1 : 0, list.createdAt, list.updatedAt]
+        );
+      }
+    }
+
+    // 10. Restore shopping items
+    if (backup.data.shoppingItems && Array.isArray(backup.data.shoppingItems)) {
+      for (const item of backup.data.shoppingItems) {
+        await db.runAsync(
+          `INSERT INTO shopping_items (
+             id, listId, name, note, productUrl, estimatedPrice, status,
+             createdAt, updatedAt, purchasedAt, purchasePrice, purchaseAccountId,
+             transactionId, categoryId
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            item.id,
+            item.listId,
+            item.name,
+            item.note ?? null,
+            item.productUrl ?? null,
+            item.estimatedPrice != null ? Math.round(item.estimatedPrice) : null,
+            item.status,
+            item.createdAt,
+            item.updatedAt,
+            item.purchasedAt ?? null,
+            item.purchasePrice != null ? Math.round(item.purchasePrice) : null,
+            item.purchaseAccountId ?? null,
+            item.transactionId ?? null,
+            item.categoryId ?? null,
+          ]
+        );
       }
     }
   });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Home, HandCoins, ArrowLeftRight, LayoutGrid } from 'lucide-react-native';
+import { Home, HandCoins, ArrowLeftRight, LayoutGrid, ShoppingBag } from 'lucide-react-native';
 import { FloatingTabBar } from '../../src/components/navigation/FloatingTabBar';
 
 export default function TabLayout() {
@@ -26,6 +26,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="transactions"
+        options={{
+          title: 'Activity',
+          tabBarIcon: ({ color, size }) => <ArrowLeftRight size={size || 22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="money"
         options={{
           title: 'Credit',
@@ -33,10 +40,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="transactions"
+        name="shopping"
         options={{
-          title: 'Activity',
-          tabBarIcon: ({ color, size }) => <ArrowLeftRight size={size || 22} color={color} />,
+          title: 'Shopping',
+          tabBarIcon: ({ color, size }) => <ShoppingBag size={size || 22} color={color} />,
         }}
       />
       <Tabs.Screen

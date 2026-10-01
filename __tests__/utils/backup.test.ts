@@ -141,5 +141,87 @@ describe('Backup & Restore Integrity Engine', () => {
         expect(isSecurityKey(key)).toBe(false);
       }
     });
+
+    it('approves backups with shopping lists and shopping items', () => {
+      const backupWithShopping: VaelthBackupData = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          shoppingLists: [
+            {
+              id: 'list-1',
+              name: 'Groceries',
+              isArchived: false,
+              createdAt: '2026-10-01',
+              updatedAt: '2026-10-01',
+            },
+          ],
+          shoppingItems: [
+            {
+              id: 'item-1',
+              listId: 'list-1',
+              name: 'Organic Milk',
+              status: 'PURCHASED',
+              estimatedPrice: 7500,
+              purchasePrice: 7000,
+              purchaseAccountId: 'acc-1',
+              transactionId: 'tx-1',
+              productUrl: 'https://example.com/milk',
+              note: '2 packets',
+              createdAt: '2026-10-01',
+              updatedAt: '2026-10-01',
+              purchasedAt: '2026-10-01',
+            },
+          ],
+        },
+      };
+
+      const res = validateBackupData(backupWithShopping);
+      expect(res.isValid).toBe(true);
+    });
+
+    it('rejects backups with invalid shopping item status or missing list reference', () => {
+      const invalidStatusBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          shoppingLists: [
+            { id: 'list-1', name: 'Needs', isArchived: false, createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+          ],
+          shoppingItems: [
+            {
+              id: 'item-1',
+              listId: 'list-1',
+              name: 'Mouse',
+              status: 'INVALID_STATUS',
+              createdAt: '2026-10-01',
+              updatedAt: '2026-10-01',
+            },
+          ],
+        },
+      };
+      expect(validateBackupData(invalidStatusBackup).isValid).toBe(false);
+
+      const danglingListBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          shoppingLists: [
+            { id: 'list-1', name: 'Needs', isArchived: false, createdAt: '2026-10-01', updatedAt: '2026-10-01' },
+          ],
+          shoppingItems: [
+            {
+              id: 'item-1',
+              listId: 'non-existent-list',
+              name: 'Mouse',
+              status: 'PENDING',
+              createdAt: '2026-10-01',
+              updatedAt: '2026-10-01',
+            },
+          ],
+        },
+      };
+      expect(validateBackupData(danglingListBackup).isValid).toBe(false);
+    });
   });
 });

@@ -7,7 +7,7 @@ import {
   LayoutAnimation,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Home, HandCoins, ArrowLeftRight, SlidersHorizontal } from 'lucide-react-native';
+import { Home, HandCoins, ArrowLeftRight, SlidersHorizontal, ShoppingBag } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../ui/LiquidGlassCard';
 
@@ -38,8 +38,9 @@ const TAB_ICONS: Record<
   React.ComponentType<{ size: number; color: string; strokeWidth?: number }>
 > = {
   home: Home,
-  money: HandCoins,
   transactions: ArrowLeftRight,
+  money: HandCoins,
+  shopping: ShoppingBag,
   more: SlidersHorizontal,
 };
 
@@ -132,9 +133,9 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              <LiquidGlassPrismOverlay borderRadius={16} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
+              <LiquidGlassPrismOverlay borderRadius={15} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
               <IconComponent
-                size={22}
+                size={21}
                 color={
                   isFocused ? '#FFFFFF' : colors.textSecondary
                 }
@@ -161,12 +162,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   squircleButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',

@@ -30,6 +30,44 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('ALTER TABLE transactions ADD COLUMN metadata TEXT;');
   } catch {}
 
+  // Shopping feature tables migration
+  try {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS shopping_lists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        isArchived INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_shopping_lists_isArchived ON shopping_lists(isArchived);
+
+      CREATE TABLE IF NOT EXISTS shopping_items (
+        id TEXT PRIMARY KEY,
+        listId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        note TEXT,
+        productUrl TEXT,
+        estimatedPrice INTEGER,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        purchasedAt TEXT,
+        purchasePrice INTEGER,
+        purchaseAccountId TEXT,
+        transactionId TEXT,
+        categoryId TEXT,
+        FOREIGN KEY (listId) REFERENCES shopping_lists(id) ON DELETE CASCADE,
+        FOREIGN KEY (purchaseAccountId) REFERENCES accounts(id) ON DELETE SET NULL,
+        FOREIGN KEY (transactionId) REFERENCES transactions(id) ON DELETE SET NULL,
+        FOREIGN KEY (categoryId) REFERENCES categories(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_listId ON shopping_items(listId);
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_status ON shopping_items(status);
+      CREATE INDEX IF NOT EXISTS idx_shopping_items_transactionId ON shopping_items(transactionId);
+    `);
+  } catch {}
+
 
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
   let fkRows: Array<{ table: string }> = [];
