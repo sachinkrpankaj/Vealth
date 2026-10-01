@@ -119,7 +119,7 @@ export function useShoppingData(activeListId?: string) {
       itemId: string;
       purchasePrice: number;
       purchaseAccountId: string;
-      categoryId: string;
+      categoryId?: string | null;
       purchaseDate?: string;
       customNote?: string;
     }) => {

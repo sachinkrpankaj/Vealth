@@ -7,21 +7,19 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Check, Wallet, AlertCircle, ShoppingBag } from 'lucide-react-native';
-import { ShoppingItem, Account } from '../../domain/finance/types';
+import { X, Wallet, AlertCircle, ShoppingBag } from 'lucide-react-native';
+import { ShoppingItem } from '../../domain/finance/types';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePickerField } from '../ui/DatePickerField';
 import { CategoryPickerField } from '../ui/CategoryPickerField';
 import { PrimaryButton } from '../ui/PrimaryButton';
-import { SecondaryButton } from '../ui/SecondaryButton';
-import { LiquidGlassCard } from '../ui/LiquidGlassCard';
 import { formatRupee } from '../../domain/finance/currency';
 import { formatDateIso } from '../../utils/dateUtils';
 import { useTheme } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinancialData } from '../../hooks/useFinancialData';
 import * as Haptics from 'expo-haptics';
 
@@ -33,7 +31,7 @@ interface PurchaseItemModalProps {
     itemId: string;
     purchasePrice: number;
     purchaseAccountId: string;
-    categoryId: string;
+    categoryId?: string | null;
     purchaseDate: string;
     customNote: string;
   }) => Promise<void>;
@@ -46,6 +44,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   onConfirmPurchase,
 }) => {
   const { colors, radii, spacing, typography, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const { accounts, accountBalances, categories } = useFinancialData();
 
   const [actualPrice, setActualPrice] = useState<number>(0);
@@ -63,23 +62,22 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
 
   useEffect(() => {
     if (visible && item) {
-      setActualPrice(0); // Require manual price entry as per requirement
+      setActualPrice(item.estimatedPrice && item.estimatedPrice > 0 ? item.estimatedPrice : 0);
       setPurchaseDate(formatDateIso(new Date()));
       setCustomNote(`Shopping: ${item.name}`);
       setErrorMessage(null);
       setIsSubmitting(false);
 
-      if (spendableAccounts.length > 0 && !selectedAccountId) {
+      if (spendableAccounts.length > 0) {
         setSelectedAccountId(spendableAccounts[0].id);
       }
 
-      // Default category if none selected
-      if (!selectedCategoryId) {
-        const defaultCat = categories.find((c) => c.type === 'EXPENSE' && !c.isArchived);
-        if (defaultCat) {
-          setSelectedCategoryId(defaultCat.id);
-        }
-      }
+      // Preselect Shopping or first expense category
+      const shoppingCat = categories.find(
+        (c) => c.type === 'EXPENSE' && !c.isArchived && c.name.toLowerCase() === 'shopping'
+      );
+      const defaultExpenseCat = categories.find((c) => c.type === 'EXPENSE' && !c.isArchived);
+      setSelectedCategoryId(shoppingCat?.id || defaultExpenseCat?.id || null);
     }
   }, [visible, item]);
 
@@ -108,11 +106,6 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
           currentAccountBalance
         )}, Required: ${formatRupee(actualPrice)}.`
       );
-      return;
-    }
-
-    if (!selectedCategoryId) {
-      setErrorMessage('Please select an expense category.');
       return;
     }
 
@@ -151,45 +144,100 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               backgroundColor: colors.surfaceElevated || colors.surface,
               borderTopLeftRadius: radii.xl,
               borderTopRightRadius: radii.xl,
+              paddingBottom: Math.max(insets.bottom, 20),
             },
           ]}
         >
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>Record Purchase</Text>
-              <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.sheetTitle,
+                  {
+                    color: colors.textPrimary,
+                    fontFamily: typography.fontFamilies.bold,
+                  },
+                ]}
+              >
+                Record Purchase
+              </Text>
+              <Text
+                style={[
+                  styles.sheetSubtitle,
+                  {
+                    color: colors.textSecondary,
+                    fontFamily: typography.fontFamilies.medium,
+                  },
+                ]}
+                numberOfLines={1}
+              >
                 {item.name}
               </Text>
             </View>
             <Pressable
               onPress={onClose}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
             >
               <X size={18} color={colors.textPrimary} />
             </Pressable>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          {/* Form Content */}
+          <ScrollView
+            style={styles.scrollArea}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Item hint card */}
             <View
               style={[
                 styles.itemSummaryBox,
-                { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)', borderRadius: radii.md },
+                {
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+                  borderRadius: radii.md,
+                },
               ]}
             >
-              <ShoppingBag size={18} color={colors.accent} style={{ marginRight: 10 }} />
+              <ShoppingBag size={18} color={isDark ? '#818CF8' : '#6366F1'} style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.summaryItemName, { color: colors.textPrimary }]} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.summaryItemName,
+                    {
+                      color: colors.textPrimary,
+                      fontFamily: typography.fontFamilies.semibold,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
                   {item.name}
                 </Text>
                 {item.estimatedPrice ? (
-                  <Text style={[styles.summaryEstPrice, { color: colors.textSecondary }]}>
-                    Estimated: {formatRupee(item.estimatedPrice)}
+                  <Text
+                    style={[
+                      styles.summaryEstPrice,
+                      {
+                        color: colors.textSecondary,
+                        fontFamily: typography.fontFamilies.regular,
+                      },
+                    ]}
+                  >
+                    Estimated budget: {formatRupee(item.estimatedPrice)}
                   </Text>
                 ) : (
-                  <Text style={[styles.summaryEstPrice, { color: colors.textMuted }]}>
+                  <Text
+                    style={[
+                      styles.summaryEstPrice,
+                      {
+                        color: colors.textMuted,
+                        fontFamily: typography.fontFamilies.regular,
+                      },
+                    ]}
+                  >
                     No estimated price set
                   </Text>
                 )}
@@ -206,7 +254,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             />
 
             {/* Account Selector */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 16, marginBottom: 8 }]}>
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                  marginTop: 16,
+                  marginBottom: 8,
+                },
+              ]}
+            >
               Paid From Account *
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountsScroll}>
@@ -220,25 +278,43 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                       Haptics.selectionAsync().catch(() => {});
                       setSelectedAccountId(acc.id);
                     }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${acc.name}, balance ${formatRupee(bal)}`}
                     style={[
                       styles.accountChip,
                       {
                         backgroundColor: isSelected
-                          ? colors.accent
+                          ? isDark
+                            ? '#6366F1'
+                            : '#4F46E5'
                           : isDark
-                          ? 'rgba(255,255,255,0.05)'
+                          ? 'rgba(255,255,255,0.06)'
                           : 'rgba(0,0,0,0.04)',
-                        borderColor: isSelected ? colors.accent : colors.borderSubtle,
+                        borderColor: isSelected
+                          ? isDark
+                            ? '#818CF8'
+                            : '#4F46E5'
+                          : colors.borderSubtle,
                         borderRadius: radii.md,
                       },
                     ]}
                   >
-                    <Wallet size={14} color={isSelected ? '#FFFFFF' : colors.textSecondary} style={{ marginRight: 6 }} />
+                    <Wallet
+                      size={14}
+                      color={isSelected ? '#FFFFFF' : colors.textSecondary}
+                      style={{ marginRight: 6 }}
+                    />
                     <View>
                       <Text
                         style={[
                           styles.accountChipName,
-                          { color: isSelected ? '#FFFFFF' : colors.textPrimary, fontWeight: isSelected ? '700' : '600' },
+                          {
+                            color: isSelected ? '#FFFFFF' : colors.textPrimary,
+                            fontFamily: isSelected
+                              ? typography.fontFamilies.bold
+                              : typography.fontFamilies.semibold,
+                          },
                         ]}
                       >
                         {acc.name}
@@ -246,7 +322,10 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                       <Text
                         style={[
                           styles.accountChipBalance,
-                          { color: isSelected ? 'rgba(255,255,255,0.85)' : colors.textMuted },
+                          {
+                            color: isSelected ? 'rgba(255,255,255,0.90)' : colors.textMuted,
+                            fontFamily: typography.fontFamilies.medium,
+                          },
                         ]}
                       >
                         {formatRupee(bal)}
@@ -259,9 +338,22 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
 
             {/* Insufficient Funds Warning */}
             {isInsufficient ? (
-              <View style={[styles.warningBox, { backgroundColor: colors.negativeBg, borderRadius: radii.sm }]}>
+              <View
+                style={[
+                  styles.warningBox,
+                  { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
+                ]}
+              >
                 <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
-                <Text style={[styles.warningText, { color: colors.negative }]}>
+                <Text
+                  style={[
+                    styles.warningText,
+                    {
+                      color: colors.negative,
+                      fontFamily: typography.fontFamilies.medium,
+                    },
+                  ]}
+                >
                   Insufficient funds in {selectedAccount?.name} ({formatRupee(currentAccountBalance)})
                 </Text>
               </View>
@@ -271,7 +363,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             <CategoryPickerField
               selectedCategoryId={selectedCategoryId}
               onSelectCategory={setSelectedCategoryId}
-              label="Expense Category *"
+              label="Expense Category"
             />
 
             {/* Date Field */}
@@ -284,7 +376,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             />
 
             {/* Transaction Note */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 14, marginBottom: 6 }]}>
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                  marginTop: 14,
+                  marginBottom: 6,
+                },
+              ]}
+            >
               Transaction Note
             </Text>
             <TextInput
@@ -292,6 +394,8 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               onChangeText={setCustomNote}
               placeholder="e.g. Shopping: Product Name"
               placeholderTextColor={colors.textMuted}
+              returnKeyType="done"
+              onSubmitEditing={handleConfirm}
               style={[
                 styles.textInput,
                 {
@@ -299,29 +403,48 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderRadius: radii.md,
+                  fontFamily: typography.fontFamilies.regular,
                 },
               ]}
             />
 
             {/* Error Message */}
             {errorMessage ? (
-              <View style={[styles.errorBox, { backgroundColor: colors.negativeBg, borderRadius: radii.sm }]}>
+              <View
+                style={[
+                  styles.errorBox,
+                  { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
+                ]}
+              >
                 <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
-                <Text style={[styles.errorText, { color: colors.negative }]}>{errorMessage}</Text>
+                <Text
+                  style={[
+                    styles.errorText,
+                    {
+                      color: colors.negative,
+                      fontFamily: typography.fontFamilies.medium,
+                    },
+                  ]}
+                >
+                  {errorMessage}
+                </Text>
               </View>
             ) : null}
 
-            {/* Action Buttons */}
-            <View style={styles.actionsContainer}>
-              <PrimaryButton
-                title="Confirm Purchase"
-                onPress={handleConfirm}
-                loading={isSubmitting}
-                disabled={isSubmitting || actualPrice <= 0 || isInsufficient}
-                style={{ width: '100%' }}
-              />
-            </View>
+            {/* Spacer for bottom pinned button */}
+            <View style={{ height: 16 }} />
           </ScrollView>
+
+          {/* Bottom Pinned Action CTA */}
+          <View style={styles.actionsContainer}>
+            <PrimaryButton
+              title="Confirm Purchase"
+              onPress={handleConfirm}
+              loading={isSubmitting}
+              disabled={isSubmitting || actualPrice <= 0 || isInsufficient}
+              style={{ width: '100%' }}
+            />
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -338,10 +461,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   modalSheet: {
-    maxHeight: '90%',
+    maxHeight: '88%',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 32,
+    paddingBottom: 24,
     elevation: 20,
     zIndex: 1,
     shadowColor: '#000',
@@ -357,7 +480,6 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
   },
   sheetSubtitle: {
     fontSize: 13,
@@ -372,6 +494,7 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     marginTop: 6,
+    flexShrink: 1,
   },
   itemSummaryBox: {
     flexDirection: 'row',
@@ -380,7 +503,6 @@ const styles = StyleSheet.create({
   },
   summaryItemName: {
     fontSize: 14,
-    fontWeight: '700',
   },
   summaryEstPrice: {
     fontSize: 12,
@@ -388,7 +510,6 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -419,7 +540,6 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: 12,
-    fontWeight: '600',
     flex: 1,
   },
   textInput: {
@@ -436,12 +556,10 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    fontWeight: '600',
     flex: 1,
   },
   actionsContainer: {
     width: '100%',
-    marginTop: 20,
-    marginBottom: 16,
+    paddingTop: 12,
   },
 });

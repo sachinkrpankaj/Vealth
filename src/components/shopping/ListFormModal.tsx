@@ -13,7 +13,6 @@ import { X, AlertCircle } from 'lucide-react-native';
 import { ShoppingList } from '../../domain/finance/types';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { useTheme } from '../../theme';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 interface ListFormModalProps {
@@ -31,8 +30,7 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const { colors, radii, isDark } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { colors, radii, typography } = useTheme();
 
   const [name, setName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -96,12 +94,22 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
         >
           {/* Header */}
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.sheetTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
               {initialList ? 'Rename Shopping List' : 'Create Shopping List'}
             </Text>
             <Pressable
               onPress={onClose}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
             >
               <X size={18} color={colors.textPrimary} />
@@ -109,7 +117,17 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
           </View>
 
           {/* List Name Input */}
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>List Name *</Text>
+          <Text
+            style={[
+              styles.fieldLabel,
+              {
+                color: colors.textSecondary,
+                fontFamily: typography.fontFamilies.semibold,
+              },
+            ]}
+          >
+            List Name *
+          </Text>
           <TextInput
             value={name}
             onChangeText={setName}
@@ -125,15 +143,31 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
                 backgroundColor: colors.surface,
                 borderColor: colors.border,
                 borderRadius: radii.md,
+                fontFamily: typography.fontFamilies.regular,
               },
             ]}
           />
 
           {/* Error Message */}
           {errorMessage ? (
-            <View style={[styles.errorBox, { backgroundColor: colors.negativeBg, borderRadius: radii.sm }]}>
+            <View
+              style={[
+                styles.errorBox,
+                { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
+              ]}
+            >
               <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
-              <Text style={[styles.errorText, { color: colors.negative }]}>{errorMessage}</Text>
+              <Text
+                style={[
+                  styles.errorText,
+                  {
+                    color: colors.negative,
+                    fontFamily: typography.fontFamilies.medium,
+                  },
+                ]}
+              >
+                {errorMessage}
+              </Text>
             </View>
           ) : null}
 
@@ -182,7 +216,6 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
   },
   closeBtn: {
     width: 32,
@@ -193,7 +226,6 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 8,
@@ -212,7 +244,6 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    fontWeight: '600',
     flex: 1,
   },
   actionsContainer: {

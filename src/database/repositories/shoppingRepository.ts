@@ -452,7 +452,7 @@ export async function purchaseShoppingItem(params: {
   itemId: string;
   purchasePrice: number; // in paise
   purchaseAccountId: string;
-  categoryId: string;
+  categoryId?: string | null;
   purchaseDate?: string;
   customNote?: string;
 }): Promise<{ shoppingItem: ShoppingItem; transactionId: string }> {
@@ -526,16 +526,20 @@ export async function purchaseShoppingItem(params: {
       );
     }
 
-    // 4. Verify category
-    const category = await txn.getFirstAsync<{ id: string; name: string; type: string }>(
-      'SELECT id, name, type FROM categories WHERE id = ?;',
-      [categoryId]
-    );
-    if (!category) {
-      throw new Error('Selected category was not found.');
-    }
-    if (category.type !== 'EXPENSE') {
-      throw new Error('Shopping purchases must use an Expense category.');
+    // 4. Verify category if provided
+    let verifiedCategoryId: string | null = null;
+    if (categoryId && categoryId.trim() !== '') {
+      const category = await txn.getFirstAsync<{ id: string; name: string; type: string }>(
+        'SELECT id, name, type FROM categories WHERE id = ?;',
+        [categoryId.trim()]
+      );
+      if (!category) {
+        throw new Error('Selected category was not found.');
+      }
+      if (category.type !== 'EXPENSE') {
+        throw new Error('Shopping purchases must use an Expense category.');
+      }
+      verifiedCategoryId = category.id;
     }
 
     // 5. Create normal Vaelth EXPENSE transaction
@@ -552,7 +556,7 @@ export async function purchaseShoppingItem(params: {
          categoryId, assetId, liabilityId, note, dueDate, metadata,
          createdAt, updatedAt, deletedAt
        ) VALUES (?, 'EXPENSE', ?, ?, ?, NULL, NULL, ?, NULL, NULL, ?, NULL, ?, ?, ?, NULL);`,
-      [txId, purchasePrice, txDate, purchaseAccountId, categoryId, txNote, txMetadata, now, now]
+      [txId, purchasePrice, txDate, purchaseAccountId, verifiedCategoryId, txNote, txMetadata, now, now]
     );
 
     // 6. Update shopping item
@@ -566,7 +570,7 @@ export async function purchaseShoppingItem(params: {
            categoryId = ?,
            updatedAt = ?
        WHERE id = ?;`,
-      [txDate, purchasePrice, purchaseAccountId, txId, categoryId, now, itemId]
+      [txDate, purchasePrice, purchaseAccountId, txId, verifiedCategoryId, now, itemId]
     );
 
     updatedItem = {
@@ -583,7 +587,7 @@ export async function purchaseShoppingItem(params: {
       purchasePrice,
       purchaseAccountId,
       transactionId: txId,
-      categoryId,
+      categoryId: verifiedCategoryId ?? undefined,
     };
   });
 

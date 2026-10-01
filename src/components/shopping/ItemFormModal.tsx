@@ -15,6 +15,7 @@ import { ShoppingItem } from '../../domain/finance/types';
 import { AmountInput } from '../ui/AmountInput';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { useTheme } from '../../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 interface ItemFormModalProps {
@@ -35,7 +36,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   onClose,
   onSubmit,
 }) => {
-  const { colors, radii, spacing, isDark } = useTheme();
+  const { colors, radii, typography, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
@@ -125,32 +127,59 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               backgroundColor: colors.surfaceElevated || colors.surface,
               borderTopLeftRadius: radii.xl,
               borderTopRightRadius: radii.xl,
+              paddingBottom: Math.max(insets.bottom, 20),
             },
           ]}
         >
           {/* Header */}
           <View style={styles.sheetHeader}>
-            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.sheetTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
               {initialItem ? 'Edit Item' : 'Add Item'}
             </Text>
             <Pressable
               onPress={onClose}
               hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
             >
               <X size={18} color={colors.textPrimary} />
             </Pressable>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          {/* Form Scroll Area */}
+          <ScrollView
+            style={styles.scrollArea}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Product Name */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Product Name *</Text>
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                },
+              ]}
+            >
+              Product Name *
+            </Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="e.g. Wireless Mouse"
               placeholderTextColor={colors.textMuted}
-              autoFocus={!initialItem}
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
               style={[
                 styles.textInput,
                 {
@@ -158,6 +187,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderRadius: radii.md,
+                  fontFamily: typography.fontFamilies.regular,
                 },
               ]}
             />
@@ -172,7 +202,16 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             />
 
             {/* Product Link */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                  marginTop: 14,
+                },
+              ]}
+            >
               Product Link (Optional)
             </Text>
             <TextInput
@@ -189,12 +228,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderRadius: radii.md,
+                  fontFamily: typography.fontFamilies.regular,
                 },
               ]}
             />
 
             {/* Note */}
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+            <Text
+              style={[
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                  marginTop: 14,
+                },
+              ]}
+            >
               Note / Specification (Optional)
             </Text>
             <TextInput
@@ -209,29 +258,47 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   backgroundColor: colors.surface,
                   borderColor: colors.border,
                   borderRadius: radii.md,
+                  fontFamily: typography.fontFamilies.regular,
                 },
               ]}
             />
 
             {/* Error Message */}
             {errorMessage ? (
-              <View style={[styles.errorBox, { backgroundColor: colors.negativeBg, borderRadius: radii.sm }]}>
+              <View
+                style={[
+                  styles.errorBox,
+                  { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
+                ]}
+              >
                 <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
-                <Text style={[styles.errorText, { color: colors.negative }]}>{errorMessage}</Text>
+                <Text
+                  style={[
+                    styles.errorText,
+                    {
+                      color: colors.negative,
+                      fontFamily: typography.fontFamilies.medium,
+                    },
+                  ]}
+                >
+                  {errorMessage}
+                </Text>
               </View>
             ) : null}
 
-            {/* Submit Button */}
-            <View style={styles.actionsContainer}>
-              <PrimaryButton
-                title={initialItem ? 'Save Changes' : 'Add Item'}
-                onPress={handleSubmit}
-                loading={isSubmitting}
-                disabled={isSubmitting || !name.trim()}
-                style={{ width: '100%' }}
-              />
-            </View>
+            <View style={{ height: 16 }} />
           </ScrollView>
+
+          {/* Bottom Pinned Action CTA */}
+          <View style={styles.actionsContainer}>
+            <PrimaryButton
+              title={initialItem ? 'Save Changes' : 'Add Item'}
+              onPress={handleSubmit}
+              loading={isSubmitting}
+              disabled={isSubmitting || !name.trim()}
+              style={{ width: '100%' }}
+            />
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -251,7 +318,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 32,
+    paddingBottom: 24,
     elevation: 20,
     zIndex: 1,
     shadowColor: '#000',
@@ -267,7 +334,6 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontSize: 18,
-    fontWeight: '700',
   },
   closeBtn: {
     width: 32,
@@ -278,10 +344,10 @@ const styles = StyleSheet.create({
   },
   scrollArea: {
     marginTop: 6,
+    flexShrink: 1,
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
@@ -300,12 +366,10 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 12,
-    fontWeight: '600',
     flex: 1,
   },
   actionsContainer: {
     width: '100%',
-    marginTop: 20,
-    marginBottom: 16,
+    paddingTop: 12,
   },
 });

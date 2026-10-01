@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import {
@@ -27,17 +27,19 @@ import { ShoppingItemCard } from '../../src/components/shopping/ShoppingItemCard
 import { ItemFormModal } from '../../src/components/shopping/ItemFormModal';
 import { PurchaseItemModal } from '../../src/components/shopping/PurchaseItemModal';
 import { ListFormModal } from '../../src/components/shopping/ListFormModal';
-import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useShoppingData } from '../../src/hooks/useShoppingData';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { ShoppingItem } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
 import { useTheme } from '../../src/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 export default function ShoppingListDetailScreen() {
   const { colors, radii, spacing, typography, isDark } = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const rawParams = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = typeof rawParams.id === 'string' ? rawParams.id : Array.isArray(rawParams.id) ? rawParams.id[0] : '';
 
   const {
     lists,
@@ -80,8 +82,14 @@ export default function ShoppingListDetailScreen() {
   const purchasedItems = items.filter((i) => i.status === 'PURCHASED');
   const discardedItems = items.filter((i) => i.status === 'DISCARDED');
 
-  const estimatedPendingTotal = pendingItems.reduce((acc, curr) => acc + (curr.estimatedPrice || 0), 0);
-  const purchasedTotal = purchasedItems.reduce((acc, curr) => acc + (curr.purchasePrice || 0), 0);
+  const estimatedPendingTotal = pendingItems.reduce(
+    (acc, curr) => acc + (curr.estimatedPrice || 0),
+    0
+  );
+  const purchasedTotal = purchasedItems.reduce(
+    (acc, curr) => acc + (curr.purchasePrice || 0),
+    0
+  );
 
   const handleDeleteList = () => {
     if (!currentList) return;
@@ -124,13 +132,48 @@ export default function ShoppingListDetailScreen() {
     }
   };
 
+  const handleDeleteDiscardedItem = (item: ShoppingItem) => {
+    Alert.alert(
+      'Delete Item Permanently',
+      `Are you sure you want to permanently delete "${item.name}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteItem(item.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to delete discarded item.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <ScreenContainer scrollable contentContainerStyle={styles.scrollContent}>
+    <ScreenContainer
+      scrollable
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: Math.max(insets.bottom + 80, 100) },
+      ]}
+    >
       {/* 1. Header Bar */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.sm }]}>
         <LiquidGlassCard
-          onPress={() => router.back()}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(tabs)/shopping');
+            }
+          }}
           hitSlop={10}
+          accessibilityRole="button"
           accessibilityLabel="Go back"
           radius={radii.full}
           padding={0}
@@ -140,12 +183,31 @@ export default function ShoppingListDetailScreen() {
         </LiquidGlassCard>
 
         <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.headerTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fontFamilies.bold,
+              },
+            ]}
+            numberOfLines={1}
+          >
             {currentList?.name || 'Shopping List'}
           </Text>
           {currentList?.isArchived ? (
             <View style={[styles.archivedPill, { backgroundColor: colors.borderSubtle }]}>
-              <Text style={[styles.archivedPillText, { color: colors.textMuted }]}>Archived</Text>
+              <Text
+                style={[
+                  styles.archivedPillText,
+                  {
+                    color: colors.textMuted,
+                    fontFamily: typography.fontFamilies.semibold,
+                  },
+                ]}
+              >
+                Archived
+              </Text>
             </View>
           ) : null}
         </View>
@@ -154,6 +216,7 @@ export default function ShoppingListDetailScreen() {
           <LiquidGlassCard
             onPress={() => setIsRenameModalOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel="Rename list"
             radius={radii.full}
             padding={0}
@@ -165,24 +228,29 @@ export default function ShoppingListDetailScreen() {
           <LiquidGlassCard
             onPress={handleToggleArchive}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel={currentList?.isArchived ? 'Unarchive list' : 'Archive list'}
             radius={radii.full}
             padding={0}
             style={styles.iconBtn}
           >
-            <Archive size={16} color={currentList?.isArchived ? colors.accent : colors.textPrimary} />
+            <Archive
+              size={16}
+              color={currentList?.isArchived ? (isDark ? '#818CF8' : '#6366F1') : colors.textPrimary}
+            />
           </LiquidGlassCard>
 
+          {/* Harmonious delete button with red icon instead of stark solid background */}
           <LiquidGlassCard
             onPress={handleDeleteList}
             hitSlop={8}
+            accessibilityRole="button"
             accessibilityLabel="Delete list"
-            tone="negative"
             radius={radii.full}
             padding={0}
             style={styles.iconBtn}
           >
-            <Trash2 size={16} color={colors.textPrimary} />
+            <Trash2 size={16} color={colors.negative} />
           </LiquidGlassCard>
         </View>
       </View>
@@ -192,16 +260,44 @@ export default function ShoppingListDetailScreen() {
         <View style={styles.summaryGrid}>
           <View style={styles.summaryCol}>
             <View style={styles.statHeader}>
-              <Clock size={13} color={colors.accent} style={{ marginRight: 5 }} />
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              <Clock
+                size={13}
+                color={isDark ? '#818CF8' : '#6366F1'}
+                style={{ marginRight: 5 }}
+              />
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  {
+                    color: colors.textSecondary,
+                    fontFamily: typography.fontFamilies.semibold,
+                  },
+                ]}
+              >
                 TO BUY ({pendingItems.length})
               </Text>
             </View>
-            <Text style={[styles.summaryVal, { color: colors.textPrimary }]}>
+            <Text
+              style={[
+                styles.summaryVal,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
               {estimatedPendingTotal > 0 ? formatRupee(estimatedPendingTotal) : '—'}
             </Text>
-            <Text style={[styles.summarySub, { color: colors.textMuted }]}>
-              {estimatedPendingTotal > 0 ? 'Estimated total' : 'No estimates'}
+            <Text
+              style={[
+                styles.summarySub,
+                {
+                  color: colors.textMuted,
+                  fontFamily: typography.fontFamilies.regular,
+                },
+              ]}
+            >
+              {estimatedPendingTotal > 0 ? 'Estimated budget' : 'No estimates'}
             </Text>
           </View>
 
@@ -210,21 +306,55 @@ export default function ShoppingListDetailScreen() {
           <View style={styles.summaryCol}>
             <View style={styles.statHeader}>
               <CheckCircle2 size={13} color={colors.positive} style={{ marginRight: 5 }} />
-              <Text style={[styles.summaryLabel, { color: colors.textSecondary }]}>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  {
+                    color: colors.textSecondary,
+                    fontFamily: typography.fontFamilies.semibold,
+                  },
+                ]}
+              >
                 PURCHASED ({purchasedItems.length})
               </Text>
             </View>
-            <Text style={[styles.summaryVal, { color: purchasedTotal > 0 ? colors.positive : colors.textMuted }]}>
+            <Text
+              style={[
+                styles.summaryVal,
+                {
+                  color: purchasedTotal > 0 ? colors.positive : colors.textMuted,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
               {purchasedTotal > 0 ? formatRupee(purchasedTotal) : '₹0'}
             </Text>
-            <Text style={[styles.summarySub, { color: colors.textMuted }]}>Actual spending</Text>
+            <Text
+              style={[
+                styles.summarySub,
+                {
+                  color: colors.textMuted,
+                  fontFamily: typography.fontFamilies.regular,
+                },
+              ]}
+            >
+              Actual spending
+            </Text>
           </View>
         </View>
       </LiquidGlassCard>
 
       {/* 3. Section: TO BUY */}
       <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.textPrimary,
+              fontFamily: typography.fontFamilies.bold,
+            },
+          ]}
+        >
           TO BUY ({pendingItems.length})
         </Text>
         <Pressable
@@ -233,22 +363,74 @@ export default function ShoppingListDetailScreen() {
             setIsAddItemModalOpen(true);
           }}
           hitSlop={8}
-          style={[styles.quickAddPill, { backgroundColor: isDark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.12)' }]}
+          accessibilityRole="button"
+          accessibilityLabel="Add item to list"
+          style={({ pressed }) => [
+            styles.quickAddPill,
+            {
+              backgroundColor: isDark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.12)',
+              opacity: pressed ? 0.7 : 1,
+            },
+          ]}
         >
-          <Plus size={13} color={colors.accent} style={{ marginRight: 4 }} />
-          <Text style={[styles.quickAddText, { color: colors.accent }]}>Add Item</Text>
+          <Plus size={13} color={isDark ? '#818CF8' : '#6366F1'} style={{ marginRight: 4 }} />
+          <Text
+            style={[
+              styles.quickAddText,
+              {
+                color: isDark ? '#818CF8' : '#6366F1',
+                fontFamily: typography.fontFamilies.bold,
+              },
+            ]}
+          >
+            Add Item
+          </Text>
         </Pressable>
       </View>
 
       <View style={styles.itemsList}>
-        {pendingItems.length === 0 ? (
-          <View style={[styles.emptyBox, { borderColor: colors.borderSubtle, borderRadius: radii.md }]}>
-            <ShoppingBag size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
-            <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Pending Items</Text>
-            <Text style={[styles.emptySub, { color: colors.textSecondary }]}>
-              Tap "+ Add Item" below to plan new purchases.
-            </Text>
+        {isLoading && items.length === 0 ? (
+          <View style={{ paddingVertical: 32, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
           </View>
+        ) : pendingItems.length === 0 ? (
+          <Pressable
+            onPress={() => setIsAddItemModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="No pending items, tap to add an item"
+            style={[
+              styles.emptyBox,
+              {
+                borderColor: colors.borderSubtle,
+                borderRadius: radii.md,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+              },
+            ]}
+          >
+            <ShoppingBag size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.textPrimary,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
+              No Pending Items
+            </Text>
+            <Text
+              style={[
+                styles.emptySub,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.regular,
+                },
+              ]}
+            >
+              Tap here to add products you plan to buy.
+            </Text>
+          </Pressable>
         ) : (
           pendingItems.map((item) => (
             <ShoppingItemCard
@@ -272,7 +454,16 @@ export default function ShoppingListDetailScreen() {
       {/* 4. Section: HISTORY (Purchased Items) */}
       {purchasedItems.length > 0 ? (
         <View style={{ marginTop: spacing.lg }}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 10 }]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              {
+                color: colors.textPrimary,
+                fontFamily: typography.fontFamilies.bold,
+                marginBottom: 10,
+              },
+            ]}
+          >
             PURCHASE HISTORY ({purchasedItems.length})
           </Text>
           <View style={styles.itemsList}>
@@ -280,7 +471,9 @@ export default function ShoppingListDetailScreen() {
               <ShoppingItemCard
                 key={item.id}
                 item={item}
-                accountName={item.purchaseAccountId ? accountMap.get(item.purchaseAccountId) : undefined}
+                accountName={
+                  item.purchaseAccountId ? accountMap.get(item.purchaseAccountId) : undefined
+                }
                 categoryName={item.categoryId ? categoryMap.get(item.categoryId) : undefined}
                 onViewTransaction={() => {
                   if (item.transactionId) {
@@ -298,9 +491,19 @@ export default function ShoppingListDetailScreen() {
         <View style={{ marginTop: spacing.lg }}>
           <Pressable
             onPress={() => setShowDiscarded(!showDiscarded)}
+            accessibilityRole="button"
+            accessibilityLabel={`Toggle discarded items, ${discardedItems.length} items`}
             style={styles.discardedHeaderRow}
           >
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                {
+                  color: colors.textMuted,
+                  fontFamily: typography.fontFamilies.bold,
+                },
+              ]}
+            >
               DISCARDED ({discardedItems.length})
             </Text>
             {showDiscarded ? (
@@ -324,14 +527,7 @@ export default function ShoppingListDetailScreen() {
                       Alert.alert('Error', e?.message || 'Failed to restore item.');
                     }
                   }}
-                  onDeletePress={async () => {
-                    try {
-                      await deleteItem(item.id);
-                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-                    } catch (e: any) {
-                      Alert.alert('Error', e?.message || 'Failed to delete discarded item.');
-                    }
-                  }}
+                  onDeletePress={() => handleDeleteDiscardedItem(item)}
                 />
               ))}
             </View>
@@ -339,7 +535,7 @@ export default function ShoppingListDetailScreen() {
         </View>
       ) : null}
 
-      {/* 6. Floating / Bottom Add Item CTA */}
+      {/* 6. Bottom Add Item CTA */}
       <View style={styles.bottomCtaContainer}>
         <PrimaryButton
           title="+ Add Item to List"
@@ -407,7 +603,7 @@ export default function ShoppingListDetailScreen() {
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingBottom: 60,
+    paddingHorizontal: 16,
   },
   headerRow: {
     flexDirection: 'row',
@@ -423,7 +619,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
   },
   archivedPill: {
     paddingHorizontal: 6,
@@ -432,7 +627,6 @@ const styles = StyleSheet.create({
   },
   archivedPillText: {
     fontSize: 10,
-    fontWeight: '600',
     textTransform: 'uppercase',
   },
   headerRightActions: {
@@ -464,12 +658,10 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 10,
-    fontWeight: '600',
     letterSpacing: 0.5,
   },
   summaryVal: {
     fontSize: 18,
-    fontWeight: '800',
   },
   summarySub: {
     fontSize: 11,
@@ -488,7 +680,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 13,
-    fontWeight: '700',
     letterSpacing: 0.5,
   },
   quickAddPill: {
@@ -500,7 +691,6 @@ const styles = StyleSheet.create({
   },
   quickAddText: {
     fontSize: 12,
-    fontWeight: '700',
   },
   itemsList: {
     gap: 8,
@@ -514,7 +704,6 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 15,
-    fontWeight: '700',
     marginBottom: 2,
   },
   emptySub: {

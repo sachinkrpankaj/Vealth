@@ -94,6 +94,7 @@ function RootStack() {
         <Stack.Screen name="net-worth/index" />
         <Stack.Screen name="analytics/index" />
         <Stack.Screen name="spending-insights/index" />
+        <Stack.Screen name="shopping/[id]" />
         <Stack.Screen name="profile/index" />
         <Stack.Screen name="settings/index" />
         <Stack.Screen name="settings/security" />
