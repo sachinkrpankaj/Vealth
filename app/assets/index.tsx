@@ -219,7 +219,7 @@ export default function AssetsListScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg }]}>

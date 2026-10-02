@@ -14,8 +14,26 @@ import { getAllLiabilities } from '../database/repositories/liabilityRepository'
 import { getSettingsMap } from '../database/repositories/settingsRepository';
 import { getAllSnapshots, NetWorthSnapshotRecord } from '../database/repositories/snapshotRepository';
 import { getAllShoppingLists, getAllShoppingItems } from '../database/repositories/shoppingRepository';
-import { Account, Person, Category, Transaction, Asset, Liability, ShoppingList, ShoppingItem } from '../domain/finance/types';
+import {
+  ACCOUNT_TYPES,
+  ASSET_CATEGORIES,
+  ASSET_VALUATION_SOURCES,
+  CATEGORY_TYPES,
+  LIABILITY_TYPES,
+  LIABILITY_VALUATION_SOURCES,
+  SHOPPING_ITEM_STATUSES,
+  TRANSACTION_TYPES,
+  Account,
+  Person,
+  Category,
+  Transaction,
+  Asset,
+  Liability,
+  ShoppingList,
+  ShoppingItem,
+} from '../domain/finance/types';
 import { formatDateIso, parseLocalDate } from './dateUtils';
+import { generateEntityId } from './idGenerator';
 
 export interface VaelthBackupData {
   appName: 'Vaelth';
@@ -123,21 +141,11 @@ export async function exportBackupToFile(): Promise<string> {
   return fileUri;
 }
 
-const VALID_ACCOUNT_TYPES = new Set(['CASH', 'BANK', 'CREDIT_CARD', 'INVESTMENT', 'OTHER']);
-const VALID_TRANSACTION_TYPES = new Set([
-  'INCOME',
-  'EXPENSE',
-  'TRANSFER',
-  'LEND',
-  'BORROW',
-  'REPAYMENT_RECEIVED',
-  'REPAYMENT_MADE',
-  'ASSET_PURCHASE',
-  'ASSET_SALE',
-  'OTHER',
-]);
-const VALID_LIABILITY_TYPES = new Set(['PERSONAL_LOAN', 'CREDIT_CARD', 'BORROWED_MONEY', 'OTHER']);
-const VALID_CATEGORY_TYPES = new Set(['EXPENSE', 'INCOME']);
+const VALID_ACCOUNT_TYPES = new Set(ACCOUNT_TYPES);
+const VALID_TRANSACTION_TYPES = new Set(TRANSACTION_TYPES);
+const VALID_LIABILITY_TYPES = new Set(LIABILITY_TYPES);
+const VALID_ASSET_CATEGORIES = new Set(ASSET_CATEGORIES);
+const VALID_CATEGORY_TYPES = new Set(CATEGORY_TYPES);
 
 function isValidCalendarDate(dateStr: any, allowDateTime = false): boolean {
   if (typeof dateStr !== 'string') return false;
@@ -155,6 +163,16 @@ function isValidCalendarDate(dateStr: any, allowDateTime = false): boolean {
   return formatDateIso(parsed) === dateOnly && (dateStr === dateOnly || Number.isFinite(Date.parse(dateStr)));
 }
 
+function shoppingItemIdFromMetadata(metadata: unknown): string | null {
+  if (typeof metadata !== 'string') return null;
+  try {
+    const parsed = JSON.parse(metadata);
+    return typeof parsed?.shoppingItemId === 'string' ? parsed.shoppingItemId : null;
+  } catch {
+    return null;
+  }
+}
+
 export function validateBackupData(parsed: any): { isValid: boolean; error?: string } {
   if (!parsed || typeof parsed !== 'object') {
     return { isValid: false, error: 'Invalid backup file format.' };
@@ -162,7 +180,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   if (parsed.appName !== 'Vaelth') {
     return { isValid: false, error: 'File is not a valid Vaelth backup.' };
   }
-  if (!parsed.schemaVersion || parsed.schemaVersion > 1) {
+  if (parsed.schemaVersion !== 1) {
     return { isValid: false, error: 'Unsupported backup schema version.' };
   }
   const data = parsed.data;
@@ -216,12 +234,25 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
       (a: any) =>
         validRecord(a) &&
         validId(a.name) &&
-        validId(a.category) &&
+        VALID_ASSET_CATEGORIES.has(a.category) &&
         validMoney(a.currentValue) &&
         a.currentValue >= 0 &&
         validMoney(a.purchaseValue) &&
         a.purchaseValue >= 0 &&
-        isValidCalendarDate(a.purchaseDate)
+        isValidCalendarDate(a.purchaseDate) &&
+        (a.valuationHistory == null ||
+          (Array.isArray(a.valuationHistory) &&
+            a.valuationHistory.every((v: any) =>
+              v && isValidCalendarDate(v.effectiveDate) && validMoney(v.value) && v.value >= 0 &&
+              (ASSET_VALUATION_SOURCES as readonly string[]).includes(v.source) &&
+              (v.createdAt == null || typeof v.createdAt === 'string')
+            ))) &&
+        (a.archiveHistory == null ||
+          (Array.isArray(a.archiveHistory) &&
+            a.archiveHistory.every((v: any) =>
+              v && isValidCalendarDate(v.effectiveDate) && typeof v.isArchived === 'boolean' &&
+              (v.createdAt == null || typeof v.createdAt === 'string')
+            )))
     ) ||
     !data.liabilities.every(
       (l: any) =>
@@ -230,7 +261,20 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
         VALID_LIABILITY_TYPES.has(l.type) &&
         validMoney(l.amount) &&
         l.amount >= 0 &&
-        (!l.dueDate || isValidCalendarDate(l.dueDate))
+        (!l.dueDate || isValidCalendarDate(l.dueDate)) &&
+        (l.amountHistory == null ||
+          (Array.isArray(l.amountHistory) &&
+            l.amountHistory.every((v: any) =>
+              v && isValidCalendarDate(v.effectiveDate) && validMoney(v.amount) && v.amount >= 0 &&
+              (LIABILITY_VALUATION_SOURCES as readonly string[]).includes(v.source) &&
+              (v.createdAt == null || typeof v.createdAt === 'string')
+            ))) &&
+        (l.archiveHistory == null ||
+          (Array.isArray(l.archiveHistory) &&
+            l.archiveHistory.every((v: any) =>
+              v && isValidCalendarDate(v.effectiveDate) && typeof v.isArchived === 'boolean' &&
+              (v.createdAt == null || typeof v.createdAt === 'string')
+            )))
     ) ||
     !data.transactions.every(
       (t: any) =>
@@ -276,6 +320,12 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
       if (!validId(t.accountId) || !validId(t.destinationAccountId) || t.accountId === t.destinationAccountId) {
         return { isValid: false, error: 'Transfer transaction requires distinct source and destination accounts.' };
       }
+      const source = data.accounts.find((account: any) => account.id === t.accountId);
+      const destination = data.accounts.find((account: any) => account.id === t.destinationAccountId);
+      if (source?.type === 'CREDIT_CARD' ||
+          (destination?.type === 'CREDIT_CARD' && ['CASH', 'INVESTMENT'].includes(source?.type))) {
+        return { isValid: false, error: 'Backup contains an invalid credit-card transfer.' };
+      }
     } else if (t.type === 'EXPENSE' || t.type === 'INCOME') {
       if (!validId(t.accountId)) {
         return { isValid: false, error: `${t.type} transaction requires an account ID.` };
@@ -286,13 +336,21 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
       t.type === 'REPAYMENT_RECEIVED' ||
       t.type === 'REPAYMENT_MADE'
     ) {
-      if (!validId(t.personId)) {
+      if (!validId(t.accountId) || !validId(t.personId)) {
         return { isValid: false, error: `${t.type} transaction requires a person ID.` };
       }
     } else if (t.type === 'ASSET_PURCHASE' || t.type === 'ASSET_SALE') {
-      if (!validId(t.assetId)) {
+      if (!validId(t.accountId) || !validId(t.assetId)) {
         return { isValid: false, error: `${t.type} transaction requires an asset ID.` };
       }
+    }
+    if (
+      (t.type !== 'TRANSFER' && t.destinationAccountId) ||
+      (!['LEND', 'BORROW', 'REPAYMENT_RECEIVED', 'REPAYMENT_MADE'].includes(t.type) && t.personId) ||
+      (!['ASSET_PURCHASE', 'ASSET_SALE'].includes(t.type) && t.assetId) ||
+      (!['INCOME', 'EXPENSE'].includes(t.type) && t.categoryId)
+    ) {
+      return { isValid: false, error: 'Transaction contains fields that do not match its type.' };
     }
   }
 
@@ -320,7 +378,16 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     return { isValid: false, error: 'Backup contains missing financial references.' };
   }
 
-  const VALID_SHOPPING_STATUSES = new Set(['PENDING', 'PURCHASED', 'DISCARDED']);
+  const categoriesById = new Map<string, any>(data.categories.map((category: any) => [category.id, category]));
+  for (const tx of data.transactions) {
+    if (!tx.categoryId) continue;
+    const expectedType = tx.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
+    if (categoriesById.get(tx.categoryId)?.type !== expectedType) {
+      return { isValid: false, error: 'Backup contains a category whose type does not match its transaction.' };
+    }
+  }
+
+  const VALID_SHOPPING_STATUSES = new Set(SHOPPING_ITEM_STATUSES);
   if (data.shoppingLists) {
     if (
       !Array.isArray(data.shoppingLists) ||
@@ -347,20 +414,66 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
           validId(i.name) &&
           VALID_SHOPPING_STATUSES.has(i.status) &&
           (i.estimatedPrice == null || (validMoney(i.estimatedPrice) && i.estimatedPrice > 0)) &&
-          (!data.shoppingLists || listIds.has(i.listId)) &&
+          (!data.shoppingLists ? !data.shoppingItems?.length : listIds.has(i.listId)) &&
           (i.status !== 'PURCHASED' ||
             (validMoney(i.purchasePrice) &&
               i.purchasePrice > 0 &&
               isValidCalendarDate(i.purchasedAt, true) &&
               validId(i.transactionId) &&
               transactionIds.has(i.transactionId) &&
-              exists(i.purchaseAccountId, accountIds) &&
+              validId(i.purchaseAccountId) && accountIds.has(i.purchaseAccountId) &&
               exists(i.categoryId, categoryIds)))
+          && (i.status === 'PURCHASED' || (
+            i.transactionId == null && i.purchasedAt == null && i.purchasePrice == null &&
+            i.purchaseAccountId == null && i.categoryId == null
+          ))
       ) ||
       !hasUniqueIds(data.shoppingItems)
     ) {
       return { isValid: false, error: 'Backup contains invalid shopping item records or broken references.' };
     }
+  }
+
+  const shoppingItemsById = new Map<string, any>(
+    (data.shoppingItems || []).map((item: any) => [item.id, item])
+  );
+  const transactionsById = new Map<string, any>(data.transactions.map((tx: any) => [tx.id, tx]));
+  const activeShoppingReferences = new Map<string, number>();
+  for (const item of data.shoppingItems || []) {
+    if (item.status !== 'PURCHASED') continue;
+    const tx = transactionsById.get(item.transactionId);
+    const purchasedDate = typeof item.purchasedAt === 'string' ? item.purchasedAt.slice(0, 10) : '';
+    if (
+      !tx || tx.deletedAt || tx.type !== 'EXPENSE' ||
+      shoppingItemIdFromMetadata(tx.metadata) !== item.id ||
+      tx.amount !== item.purchasePrice || tx.date !== purchasedDate ||
+      tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null) ||
+      (item.categoryId && categoriesById.get(item.categoryId)?.type !== 'EXPENSE')
+    ) {
+      return { isValid: false, error: 'Backup contains mismatched shopping purchases and transactions.' };
+    }
+  }
+
+  for (const tx of data.transactions) {
+    if (tx.deletedAt) continue;
+    const shoppingItemId = shoppingItemIdFromMetadata(tx.metadata);
+    if (!shoppingItemId) continue;
+    activeShoppingReferences.set(
+      shoppingItemId,
+      (activeShoppingReferences.get(shoppingItemId) || 0) + 1
+    );
+    const item = shoppingItemsById.get(shoppingItemId);
+    if (
+      !item || item.status !== 'PURCHASED' || item.transactionId !== tx.id ||
+      tx.type !== 'EXPENSE' || tx.amount !== item.purchasePrice ||
+      tx.date !== String(item.purchasedAt || '').slice(0, 10) ||
+      tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null)
+    ) {
+      return { isValid: false, error: 'Backup contains a dangling or mismatched shopping transaction.' };
+    }
+  }
+  if (Array.from(activeShoppingReferences.values()).some((count) => count !== 1)) {
+    return { isValid: false, error: 'Backup contains shopping items with multiple active transactions.' };
   }
 
   return { isValid: true };
@@ -475,6 +588,27 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
           ast.updatedAt,
         ]
       );
+      const valuations = ast.valuationHistory?.length
+        ? ast.valuationHistory
+        : [
+            { effectiveDate: ast.purchaseDate, value: ast.purchaseValue, source: 'PURCHASE' as const, createdAt: ast.createdAt },
+            { effectiveDate: ast.updatedAt.slice(0, 10), value: ast.currentValue, source: 'LEGACY_BASELINE' as const, createdAt: ast.updatedAt },
+          ];
+      for (const valuation of valuations) {
+        await db.runAsync(
+          `INSERT INTO asset_valuations (id, assetId, effectiveDate, value, source, createdAt) VALUES (?, ?, ?, ?, ?, ?);`,
+          [generateEntityId('assetval'), ast.id, valuation.effectiveDate, Math.round(valuation.value), valuation.source, valuation.createdAt || ast.updatedAt]
+        );
+      }
+      const archiveHistory = ast.archiveHistory?.length
+        ? ast.archiveHistory
+        : [{ effectiveDate: ast.updatedAt.slice(0, 10), isArchived: ast.isArchived, createdAt: ast.updatedAt }];
+      for (const state of archiveHistory) {
+        await db.runAsync(
+          `INSERT INTO asset_archive_history (id, assetId, effectiveDate, isArchived, createdAt) VALUES (?, ?, ?, ?, ?);`,
+          [generateEntityId('assetstate'), ast.id, state.effectiveDate, state.isArchived ? 1 : 0, state.createdAt || ast.updatedAt]
+        );
+      }
     }
 
     // 5. Restore liabilities
@@ -495,6 +629,24 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
           l.updatedAt,
         ]
       );
+      const amountHistory = l.amountHistory?.length
+        ? l.amountHistory
+        : [{ effectiveDate: l.updatedAt.slice(0, 10), amount: l.amount, source: 'LEGACY_BASELINE' as const, createdAt: l.updatedAt }];
+      for (const valuation of amountHistory) {
+        await db.runAsync(
+          `INSERT INTO liability_valuations (id, liabilityId, effectiveDate, amount, source, createdAt) VALUES (?, ?, ?, ?, ?, ?);`,
+          [generateEntityId('liabval'), l.id, valuation.effectiveDate, Math.round(valuation.amount), valuation.source, valuation.createdAt || l.updatedAt]
+        );
+      }
+      const archiveHistory = l.archiveHistory?.length
+        ? l.archiveHistory
+        : [{ effectiveDate: l.updatedAt.slice(0, 10), isArchived: l.isArchived, createdAt: l.updatedAt }];
+      for (const state of archiveHistory) {
+        await db.runAsync(
+          `INSERT INTO liability_archive_history (id, liabilityId, effectiveDate, isArchived, createdAt) VALUES (?, ?, ?, ?, ?);`,
+          [generateEntityId('liabstate'), l.id, state.effectiveDate, state.isArchived ? 1 : 0, state.createdAt || l.updatedAt]
+        );
+      }
     }
 
     // 6. Restore transactions

@@ -1,34 +1,16 @@
-let Crypto: typeof import('expo-crypto') | null = null;
-try {
-  Crypto = require('expo-crypto');
-} catch {}
-
-let monotonicCounter = 0;
+import * as Crypto from 'expo-crypto';
 
 /**
- * Generates collision-resistant, unique IDs for entities across Vaelth.
- * Format: `${prefix}_${uuid}` or `${prefix}_${timestamp}_${counter}_${entropy}`
+ * Generates entity IDs with Expo's platform CSPRNG-backed UUID implementation.
+ * Fails closed if the platform cannot provide a secure UUID.
  */
 export function generateEntityId(prefix: string): string {
-  // 1. Try expo-crypto randomUUID if available
-  if (Crypto && typeof Crypto.randomUUID === 'function') {
-    try {
-      return `${prefix}_${Crypto.randomUUID()}`;
-    } catch {}
+  if (!prefix || !/^[a-z0-9-]+$/i.test(prefix)) {
+    throw new Error('Entity ID prefix must contain only letters, numbers, and hyphens.');
   }
-
-  // 2. Try globalThis.crypto.randomUUID if available (modern JS runtime / Web)
-  if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
-    try {
-      return `${prefix}_${globalThis.crypto.randomUUID()}`;
-    } catch {}
+  const uuid = Crypto.randomUUID();
+  if (!uuid || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid)) {
+    throw new Error('Secure UUID generation is unavailable.');
   }
-
-  // 3. Robust monotonic timestamp + counter + random entropy fallback
-  monotonicCounter = (monotonicCounter + 1) % 1000000;
-  const timestamp = Date.now().toString(36);
-  const counterStr = monotonicCounter.toString(36).padStart(4, '0');
-  const randomEntropy = Math.random().toString(36).substring(2, 10);
-
-  return `${prefix}_${timestamp}_${counterStr}_${randomEntropy}`;
+  return `${prefix}_${uuid}`;
 }

@@ -1,5 +1,5 @@
 import { getDatabase } from '../db';
-import { Account, AccountType } from '../../domain/finance/types';
+import { Account, AccountType, ACCOUNT_TYPES } from '../../domain/finance/types';
 
 interface AccountRow {
   id: string;
@@ -62,6 +62,7 @@ export async function getAccountById(id: string): Promise<Account | null> {
 export async function createAccount(
   account: Omit<Account, 'createdAt' | 'updatedAt'>
 ): Promise<Account> {
+  if (!ACCOUNT_TYPES.includes(account.type)) throw new Error(`Invalid account type: ${account.type}`);
   const db = await getDatabase();
   const now = new Date().toISOString();
   await db.runAsync(
@@ -91,6 +92,9 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
   const now = new Date().toISOString();
   const current = await getAccountById(id);
   if (!current) throw new Error(`Account ${id} not found`);
+  if (updates.type && !ACCOUNT_TYPES.includes(updates.type)) {
+    throw new Error(`Invalid account type: ${updates.type}`);
+  }
 
   // Restrict unsafe account type changes if transactions exist
   if (updates.type && updates.type !== current.type) {

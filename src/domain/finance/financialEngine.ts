@@ -1,5 +1,6 @@
 import {
   Account,
+  AssetArchiveState,
   Asset,
   DueDateStatus,
   Liability,
@@ -345,11 +346,123 @@ export function calculateTotalPayables(
 /**
  * Total physical / investment standalone assets valuation.
  */
-export function calculateTotalPhysicalAssets(assets: Asset[], asOfDateStr?: string): number {
-  return assets
-    .filter((a) => !a.isArchived)
-    .filter((a) => !asOfDateStr || !a.createdAt || a.createdAt.slice(0, 10) <= asOfDateStr)
-    .reduce((acc, curr) => addMinor(acc, Math.round(curr.currentValue)), 0);
+function isAfterValuation(tx: Transaction, point: { effectiveDate: string; createdAt?: string }): boolean {
+  if (tx.date !== point.effectiveDate) return tx.date > point.effectiveDate;
+  if (point.createdAt && tx.createdAt) return tx.createdAt > point.createdAt;
+  return true;
+}
+
+export function calculateAssetValueAsOf(
+  asset: Asset,
+  transactions: Transaction[],
+  asOfDate: string = getTodayLocalDateString()
+): number {
+  const history = (asset.valuationHistory || [])
+    .filter((point) => point.effectiveDate <= asOfDate)
+    .sort((a, b) =>
+      a.effectiveDate.localeCompare(b.effectiveDate) ||
+      (a.createdAt || '').localeCompare(b.createdAt || '') ||
+      (a.source === 'PURCHASE' ? -1 : b.source === 'PURCHASE' ? 1 : 0)
+    );
+  const valuation = history[history.length - 1];
+  if (!valuation) return 0;
+
+  let value = Math.round(valuation.value);
+  const effectiveTransactions = getActiveTransactions(transactions)
+    .filter(
+      (tx) =>
+        tx.assetId === asset.id &&
+        tx.date <= asOfDate &&
+        isAfterValuation(tx, valuation) &&
+        (tx.type === 'ASSET_SALE' || tx.type === 'ASSET_PURCHASE')
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+
+  for (const tx of effectiveTransactions) {
+    if (tx.type === 'ASSET_PURCHASE') {
+      value += Math.round(tx.amount);
+    } else {
+      // Rebuild the sale's book value from the active event sequence. Persisted
+      // reversal metadata can be stale after an earlier sale is edited or removed.
+      value = Math.max(0, value - Math.min(value, Math.round(tx.amount)));
+    }
+  }
+  return value;
+}
+
+export function isAssetArchivedAsOf(
+  asset: Asset,
+  asOfDate: string = getTodayLocalDateString(),
+  transactions: Transaction[] = []
+): boolean {
+  const history = (asset.archiveHistory || [])
+    .filter((state) => state.effectiveDate <= asOfDate)
+    .sort((a, b) =>
+      a.effectiveDate.localeCompare(b.effectiveDate) ||
+      (a.createdAt || '').localeCompare(b.createdAt || '')
+    );
+  const latestState = history[history.length - 1];
+  if (!latestState) {
+    // Legacy/synthetic data without an archive timeline is only trustworthy for today.
+    return !asset.archiveHistory?.length && asOfDate >= getTodayLocalDateString()
+      ? asset.isArchived
+      : false;
+  }
+  if (!latestState.isArchived) return false;
+  return !getActiveTransactions(transactions).some(
+    (tx) =>
+      tx.assetId === asset.id &&
+      tx.type === 'ASSET_PURCHASE' &&
+      tx.date <= asOfDate &&
+      isAfterValuation(tx, latestState)
+  );
+}
+
+export function calculateTotalPhysicalAssets(
+  assets: Asset[],
+  asOfDateStr?: string,
+  transactions: Transaction[] = []
+): number {
+  const cutoff = asOfDateStr || getTodayLocalDateString();
+  return assets.reduce((total, asset) => {
+    if (asset.createdAt && asset.createdAt.slice(0, 10) > cutoff) return total;
+    if (!asset.valuationHistory?.length) {
+      // Migration-less callers and older backups may not carry valuation history.
+      // The mutable value remains authoritative at/after its last update. For dates
+      // before that update, reconstruct only what the purchase basis and dated asset
+      // transactions can establish.
+      let historicalValue = Math.round(asset.currentValue);
+      const lastUpdateDate = asset.updatedAt?.slice(0, 10);
+      const beforeLastUpdate = !!lastUpdateDate && cutoff < lastUpdateDate;
+      if (beforeLastUpdate && asset.purchaseDate && asset.purchaseDate <= cutoff) {
+        historicalValue = Math.round(asset.purchaseValue);
+        const assetTransactions = getActiveTransactions(transactions)
+          .filter(
+            (tx) =>
+              tx.assetId === asset.id &&
+              tx.date > asset.purchaseDate &&
+              tx.date <= cutoff &&
+              (tx.type === 'ASSET_SALE' || tx.type === 'ASSET_PURCHASE')
+          )
+          .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+        for (const tx of assetTransactions) {
+          if (tx.type === 'ASSET_PURCHASE') {
+            historicalValue += Math.round(tx.amount);
+          } else {
+            historicalValue = Math.max(
+              0,
+              historicalValue - Math.min(historicalValue, Math.round(tx.amount))
+            );
+          }
+        }
+      }
+      const archivedByCutoff = beforeLastUpdate ? false : asset.isArchived;
+      return !archivedByCutoff ? addMinor(total, historicalValue) : total;
+    }
+    const value = calculateAssetValueAsOf(asset, transactions, cutoff);
+    const archived = isAssetArchivedAsOf(asset, cutoff, transactions);
+    return archived ? total : addMinor(total, value);
+  }, 0);
 }
 
 /**
@@ -361,9 +474,18 @@ export function calculateTotalStandaloneLiabilities(
   accounts?: Account[],
   asOfDateStr?: string
 ): number {
+  const cutoff = asOfDateStr || getTodayLocalDateString();
   return liabilities
-    .filter((l) => !l.isArchived)
-    .filter((l) => !asOfDateStr || !l.createdAt || l.createdAt.slice(0, 10) <= asOfDateStr)
+    .filter((liability) => {
+      if (liability.createdAt && liability.createdAt.slice(0, 10) > cutoff) return false;
+      const history = (liability.archiveHistory || [])
+        .filter((state) => state.effectiveDate <= cutoff)
+        .sort((a, b) =>
+          a.effectiveDate.localeCompare(b.effectiveDate) ||
+          (a.createdAt || '').localeCompare(b.createdAt || '')
+        );
+      return history.length ? !history[history.length - 1].isArchived : !liability.isArchived;
+    })
     .filter((l) => {
       if (
         accounts &&
@@ -379,11 +501,20 @@ export function calculateTotalStandaloneLiabilities(
       return true;
     })
     .reduce(
-      (acc, curr) =>
-        addMinor(
-          acc,
-          Math.round(curr.amount ?? (curr as any).remainingAmount ?? (curr as any).totalAmount ?? 0)
-        ),
+      (acc, curr) => {
+        const amountHistory = (curr.amountHistory || [])
+          .filter((point) => point.effectiveDate <= cutoff)
+          .sort((a, b) =>
+            a.effectiveDate.localeCompare(b.effectiveDate) ||
+            (a.createdAt || '').localeCompare(b.createdAt || '')
+          );
+        const amount = amountHistory.length
+          ? amountHistory[amountHistory.length - 1].amount
+        : (curr.amountHistory?.length || (curr.updatedAt && curr.updatedAt.slice(0, 10) > cutoff))
+            ? 0
+            : Math.round(curr.amount ?? (curr as any).remainingAmount ?? (curr as any).totalAmount ?? 0);
+        return addMinor(acc, amount);
+      },
       0
     );
 }
@@ -486,7 +617,7 @@ export function calculateNetWorth(
   const totalPayables = calculateTotalPayables(people, transactions, asOfDateStr);
 
   // Physical assets & liabilities as of reference date (deduplicating credit cards to prevent double counting)
-  const totalPhysicalAssets = calculateTotalPhysicalAssets(physicalAssets, asOfDateStr);
+  const totalPhysicalAssets = calculateTotalPhysicalAssets(physicalAssets, asOfDateStr, transactions);
   const totalStandaloneLiabilities = calculateTotalStandaloneLiabilities(
     standaloneLiabilities,
     accounts,
@@ -560,48 +691,19 @@ export function calculateNetWorth(
       const totalReceivablesStart = calculateTotalReceivables(people, txBeforeStart, `${startOfMonth}`);
       const totalPayablesStart = calculateTotalPayables(people, txBeforeStart, `${startOfMonth}`);
 
-      // Restore book value of assets sold during target month up to asOfDate
-      const salesByAssetId = new Map<string, number>();
-      for (const sale of activeTx) {
-        if (sale.date >= startOfMonth && sale.date <= asOfDateStr && sale.type === 'ASSET_SALE' && sale.assetId) {
-          let bookValueSold = Math.abs(sale.amount);
-          if (sale.metadata) {
-            try {
-              const meta = typeof sale.metadata === 'string' ? JSON.parse(sale.metadata) : sale.metadata;
-              if (meta.bookValueSold !== undefined) bookValueSold = meta.bookValueSold;
-              else if (meta.assetValueDeducted !== undefined) bookValueSold = meta.assetValueDeducted;
-            } catch {}
-          }
-          salesByAssetId.set(sale.assetId, addMinor(salesByAssetId.get(sale.assetId) ?? 0, bookValueSold));
-        }
-      }
-
-      let totalPhysicalAssetsStart = 0;
-      for (const ast of physicalAssets) {
-        if (ast.createdAt && ast.createdAt.slice(0, 10) >= startOfMonth) {
-          continue;
-        }
-        const soldInOrAfter = salesByAssetId.get(ast.id) ?? 0;
-        const initialVal = addMinor(Math.round(ast.currentValue), soldInOrAfter);
-        totalPhysicalAssetsStart = addMinor(totalPhysicalAssetsStart, initialVal);
-      }
-
-      let totalStandaloneLiabilitiesStart = 0;
-      for (const l of standaloneLiabilities) {
-        if (l.isArchived) continue;
-        if (l.createdAt && l.createdAt.slice(0, 10) >= startOfMonth) continue;
-        if (
-          accounts &&
-          l.type === 'CREDIT_CARD' &&
-          accounts.some((a) => a.type === 'CREDIT_CARD' && (a.id === l.id || (a as any).liabilityId === l.id || (l as any).accountId === a.id))
-        ) {
-          continue;
-        }
-        totalStandaloneLiabilitiesStart = addMinor(
-          totalStandaloneLiabilitiesStart,
-          Math.round(l.amount ?? (l as any).remainingAmount ?? (l as any).totalAmount ?? 0)
-        );
-      }
+      const priorMonthEnd = formatDateIso(
+        new Date(Number(targetMonth.slice(0, 4)), Number(targetMonth.slice(5, 7)) - 1, 0)
+      );
+      const totalPhysicalAssetsStart = calculateTotalPhysicalAssets(
+        physicalAssets,
+        priorMonthEnd,
+        txBeforeStart
+      );
+      const totalStandaloneLiabilitiesStart = calculateTotalStandaloneLiabilities(
+        standaloneLiabilities,
+        accounts,
+        priorMonthEnd
+      );
 
       const totalAssetsStart = addMinor(totalPositiveAccountsStart, totalPhysicalAssetsStart);
       const totalLiabilitiesStart = addMinor(totalNegativeAccountsStart, totalStandaloneLiabilitiesStart);

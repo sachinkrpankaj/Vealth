@@ -535,11 +535,28 @@ describe('Remaining Audit Fixes Verification', () => {
   describe('5. Data & Transaction Safety (Reversal & Restoration)', () => {
     let db: any;
     let scoped: any;
+    let assetRows: Record<string, { currentValue: number; isArchived: number }>;
 
     beforeEach(() => {
+      assetRows = {};
       scoped = {
-        getFirstAsync: jest.fn(),
-        runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
+        getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('FROM accounts WHERE id = ?')) {
+            return { id: params[0], name: 'Main bank', type: 'BANK', isArchived: 0 };
+          }
+          if (sql.includes('FROM assets WHERE id = ?')) {
+            return { id: params[0], ...(assetRows[params[0]] || { currentValue: 0, isArchived: 0 }) };
+          }
+          if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return null;
+          return null;
+        }),
+        getAllAsync: jest.fn(async () => []),
+        runAsync: jest.fn(async (sql: string, params: any[] = []) => {
+          if (sql.includes('UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ?')) {
+            assetRows[params[3]] = { currentValue: params[0], isArchived: params[1] };
+          }
+          return { changes: 1 };
+        }),
       };
       db = {
         execAsync: jest.fn(),
@@ -560,18 +577,14 @@ describe('Remaining Audit Fixes Verification', () => {
         bookValueSold: 5000000,
       });
 
-      scoped.getFirstAsync
-        .mockResolvedValueOnce({
+      assetRows['asset-gold'] = { currentValue: 0, isArchived: 1 };
+      scoped.getFirstAsync.mockResolvedValueOnce({
           id: 'tx-sale-full',
           type: 'ASSET_SALE',
           amount: 5000000,
           assetId: 'asset-gold',
           metadata,
           deletedAt: null,
-        })
-        .mockResolvedValueOnce({
-          currentValue: 0,
-          isArchived: 1,
         });
 
       await deleteTransaction('tx-sale-full');
@@ -602,21 +615,18 @@ describe('Remaining Audit Fixes Verification', () => {
     it('partial sale -> edit amount -> adjusts asset value accurately by delta', async () => {
       // Current sale is ₹10,000. Asset remaining is ₹40,000.
       // Update sale amount to ₹15,000 (net remaining should become ₹35,000)
-      scoped.getFirstAsync
-        .mockResolvedValueOnce({
+      assetRows['asset-stocks'] = { currentValue: 4000000, isArchived: 0 };
+      scoped.getFirstAsync.mockResolvedValueOnce({
           id: 'tx-sale-partial',
           type: 'ASSET_SALE',
           amount: 1000000, // ₹10,000
+          accountId: 'acc-main',
           assetId: 'asset-stocks',
           metadata: JSON.stringify({
             assetBookValueBefore: 5000000,
             assetValueDeducted: 1000000,
             bookValueSold: 1000000,
           }),
-        })
-        .mockResolvedValueOnce({
-          currentValue: 4000000, // ₹40,000 remaining
-          isArchived: 0,
         });
 
       await updateTransaction('tx-sale-partial', { amount: 1500000 });
@@ -629,11 +639,12 @@ describe('Remaining Audit Fixes Verification', () => {
     });
 
     it('changing transaction type away from ASSET_SALE fully restores original asset', async () => {
-      scoped.getFirstAsync
-        .mockResolvedValueOnce({
+      assetRows['asset-car'] = { currentValue: 0, isArchived: 1 };
+      scoped.getFirstAsync.mockResolvedValueOnce({
           id: 'tx-switch-type',
           type: 'ASSET_SALE',
           amount: 2000000,
+          accountId: 'acc-main',
           assetId: 'asset-car',
           metadata: JSON.stringify({
             assetBookValueBefore: 2000000,
@@ -641,16 +652,13 @@ describe('Remaining Audit Fixes Verification', () => {
             assetValueDeducted: 2000000,
             bookValueSold: 2000000,
           }),
-        })
-        .mockResolvedValueOnce({
-          currentValue: 0,
-          isArchived: 1,
         });
 
       // Switch to ordinary EXPENSE
       await updateTransaction('tx-switch-type', {
         type: 'EXPENSE',
         assetId: undefined,
+        accountId: 'acc-main',
         amount: 2000000,
       });
 
@@ -662,11 +670,13 @@ describe('Remaining Audit Fixes Verification', () => {
     });
 
     it('changing assetId on ASSET_SALE restores old asset and applies deduction to new asset', async () => {
-      scoped.getFirstAsync
-        .mockResolvedValueOnce({
+      assetRows['asset-old'] = { currentValue: 0, isArchived: 1 };
+      assetRows['asset-new'] = { currentValue: 3000000, isArchived: 0 };
+      scoped.getFirstAsync.mockResolvedValueOnce({
           id: 'tx-change-asset',
           type: 'ASSET_SALE',
           amount: 1000000,
+          accountId: 'acc-main',
           assetId: 'asset-old',
           metadata: JSON.stringify({
             assetBookValueBefore: 1000000,
@@ -674,16 +684,6 @@ describe('Remaining Audit Fixes Verification', () => {
             assetValueDeducted: 1000000,
             bookValueSold: 1000000,
           }),
-        })
-        // Step 1: restore old asset
-        .mockResolvedValueOnce({
-          currentValue: 0,
-          isArchived: 1,
-        })
-        // Step 2: query new asset
-        .mockResolvedValueOnce({
-          currentValue: 3000000, // ₹30,000
-          isArchived: 0,
         });
 
       await updateTransaction('tx-change-asset', {

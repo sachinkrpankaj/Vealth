@@ -25,6 +25,7 @@ import { typography } from '../src/theme/typography';
 import { useThemeStore } from '../src/stores/useThemeStore';
 import { createAccount } from '../src/database/repositories/accountRepository';
 import { setSetting } from '../src/database/repositories/settingsRepository';
+import { generateEntityId } from '../src/utils/idGenerator';
 import { formatRupee } from '../src/domain/finance/currency';
 
 interface OnboardingSlide {
@@ -124,8 +125,6 @@ export default function OnboardingScreen() {
   const handleFinishSetup = async () => {
     try {
       setIsSubmitting(true);
-      const timestamp = Date.now();
-
       // Save user details & theme preference
       if (userName.trim()) {
         await setSetting('user_name', userName.trim());
@@ -135,7 +134,7 @@ export default function OnboardingScreen() {
       // 1. Create Cash account if included
       if (includeCash) {
         await createAccount({
-          id: `acc-cash-${timestamp}`,
+          id: generateEntityId('acc-cash'),
           name: 'Cash in Hand',
           type: 'CASH',
           openingBalance: cashBalance,
@@ -153,7 +152,7 @@ export default function OnboardingScreen() {
           : rawName;
 
         await createAccount({
-          id: `acc-bank-${timestamp + 1}`,
+          id: generateEntityId('acc-bank'),
           name: finalName,
           type: 'BANK',
           openingBalance: bankBalance,

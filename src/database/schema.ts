@@ -79,6 +79,25 @@ CREATE TABLE IF NOT EXISTS assets (
   updatedAt TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS asset_valuations (
+  id TEXT PRIMARY KEY,
+  assetId TEXT NOT NULL,
+  effectiveDate TEXT NOT NULL,
+  value INTEGER NOT NULL CHECK (value >= 0),
+  source TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS asset_archive_history (
+  id TEXT PRIMARY KEY,
+  assetId TEXT NOT NULL,
+  effectiveDate TEXT NOT NULL,
+  isArchived INTEGER NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (assetId) REFERENCES assets(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS liabilities (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -91,6 +110,25 @@ CREATE TABLE IF NOT EXISTS liabilities (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
   FOREIGN KEY (personId) REFERENCES people(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS liability_valuations (
+  id TEXT PRIMARY KEY,
+  liabilityId TEXT NOT NULL,
+  effectiveDate TEXT NOT NULL,
+  amount INTEGER NOT NULL CHECK (amount >= 0),
+  source TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (liabilityId) REFERENCES liabilities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS liability_archive_history (
+  id TEXT PRIMARY KEY,
+  liabilityId TEXT NOT NULL,
+  effectiveDate TEXT NOT NULL,
+  isArchived INTEGER NOT NULL,
+  createdAt TEXT NOT NULL,
+  FOREIGN KEY (liabilityId) REFERENCES liabilities(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS net_worth_snapshots (
@@ -146,6 +184,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_deletedAt ON transactions(deletedAt)
 CREATE INDEX IF NOT EXISTS idx_transactions_assetId ON transactions(assetId);
 CREATE INDEX IF NOT EXISTS idx_transactions_liabilityId ON transactions(liabilityId);
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON net_worth_snapshots(date);
+CREATE INDEX IF NOT EXISTS idx_asset_valuations_asset_date ON asset_valuations(assetId, effectiveDate, createdAt);
+CREATE INDEX IF NOT EXISTS idx_asset_archive_history_asset_date ON asset_archive_history(assetId, effectiveDate, createdAt);
+CREATE INDEX IF NOT EXISTS idx_liability_valuations_liability_date ON liability_valuations(liabilityId, effectiveDate, createdAt);
+CREATE INDEX IF NOT EXISTS idx_liability_archive_history_liability_date ON liability_archive_history(liabilityId, effectiveDate, createdAt);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_listId ON shopping_items(listId);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_status ON shopping_items(status);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_transactionId ON shopping_items(transactionId);

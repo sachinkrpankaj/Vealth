@@ -20,8 +20,22 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
     };
 
     scoped = {
-      getFirstAsync: jest.fn(),
-      runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
+      getFirstAsync: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM accounts WHERE id = ?')) {
+          return { id: 'acc-1', name: 'Main bank', type: 'BANK', isArchived: 0 };
+        }
+        if (sql.includes('FROM assets WHERE id = ?')) return mockAsset;
+        if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return null;
+        return null;
+      }),
+      getAllAsync: jest.fn(async () => []),
+      runAsync: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('UPDATE assets SET currentValue = ?')) {
+          mockAsset.currentValue = params[0];
+          if (params.length > 1) mockAsset.isArchived = params[1];
+        }
+        return { changes: 1 };
+      }),
     };
 
     db = {
@@ -149,6 +163,7 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
       type: 'ASSET_SALE',
       amount: 2000000,
       date: '2026-10-01',
+      accountId: 'acc-1',
       assetId: 'ast-portfolio',
       metadata: JSON.stringify({
         assetBookValueBefore: 6000000,
@@ -159,9 +174,7 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
       updatedAt: '2026-10-01',
     };
 
-    scoped.getFirstAsync
-      .mockResolvedValueOnce(existingSale)
-      .mockResolvedValueOnce({ currentValue: 4000000, isArchived: 0 });
+    scoped.getFirstAsync.mockResolvedValueOnce(existingSale);
 
     await updateTransaction('tx-sale-edit', { amount: 3500000 });
 

@@ -1,4 +1,5 @@
-export type AccountType = 'CASH' | 'BANK' | 'CREDIT_CARD' | 'INVESTMENT' | 'OTHER';
+export const ACCOUNT_TYPES = ['CASH', 'BANK', 'CREDIT_CARD', 'INVESTMENT', 'OTHER'] as const;
+export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
 export interface Account {
   id: string;
@@ -28,7 +29,8 @@ export interface Person {
   updatedAt: string;
 }
 
-export type CategoryType = 'INCOME' | 'EXPENSE';
+export const CATEGORY_TYPES = ['INCOME', 'EXPENSE'] as const;
+export type CategoryType = (typeof CATEGORY_TYPES)[number];
 
 export interface Category {
   id: string;
@@ -43,17 +45,19 @@ export interface Category {
   updatedAt?: string;
 }
 
-export type TransactionType =
-  | 'INCOME'
-  | 'EXPENSE'
-  | 'LEND'
-  | 'BORROW'
-  | 'REPAYMENT_RECEIVED'
-  | 'REPAYMENT_MADE'
-  | 'TRANSFER'
-  | 'ASSET_PURCHASE'
-  | 'ASSET_SALE'
-  | 'OTHER';
+export const TRANSACTION_TYPES = [
+  'INCOME',
+  'EXPENSE',
+  'LEND',
+  'BORROW',
+  'REPAYMENT_RECEIVED',
+  'REPAYMENT_MADE',
+  'TRANSFER',
+  'ASSET_PURCHASE',
+  'ASSET_SALE',
+  'OTHER',
+] as const;
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
 export interface Transaction {
   id: string;
@@ -74,7 +78,8 @@ export interface Transaction {
   deletedAt?: string | null;
 }
 
-export type AssetCategory = 'GOLD' | 'VEHICLE' | 'PROPERTY' | 'ELECTRONICS' | 'INVESTMENT' | 'CASH' | 'OTHER';
+export const ASSET_CATEGORIES = ['GOLD', 'VEHICLE', 'PROPERTY', 'ELECTRONICS', 'INVESTMENT', 'CASH', 'OTHER'] as const;
+export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
 
 export interface Asset {
   id: string;
@@ -87,9 +92,28 @@ export interface Asset {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  valuationHistory?: AssetValuation[];
+  archiveHistory?: AssetArchiveState[];
 }
 
-export type LiabilityType = 'PERSONAL_LOAN' | 'CREDIT_CARD' | 'BORROWED_MONEY' | 'OTHER';
+export interface AssetValuation {
+  effectiveDate: string;
+  value: number;
+  source: AssetValuationSource;
+  createdAt?: string;
+}
+
+export const ASSET_VALUATION_SOURCES = ['PURCHASE', 'MANUAL', 'LEGACY_BASELINE'] as const;
+export type AssetValuationSource = (typeof ASSET_VALUATION_SOURCES)[number];
+
+export interface AssetArchiveState {
+  effectiveDate: string;
+  isArchived: boolean;
+  createdAt?: string;
+}
+
+export const LIABILITY_TYPES = ['PERSONAL_LOAN', 'CREDIT_CARD', 'BORROWED_MONEY', 'OTHER'] as const;
+export type LiabilityType = (typeof LIABILITY_TYPES)[number];
 
 export interface Liability {
   id: string;
@@ -102,6 +126,24 @@ export interface Liability {
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
+  amountHistory?: LiabilityValuation[];
+  archiveHistory?: LiabilityArchiveState[];
+}
+
+export interface LiabilityValuation {
+  effectiveDate: string;
+  amount: number;
+  source: LiabilityValuationSource;
+  createdAt?: string;
+}
+
+export const LIABILITY_VALUATION_SOURCES = ['CREATED', 'MANUAL', 'LEGACY_BASELINE'] as const;
+export type LiabilityValuationSource = (typeof LIABILITY_VALUATION_SOURCES)[number];
+
+export interface LiabilityArchiveState {
+  effectiveDate: string;
+  isArchived: boolean;
+  createdAt?: string;
 }
 
 export type DueDateStatus = 'DUE_TODAY' | 'DUE_SOON' | 'OVERDUE' | 'NO_DUE_DATE' | 'SETTLED';
@@ -140,7 +182,8 @@ export interface FinancialEffect {
   descriptionLines: string[];
 }
 
-export type ShoppingItemStatus = 'PENDING' | 'PURCHASED' | 'DISCARDED';
+export const SHOPPING_ITEM_STATUSES = ['PENDING', 'PURCHASED', 'DISCARDED'] as const;
+export type ShoppingItemStatus = (typeof SHOPPING_ITEM_STATUSES)[number];
 
 export interface ShoppingList {
   id: string;

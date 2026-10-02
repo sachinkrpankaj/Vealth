@@ -1,4 +1,9 @@
-import { isDateDisabled } from '../../src/utils/dateUtils';
+import {
+  getEffectiveDateBounds,
+  getSelectableDateShortcuts,
+  isDateDisabled,
+  selectDateWithinBounds,
+} from '../../src/utils/dateUtils';
 
 describe('2 & 17. Calendar minDate/maxDate & Future Date Validation — Unit Tests', () => {
   const TODAY = '2026-10-02';
@@ -64,5 +69,35 @@ describe('2 & 17. Calendar minDate/maxDate & Future Date Validation — Unit Tes
     expect(isDateDisabled('2026-10-03', minDate, maxDate, true, TODAY)).toBe(false);
     expect(isDateDisabled('2026-10-05', minDate, maxDate, true, TODAY)).toBe(false);
     expect(isDateDisabled('2026-10-06', minDate, maxDate, true, TODAY)).toBe(true);
+  });
+
+  it('shows shortcuts only when the shared effective bounds allow them', () => {
+    const referenceDate = new Date(2026, 9, 2);
+    const bounds = getEffectiveDateBounds('2026-09-01', '2026-10-10', true, TODAY);
+    const shortcuts = getSelectableDateShortcuts(true, bounds, referenceDate);
+    expect(shortcuts.map((shortcut) => shortcut.label)).toContain('+7 Days');
+    expect(shortcuts.map((shortcut) => shortcut.label)).not.toContain('+30 Days');
+  });
+
+  it('hides shortcuts below minDate and above maxDate', () => {
+    const referenceDate = new Date(2026, 9, 2);
+    const minBounds = getEffectiveDateBounds('2026-10-03', undefined, true, TODAY);
+    const minShortcuts = getSelectableDateShortcuts(true, minBounds, referenceDate);
+    expect(minShortcuts.map((shortcut) => shortcut.label)).not.toContain('Yesterday');
+    expect(minShortcuts.map((shortcut) => shortcut.label)).not.toContain('Today');
+
+    const maxBounds = getEffectiveDateBounds(undefined, '2026-10-05', true, TODAY);
+    const maxShortcuts = getSelectableDateShortcuts(true, maxBounds, referenceDate);
+    expect(maxShortcuts.map((shortcut) => shortcut.label)).not.toContain('+7 Days');
+    expect(maxShortcuts.map((shortcut) => shortcut.label)).not.toContain('+30 Days');
+  });
+
+  it('hides future shortcuts when future dates are disabled and prevents disabled selection', () => {
+    const referenceDate = new Date(2026, 9, 2);
+    const bounds = getEffectiveDateBounds(undefined, '2026-10-31', false, TODAY);
+    const shortcuts = getSelectableDateShortcuts(false, bounds, referenceDate);
+    expect(shortcuts.map((shortcut) => shortcut.dateStr).every((date) => date <= TODAY)).toBe(true);
+    expect(selectDateWithinBounds('2026-10-20', bounds)).toBeNull();
+    expect(selectDateWithinBounds(TODAY, bounds)).toBe(TODAY);
   });
 });

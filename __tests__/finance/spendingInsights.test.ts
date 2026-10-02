@@ -176,13 +176,6 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
             const cat = mockCategories.find((c) => c.id === params[0]);
             return cat ? { ...cat } : null;
           }
-          if (sql.includes('WHERE type = ? AND (id = ? OR monthYear = ?)')) {
-            const [type, id, monthYear] = params;
-            const cat = mockCategories.find(
-              (c) => c.type === type && (c.id === id || c.monthYear === monthYear)
-            );
-            return cat ? { ...cat } : null;
-          }
           if (sql.includes('FROM categories WHERE type = ? AND (monthYear = ? OR name = ?)')) {
             const [type, monthYear, name] = params;
             const cat = mockCategories.find(
@@ -223,10 +216,10 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
           return [];
         }),
         runAsync: jest.fn(async (sql: string, params: any[] = []) => {
-          if (sql.includes('INSERT INTO categories')) {
+          if (sql.includes('INSERT OR IGNORE INTO categories')) {
             if (params.length === 4) {
               const [id, generalName, monthYear, now] = params;
-              mockCategories.push({
+              if (!mockCategories.some((category) => category.id === id)) mockCategories.push({
                 id,
                 name: generalName,
                 type: 'EXPENSE',
@@ -251,6 +244,20 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
                 createdAt,
               });
             }
+            return { changes: 1 };
+          }
+          if (sql.includes("UPDATE categories SET type = 'EXPENSE', monthYear = ?")) {
+            const [monthYear, id] = params;
+            const category = mockCategories.find((item) => item.id === id);
+            if (category) {
+              category.type = 'EXPENSE';
+              category.monthYear = monthYear;
+            }
+            return { changes: 1 };
+          }
+          if (sql.includes('INSERT INTO categories')) {
+            const [id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt] = params;
+            mockCategories.push({ id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt });
             return { changes: 1 };
           }
           if (sql.includes('UPDATE categories SET name = ?')) {
@@ -314,6 +321,29 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
       expect(octCat.name).toBe("October '26 · General");
       expect(novCat.name).toBe("November '26 · General");
       expect(octCat.id).not.toBe(novCat.id);
+    });
+
+    it('does not reuse an unrelated category with the same monthYear', async () => {
+      mockCategories.push({
+        id: 'cat-custom-december', name: 'Seasonal', type: 'EXPENSE', icon: 'Tag',
+        isDefault: 0, isArchived: 0, monthYear: '2026-12', createdAt: '2026-10-01',
+      });
+      const canonical = await ensureMonthlyGeneralCategory(new Date(2026, 11, 1));
+      expect(canonical.id).toBe('cat-general-2026-12');
+      expect(canonical.name).toBe("December '26 · General");
+      expect(mockCategories.find((category) => category.id === 'cat-custom-december')?.name).toBe('Seasonal');
+    });
+
+    it('repairs monthYear on an existing canonical category without creating a duplicate', async () => {
+      mockCategories.push({
+        id: 'cat-general-2026-09', name: "September '26 · General", type: 'EXPENSE', icon: 'Folder',
+        isDefault: 0, isArchived: 0, monthYear: null, createdAt: '2026-09-01',
+      });
+      const before = mockCategories.length;
+      const canonical = await ensureMonthlyGeneralCategory(new Date(2026, 8, 1));
+      expect(canonical.id).toBe('cat-general-2026-09');
+      expect(canonical.monthYear).toBe('2026-09');
+      expect(mockCategories.length).toBe(before);
     });
 
     it('enforces Current-Month Rule: normal Add Expense exposes only current calendar month General and custom categories', async () => {

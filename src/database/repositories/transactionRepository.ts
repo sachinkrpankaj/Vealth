@@ -1,6 +1,13 @@
 import { getDatabase } from '../db';
-import { Transaction, TransactionType } from '../../domain/finance/types';
-import { getTodayLocalDateString } from '../../utils/dateUtils';
+import { SQLiteDatabase } from 'expo-sqlite';
+import {
+  AccountType,
+  Transaction,
+  TransactionType,
+  TRANSACTION_TYPES,
+  ACCOUNT_TYPES,
+} from '../../domain/finance/types';
+import { getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { validateTransactionRequiredFields } from '../../domain/finance/validator';
 
 interface TransactionRow {
@@ -20,6 +27,28 @@ interface TransactionRow {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+}
+
+interface LinkedShoppingItemRow {
+  id: string;
+  status: string;
+  transactionId: string | null;
+  purchasePrice: number | null;
+  purchasedAt: string | null;
+  purchaseAccountId: string | null;
+  categoryId: string | null;
+}
+
+function shoppingPurchaseMatchesTransaction(
+  item: LinkedShoppingItemRow,
+  transaction: Pick<Transaction, 'amount' | 'date' | 'accountId' | 'categoryId'>
+): boolean {
+  return (
+    item.purchasePrice === transaction.amount &&
+    String(item.purchasedAt || '').slice(0, 10) === transaction.date &&
+    (item.purchaseAccountId ?? null) === (transaction.accountId ?? null) &&
+    (item.categoryId ?? null) === (transaction.categoryId ?? null)
+  );
 }
 
 function mapRowToTransaction(row: TransactionRow): Transaction {
@@ -184,166 +213,364 @@ function getAssetDeductedValue(tx: { amount: number; metadata?: string | null })
   return Math.round(Math.abs(tx.amount));
 }
 
-const VALID_TRANSACTION_TYPES = new Set<TransactionType>([
-  'INCOME',
-  'EXPENSE',
-  'TRANSFER',
-  'LEND',
-  'BORROW',
-  'REPAYMENT_RECEIVED',
-  'REPAYMENT_MADE',
-  'ASSET_PURCHASE',
-  'ASSET_SALE',
-  'OTHER',
+const VALID_TRANSACTION_TYPES = new Set<TransactionType>(TRANSACTION_TYPES);
+
+const PERSON_TRANSACTION_TYPES = new Set<TransactionType>([
+  'LEND', 'BORROW', 'REPAYMENT_RECEIVED', 'REPAYMENT_MADE',
 ]);
+const ASSET_TRANSACTION_TYPES = new Set<TransactionType>(['ASSET_PURCHASE', 'ASSET_SALE']);
+
+function metadataObject(metadata?: string | null): Record<string, any> | null {
+  if (!metadata) return null;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function getShoppingItemId(metadata?: string | null): string | null {
+  const value = metadataObject(metadata)?.shoppingItemId;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function isValidOptionalDate(date?: string): boolean {
+  return !date || (/^\d{4}-\d{2}-\d{2}$/.test(date) && !!parseLocalDate(date));
+}
+
+async function validateFinalTransaction(
+  txn: SQLiteDatabase,
+  tx: Transaction,
+  options: { existing?: Transaction; excludeId?: string } = {}
+): Promise<void> {
+  if (!VALID_TRANSACTION_TYPES.has(tx.type)) throw new Error(`Invalid transaction type: ${tx.type}`);
+  if (!Number.isSafeInteger(tx.amount) || tx.amount <= 0) {
+    throw new Error('Transaction amount must be a positive safe integer in paise.');
+  }
+  const required = validateTransactionRequiredFields(tx);
+  if (!required.isValid) throw new Error(required.error || 'Transaction is missing required fields.');
+  if (!isValidOptionalDate(tx.dueDate)) {
+    throw new Error('Due date must be a valid calendar date in YYYY-MM-DD format.');
+  }
+
+  if (tx.type !== 'TRANSFER' && tx.destinationAccountId) {
+    throw new Error(`${tx.type} cannot have a destination account.`);
+  }
+  if (!PERSON_TRANSACTION_TYPES.has(tx.type) && tx.personId) {
+    throw new Error(`${tx.type} cannot reference a person.`);
+  }
+  if (!ASSET_TRANSACTION_TYPES.has(tx.type) && tx.assetId) {
+    throw new Error(`${tx.type} cannot reference an asset.`);
+  }
+  if (tx.type !== 'EXPENSE' && tx.type !== 'INCOME' && tx.categoryId) {
+    throw new Error(`${tx.type} cannot reference a category.`);
+  }
+
+  const existing = options.existing;
+  const accounts = new Map<string, { id: string; name: string; type: string; isArchived: number }>();
+  const accountReferences = [
+    { id: tx.accountId, existingId: existing?.accountId, role: 'source' },
+    { id: tx.destinationAccountId, existingId: existing?.destinationAccountId, role: 'destination' },
+  ].filter(
+    (reference): reference is { id: string; existingId: string | undefined; role: string } =>
+      !!reference.id
+  );
+  for (const reference of accountReferences) {
+    const accountId = reference.id;
+    if (accounts.has(accountId)) continue;
+    const row = await txn.getFirstAsync<{ id: string; name: string; type: string; isArchived: number }>(
+      'SELECT id, name, type, isArchived FROM accounts WHERE id = ?;',
+      [accountId]
+    );
+    if (!row) throw new Error(`Account "${accountId}" does not exist.`);
+    if (!ACCOUNT_TYPES.includes(row.type as AccountType)) {
+      throw new Error(`Account "${accountId}" has an unsupported account type.`);
+    }
+    accounts.set(accountId, row);
+    if (row.isArchived === 1 && accountId !== reference.existingId) {
+      throw new Error(`Account "${row.name}" is archived and cannot be used.`);
+    }
+  }
+  if (tx.type === 'TRANSFER' && tx.accountId === tx.destinationAccountId) {
+    throw new Error('Transfer source and destination accounts must be different.');
+  }
+  if (tx.type === 'TRANSFER' && accounts.get(tx.accountId!)?.type === 'CREDIT_CARD') {
+    throw new Error('A transfer cannot be funded from a credit-card account.');
+  }
+  if (
+    tx.type === 'TRANSFER' &&
+    accounts.get(tx.destinationAccountId!)?.type === 'CREDIT_CARD' &&
+    ['CASH', 'INVESTMENT'].includes(accounts.get(tx.accountId!)?.type || '')
+  ) {
+    throw new Error('Credit-card bill payments must use a bank or other non-cash funding account.');
+  }
+
+  if (tx.personId) {
+    const person = await txn.getFirstAsync<{ id: string; name: string; isArchived: number }>(
+      'SELECT id, name, isArchived FROM people WHERE id = ?;',
+      [tx.personId]
+    );
+    if (!person) throw new Error(`Person "${tx.personId}" does not exist.`);
+    const isRepayment = tx.type === 'REPAYMENT_RECEIVED' || tx.type === 'REPAYMENT_MADE';
+    const sameExistingPerson = tx.personId === existing?.personId;
+    if (person.isArchived === 1 && !sameExistingPerson && !isRepayment) {
+      throw new Error(`Person "${person.name}" is archived and cannot be used for a new debt.`);
+    }
+
+    if (isRepayment) {
+      const rows = await txn.getAllAsync<{ type: string; amount: number }>(
+        `SELECT type, amount FROM transactions
+         WHERE personId = ? AND deletedAt IS NULL AND id <> COALESCE(?, '') AND date <= ?;`,
+        [tx.personId, options.excludeId ?? null, tx.date]
+      );
+      const debtType = tx.type === 'REPAYMENT_RECEIVED' ? 'LEND' : 'BORROW';
+      let outstanding = 0;
+      for (const row of rows) {
+        if (row.type === debtType) outstanding += row.amount;
+        else if (row.type === tx.type) outstanding -= row.amount;
+      }
+      if (outstanding <= 0) throw new Error('There is no outstanding balance recorded to repay.');
+      if (tx.amount > outstanding) {
+        throw new Error(`Repayment amount exceeds outstanding balance of ${outstanding}.`);
+      }
+    }
+  }
+
+  if (tx.categoryId) {
+    const category = await txn.getFirstAsync<{ id: string; type: string; isArchived: number }>(
+      'SELECT id, type, isArchived FROM categories WHERE id = ?;',
+      [tx.categoryId]
+    );
+    if (!category) throw new Error(`Category "${tx.categoryId}" does not exist.`);
+    const expectedType = tx.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
+    if (category.type !== expectedType) throw new Error(`${tx.type} requires a ${expectedType} category.`);
+    if (category.isArchived === 1 && tx.categoryId !== existing?.categoryId) {
+      throw new Error(`Category "${tx.categoryId}" is archived and cannot be selected.`);
+    }
+  }
+
+  if (tx.liabilityId) {
+    const liability = await txn.getFirstAsync<{ id: string; isArchived: number }>(
+      'SELECT id, isArchived FROM liabilities WHERE id = ?;',
+      [tx.liabilityId]
+    );
+    if (!liability) throw new Error(`Liability "${tx.liabilityId}" does not exist.`);
+    if (liability.isArchived === 1 && tx.liabilityId !== existing?.liabilityId) {
+      throw new Error(`Liability "${tx.liabilityId}" is archived and cannot be selected.`);
+    }
+  }
+
+  if (ASSET_TRANSACTION_TYPES.has(tx.type)) {
+    const asset = await txn.getFirstAsync<{ id: string; isArchived: number }>(
+      'SELECT id, isArchived FROM assets WHERE id = ?;',
+      [tx.assetId!]
+    );
+    if (!asset) throw new Error(`Asset "${tx.assetId}" does not exist.`);
+    if (tx.type === 'ASSET_SALE' && asset.isArchived === 1 && tx.assetId !== existing?.assetId) {
+      throw new Error('An archived asset cannot be sold.');
+    }
+  }
+}
+
+async function validateShoppingLinkForCreate(
+  txn: SQLiteDatabase,
+  tx: Transaction
+): Promise<string | null> {
+  const itemId = getShoppingItemId(tx.metadata);
+  if (!itemId) return null;
+  if (tx.type !== 'EXPENSE') throw new Error('Shopping purchases must be EXPENSE transactions.');
+  const item = await txn.getFirstAsync<LinkedShoppingItemRow>(
+    'SELECT * FROM shopping_items WHERE id = ?;',
+    [itemId]
+  );
+  if (!item) throw new Error(`Shopping item "${itemId}" does not exist.`);
+  if (item.status !== 'PENDING' || item.transactionId) {
+    throw new Error('Shopping item is already linked to a purchase.');
+  }
+  const existingRows = await txn.getAllAsync<{ id: string; metadata: string | null }>(
+    'SELECT id, metadata FROM transactions WHERE deletedAt IS NULL AND metadata IS NOT NULL;'
+  );
+  if (existingRows.some((row) => getShoppingItemId(row.metadata) === itemId)) {
+    throw new Error('Shopping item already has an active transaction.');
+  }
+  return itemId;
+}
+
+export async function validateTransactionForInsertInTransaction(
+  txn: SQLiteDatabase,
+  tx: Transaction
+): Promise<string | null> {
+  if (tx.deletedAt) throw new Error('New transactions cannot be created as deleted.');
+  await validateFinalTransaction(txn, tx);
+  return validateShoppingLinkForCreate(txn, tx);
+}
+
+async function validateShoppingLinkForUpdate(
+  txn: SQLiteDatabase,
+  txId: string,
+  current: Transaction,
+  updated: Transaction
+): Promise<string | null> {
+  const itemByTransaction = await txn.getFirstAsync<LinkedShoppingItemRow>(
+    'SELECT * FROM shopping_items WHERE transactionId = ?;',
+    [txId]
+  );
+  const oldMetadataId = getShoppingItemId(current.metadata);
+  const newMetadataId = getShoppingItemId(updated.metadata);
+  const linkedItemId = itemByTransaction?.id ?? null;
+
+  if (oldMetadataId !== linkedItemId) {
+    throw new Error('Shopping purchase transaction and item references are inconsistent.');
+  }
+  if (!linkedItemId) {
+    if (newMetadataId) throw new Error('An existing transaction cannot be relinked to a shopping item.');
+    return null;
+  }
+  if (updated.type !== 'EXPENSE') {
+    throw new Error('A linked shopping purchase must remain an EXPENSE transaction.');
+  }
+  if (newMetadataId !== linkedItemId) {
+    throw new Error('A linked shopping transaction cannot be detached or relinked.');
+  }
+  if (itemByTransaction?.status !== 'PURCHASED' || itemByTransaction.transactionId !== txId) {
+    throw new Error('Linked shopping item is not in a purchased state.');
+  }
+  if (!shoppingPurchaseMatchesTransaction(itemByTransaction, current)) {
+    throw new Error('Shopping purchase values do not match the linked transaction.');
+  }
+  return linkedItemId;
+}
+
+function mergeAssetMetadata(
+  metadata: string | null | undefined,
+  assetFields: Record<string, unknown>
+): string {
+  return JSON.stringify({ ...(metadataObject(metadata) || {}), ...assetFields });
+}
+
+function clearAssetMetadata(metadata?: string | null): string | null {
+  const value = metadataObject(metadata);
+  if (!value) return metadata ?? null;
+  for (const key of [
+    'assetBookValueBefore', 'assetArchivedBefore', 'assetValueDeducted',
+    'bookValueSold', 'assetValueAdded', 'assetStateApplied',
+  ]) delete value[key];
+  return Object.keys(value).length ? JSON.stringify(value) : null;
+}
+
+function assetEffectWasApplied(tx: Transaction): boolean {
+  const metadata = metadataObject(tx.metadata);
+  if (typeof metadata?.assetStateApplied === 'boolean') return metadata.assetStateApplied;
+  // Older versions applied all asset transactions when they were recorded.
+  return !tx.date || tx.date <= getTodayLocalDateString();
+}
+
+async function reverseAssetEffect(
+  txn: SQLiteDatabase,
+  tx: Transaction,
+  now: string
+): Promise<void> {
+  if (!ASSET_TRANSACTION_TYPES.has(tx.type) || !tx.assetId || !assetEffectWasApplied(tx)) return;
+  const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
+    'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
+    [tx.assetId]
+  );
+  if (!asset) return;
+
+  const metadata = metadataObject(tx.metadata) || {};
+  if (tx.type === 'ASSET_SALE') {
+    if (!hasRecordedAssetMetadata(tx)) {
+      if (asset.isArchived === 1 && asset.currentValue === 0) {
+        throw new Error('Cannot safely reverse asset sale: previous value was not recorded.');
+      }
+      if (asset.currentValue > 0) {
+        const restoredValue = asset.currentValue + Math.round(Math.abs(tx.amount));
+        await txn.runAsync(
+          'UPDATE assets SET currentValue = ?, isArchived = 0, updatedAt = ? WHERE id = ?;',
+          [restoredValue, now, tx.assetId]
+        );
+      }
+      return;
+    }
+    const restoredValue = Math.max(0, asset.currentValue + getAssetDeductedValue(tx));
+    const restoredArchived = restoredValue > 0 ? 0 : (metadata.assetArchivedBefore ? 1 : asset.isArchived);
+    await txn.runAsync(
+      'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+      [restoredValue, restoredArchived, now, tx.assetId]
+    );
+  } else if (typeof metadata.assetValueAdded === 'number') {
+    const restoredValue = Math.max(0, asset.currentValue - metadata.assetValueAdded);
+    const restoredArchived = metadata.assetArchivedBefore ? 1 : 0;
+    await txn.runAsync(
+      'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+      [restoredValue, restoredArchived, now, tx.assetId]
+    );
+  }
+}
+
+async function applyAssetEffect(
+  txn: SQLiteDatabase,
+  tx: Transaction,
+  now: string
+): Promise<string | null> {
+  if (!ASSET_TRANSACTION_TYPES.has(tx.type) || !tx.assetId) return tx.metadata ?? null;
+  const cleanMetadata = clearAssetMetadata(tx.metadata);
+  const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
+    'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
+    [tx.assetId]
+  );
+  if (!asset) throw new Error(`Asset "${tx.assetId}" does not exist.`);
+
+  const effectiveNow = tx.date <= getTodayLocalDateString();
+  if (!effectiveNow) {
+    return mergeAssetMetadata(cleanMetadata, {
+      assetStateApplied: false,
+      ...(tx.type === 'ASSET_PURCHASE' ? { assetValueAdded: tx.amount, assetArchivedBefore: asset.isArchived === 1 } : {}),
+    });
+  }
+
+  if (tx.type === 'ASSET_SALE') {
+    const valueDeducted = Math.min(asset.currentValue, tx.amount);
+    const newAssetValue = Math.max(0, asset.currentValue - valueDeducted);
+    const newArchived = newAssetValue === 0 ? 1 : asset.isArchived;
+    await txn.runAsync(
+      'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
+      [newAssetValue, newArchived, now, tx.assetId]
+    );
+    return mergeAssetMetadata(cleanMetadata, {
+      assetBookValueBefore: asset.currentValue,
+      assetArchivedBefore: asset.isArchived === 1,
+      assetValueDeducted: valueDeducted,
+      bookValueSold: valueDeducted,
+      assetStateApplied: true,
+    });
+  }
+
+  await txn.runAsync(
+    'UPDATE assets SET currentValue = currentValue + ?, isArchived = 0, updatedAt = ? WHERE id = ?;',
+    [tx.amount, now, tx.assetId]
+  );
+  return mergeAssetMetadata(cleanMetadata, {
+    assetValueAdded: tx.amount,
+    assetArchivedBefore: asset.isArchived === 1,
+    assetStateApplied: true,
+  });
+}
 
 export async function createTransaction(
   tx: Omit<Transaction, 'createdAt' | 'updatedAt'>
 ): Promise<Transaction> {
-  // 1. Strict validation
-  if (!VALID_TRANSACTION_TYPES.has(tx.type)) {
-    throw new Error(`Invalid transaction type: ${tx.type}`);
-  }
-  if (!Number.isFinite(tx.amount) || !Number.isSafeInteger(tx.amount) || tx.amount <= 0) {
-    throw new Error('Transaction amount must be a positive safe integer in paise.');
-  }
-  const requiredFields = validateTransactionRequiredFields({
-    type: tx.type,
-    amount: tx.amount,
-    date: tx.date,
-    accountId: tx.accountId,
-    destinationAccountId: tx.destinationAccountId,
-    personId: tx.personId,
-    assetId: tx.assetId,
-  });
-  if (!requiredFields.isValid) {
-    throw new Error(requiredFields.error || 'Transaction is missing required fields.');
-  }
-
   const db = await getDatabase();
   const now = new Date().toISOString();
   let metadata = tx.metadata ?? null;
+  const newTransaction: Transaction = { ...tx, createdAt: now, updatedAt: now, metadata: metadata ?? undefined };
 
   await db.withExclusiveTransactionAsync(async (txn) => {
-    // 2. Validate accounts and entity references
-    if (tx.accountId) {
-      const account = await txn.getFirstAsync<{ id: string; name: string; type: string; isArchived: number }>(
-        'SELECT id, name, type, isArchived FROM accounts WHERE id = ?;',
-        [tx.accountId]
-      );
-      if (!account) throw new Error(`Account "${tx.accountId}" does not exist.`);
-
-      const isSpendingType =
-        tx.type === 'EXPENSE' ||
-        tx.type === 'LEND' ||
-        tx.type === 'REPAYMENT_MADE' ||
-        tx.type === 'ASSET_PURCHASE';
-
-      if (isSpendingType && account.isArchived === 1) {
-        throw new Error(`Account "${account.name}" is archived and cannot be used for spending.`);
-      }
-      if (tx.type === 'TRANSFER' && account.isArchived === 1) {
-        throw new Error(`Source account "${account.name}" is archived and cannot transfer funds.`);
-      }
-    } else if (tx.type !== 'TRANSFER') {
-      if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'ASSET_PURCHASE' || tx.type === 'ASSET_SALE') {
-        throw new Error(`${tx.type} requires a valid accountId.`);
-      }
-    }
-
-    if (tx.type === 'TRANSFER') {
-      if (!tx.accountId || !tx.destinationAccountId) {
-        throw new Error('Transfer requires both source and destination accounts.');
-      }
-      if (tx.accountId === tx.destinationAccountId) {
-        throw new Error('Transfer source and destination accounts must be different.');
-      }
-      const destAccount = await txn.getFirstAsync<{ id: string; name: string; isArchived: number }>(
-        'SELECT id, name, isArchived FROM accounts WHERE id = ?;',
-        [tx.destinationAccountId]
-      );
-      if (!destAccount) throw new Error(`Destination account "${tx.destinationAccountId}" does not exist.`);
-      if (destAccount.isArchived === 1) {
-        throw new Error(`Destination account "${destAccount.name}" is archived and cannot receive funds.`);
-      }
-    }
-
-    if (tx.personId) {
-      const person = await txn.getFirstAsync<{ id: string; name: string }>(
-        'SELECT id, name FROM people WHERE id = ?;',
-        [tx.personId]
-      );
-      if (!person) throw new Error(`Person "${tx.personId}" does not exist.`);
-
-      if (tx.type === 'REPAYMENT_RECEIVED' || tx.type === 'REPAYMENT_MADE') {
-        const activeTx = await txn.getAllAsync<TransactionRow>(
-          'SELECT * FROM transactions WHERE personId = ? AND deletedAt IS NULL AND date <= ?;',
-          [tx.personId, tx.date]
-        );
-        let debtBalance = 0;
-        for (const t of activeTx) {
-          if (tx.type === 'REPAYMENT_RECEIVED') {
-            if (t.type === 'LEND') debtBalance += t.amount;
-            else if (t.type === 'REPAYMENT_RECEIVED') debtBalance -= t.amount;
-          } else {
-            if (t.type === 'BORROW') debtBalance += t.amount;
-            else if (t.type === 'REPAYMENT_MADE') debtBalance -= t.amount;
-          }
-        }
-        if (debtBalance <= 0) {
-          throw new Error('There is no outstanding balance recorded to repay.');
-        }
-        if (tx.amount > debtBalance) {
-          throw new Error(`Repayment amount exceeds outstanding balance of ${debtBalance}.`);
-        }
-      }
-    } else if (
-      tx.type === 'LEND' ||
-      tx.type === 'BORROW' ||
-      tx.type === 'REPAYMENT_RECEIVED' ||
-      tx.type === 'REPAYMENT_MADE'
-    ) {
-      throw new Error(`${tx.type} requires a valid personId.`);
-    }
-
-    if (tx.type === 'ASSET_PURCHASE' || tx.type === 'ASSET_SALE') {
-      if (!tx.assetId) throw new Error(`${tx.type} requires a valid assetId.`);
-    }
-
-    // 3. Asset side-effects
-    if (tx.type === 'ASSET_SALE' && tx.assetId) {
-      const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
-        'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
-        [tx.assetId]
-      );
-      if (!asset) throw new Error(`Asset "${tx.assetId}" does not exist.`);
-
-      const valueDeducted = Math.min(asset.currentValue, tx.amount);
-      if (!metadata) {
-        metadata = JSON.stringify({
-          assetBookValueBefore: asset.currentValue,
-          assetArchivedBefore: asset.isArchived === 1,
-          assetValueDeducted: valueDeducted,
-          bookValueSold: valueDeducted,
-        });
-      }
-      const newAssetValue = Math.max(0, asset.currentValue - valueDeducted);
-      const newArchived = newAssetValue === 0 ? 1 : asset.isArchived;
-      await txn.runAsync(
-        'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-        [newAssetValue, newArchived, now, tx.assetId]
-      );
-    } else if (tx.type === 'ASSET_PURCHASE' && tx.assetId) {
-      const asset = await txn.getFirstAsync<{ id: string; isArchived: number }>(
-        'SELECT id, isArchived FROM assets WHERE id = ?;',
-        [tx.assetId]
-      );
-      if (!asset) throw new Error(`Asset "${tx.assetId}" does not exist.`);
-      await txn.runAsync(
-        'UPDATE assets SET isArchived = 0, updatedAt = ? WHERE id = ? AND isArchived = 1;',
-        [now, tx.assetId]
-      );
-    }
+    const shoppingItemId = await validateTransactionForInsertInTransaction(txn, newTransaction);
+    // Validation and relationship checks run once through the shared path above.
+    // Asset transaction effects are cached only on/after their effective date.
+    metadata = await applyAssetEffect(txn, { ...newTransaction, metadata: metadata ?? undefined }, now);
 
     // 4. Insert transaction
     await txn.runAsync(
@@ -368,6 +595,16 @@ export async function createTransaction(
         tx.deletedAt ?? null,
       ]
     );
+
+    if (shoppingItemId) {
+      const linked = await txn.runAsync(
+        `UPDATE shopping_items SET status = 'PURCHASED', purchasedAt = ?, purchasePrice = ?,
+           purchaseAccountId = ?, transactionId = ?, categoryId = ?, updatedAt = ?
+         WHERE id = ? AND status = 'PENDING' AND transactionId IS NULL;`,
+        [tx.date, tx.amount, tx.accountId ?? null, tx.id, tx.categoryId ?? null, now, shoppingItemId]
+      );
+      if (linked.changes !== 1) throw new Error('Shopping item changed before its purchase was recorded.');
+    }
   });
   return { ...tx, metadata: metadata ?? undefined, createdAt: now, updatedAt: now };
 }
@@ -385,152 +622,49 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
     }
 
     const now = new Date().toISOString();
-    const effectiveDate = updates.date || current.date || getTodayLocalDateString();
+    const effectiveDate = updates.date !== undefined
+      ? updates.date
+      : current.date || getTodayLocalDateString();
+    const currentTransaction = mapRowToTransaction(current);
     const updated: Transaction = {
-      ...mapRowToTransaction(current),
+      ...currentTransaction,
       ...updates,
+      id: currentTransaction.id,
+      createdAt: currentTransaction.createdAt,
+      deletedAt: currentTransaction.deletedAt,
       date: effectiveDate,
       updatedAt: now,
     };
 
-    if (!VALID_TRANSACTION_TYPES.has(updated.type)) {
-      throw new Error(`Invalid transaction type: ${updated.type}`);
-    }
-    if (!Number.isFinite(updated.amount) || !Number.isSafeInteger(updated.amount) || updated.amount <= 0) {
-      throw new Error('Transaction amount must be a positive safe integer in paise.');
-    }
-
-    const requiredFields = validateTransactionRequiredFields({
-      type: updated.type,
-      amount: updated.amount,
-      date: updated.date,
-      accountId: updated.accountId,
-      destinationAccountId: updated.destinationAccountId,
-      personId: updated.personId,
-      assetId: updated.assetId,
-    });
-    if (!requiredFields.isValid) {
-      throw new Error(requiredFields.error || 'Transaction is missing required fields.');
-    }
-
-    if (updated.type === 'REPAYMENT_RECEIVED' || updated.type === 'REPAYMENT_MADE') {
-      if (!updated.personId) {
-        throw new Error(`${updated.type} requires a valid personId.`);
+    if (updated.type !== currentTransaction.type) {
+      if (updated.type !== 'TRANSFER') updated.destinationAccountId = undefined;
+      if (!PERSON_TRANSACTION_TYPES.has(updated.type)) updated.personId = undefined;
+      if (!ASSET_TRANSACTION_TYPES.has(updated.type)) {
+        updated.assetId = undefined;
+        updated.metadata = clearAssetMetadata(updated.metadata);
       }
-      const outstandingTransactions = await txn.getAllAsync<{ type: string; amount: number }>(
-        `SELECT type, amount FROM transactions
-         WHERE personId = ? AND deletedAt IS NULL AND id <> ? AND date <= ?;`,
-        [updated.personId, id, updated.date]
+      if (updated.type !== 'EXPENSE' && updated.type !== 'INCOME') updated.categoryId = undefined;
+    }
+
+    await validateFinalTransaction(txn, updated, { existing: currentTransaction, excludeId: id });
+    const shoppingItemId = await validateShoppingLinkForUpdate(
+      txn,
+      id,
+      currentTransaction,
+      updated
+    );
+
+    await reverseAssetEffect(txn, currentTransaction, now);
+    updated.metadata = await applyAssetEffect(txn, updated, now) ?? undefined;
+
+    if (shoppingItemId) {
+      const result = await txn.runAsync(
+        `UPDATE shopping_items SET purchasePrice = ?, purchasedAt = ?, purchaseAccountId = ?,
+           categoryId = ?, updatedAt = ?
+         WHERE id = ? AND transactionId = ? AND status = 'PURCHASED';`,
+        [updated.amount, updated.date, updated.accountId ?? null, updated.categoryId ?? null, now, shoppingItemId, id]
       );
-      const debtType = updated.type === 'REPAYMENT_RECEIVED' ? 'LEND' : 'BORROW';
-      let outstanding = 0;
-      for (const existingTx of outstandingTransactions) {
-        if (existingTx.type === debtType) outstanding += existingTx.amount;
-        else if (existingTx.type === updated.type) outstanding -= existingTx.amount;
-      }
-      if (outstanding <= 0) {
-        throw new Error('There is no outstanding balance recorded to repay.');
-      }
-      if (updated.amount > outstanding) {
-        throw new Error(`Repayment amount exceeds outstanding balance of ${outstanding}.`);
-      }
-    }
-
-    // Asset effect handling:
-    // If updating the sale amount on the exact same asset, compute delta atomically
-    if (
-      current.type === 'ASSET_SALE' &&
-      updated.type === 'ASSET_SALE' &&
-      current.assetId &&
-      current.assetId === updated.assetId
-    ) {
-      const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
-        'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
-        [current.assetId]
-      );
-      if (asset) {
-        const oldDeducted = getAssetDeductedValue(current);
-        const restoredBase = asset.currentValue + oldDeducted;
-        const newDeducted = Math.min(restoredBase, updated.amount);
-        const newAssetValue = Math.max(0, restoredBase - newDeducted);
-        const newArchived = newAssetValue === 0 ? 1 : (restoredBase > 0 ? 0 : asset.isArchived);
-        await txn.runAsync(
-          'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-          [newAssetValue, newArchived, now, current.assetId]
-        );
-        updated.metadata = JSON.stringify({
-          assetBookValueBefore: restoredBase,
-          assetArchivedBefore: restoredBase === 0,
-          assetValueDeducted: newDeducted,
-          bookValueSold: newDeducted,
-        });
-      }
-    } else {
-      // Step 1: Reversal of old transaction asset effects
-      if (current.type === 'ASSET_SALE' && current.assetId) {
-        const oldAsset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
-          'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
-          [current.assetId]
-        );
-        if (oldAsset) {
-          const valToRestore = getAssetDeductedValue(current);
-          const restoredValue = Math.max(0, oldAsset.currentValue + valToRestore);
-          const restoredArchived = restoredValue > 0 ? 0 : 1;
-          await txn.runAsync(
-            'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-            [restoredValue, restoredArchived, now, current.assetId]
-          );
-        }
-      }
-
-      // Step 2: Application of new transaction asset effects
-      if (updated.type === 'ASSET_SALE' && updated.assetId) {
-        const targetAsset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
-          'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
-          [updated.assetId]
-        );
-        if (targetAsset) {
-          const valueDeducted = Math.min(targetAsset.currentValue, updated.amount);
-          const newAssetValue = Math.max(0, targetAsset.currentValue - valueDeducted);
-          const newArchived = newAssetValue === 0 ? 1 : targetAsset.isArchived;
-          await txn.runAsync(
-            'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-            [newAssetValue, newArchived, now, updated.assetId]
-          );
-          updated.metadata = JSON.stringify({
-            assetBookValueBefore: targetAsset.currentValue,
-            assetArchivedBefore: targetAsset.isArchived === 1,
-            assetValueDeducted: valueDeducted,
-            bookValueSold: valueDeducted,
-          });
-        }
-      } else if (updated.type === 'ASSET_PURCHASE' && updated.assetId) {
-        await txn.runAsync(
-          'UPDATE assets SET isArchived = 0, updatedAt = ? WHERE id = ? AND isArchived = 1;',
-          [now, updated.assetId]
-        );
-      }
-    }
-
-    // Step 3: Synchronize linked shopping item if this transaction is linked to one
-    if (updated.type === 'EXPENSE' || (updated.metadata && updated.metadata.includes('shoppingItemId'))) {
-      await txn.runAsync(
-        `UPDATE shopping_items
-         SET purchasePrice = ?,
-             purchasedAt = ?,
-             purchaseAccountId = ?,
-             categoryId = ?,
-             updatedAt = ?
-         WHERE transactionId = ?;`,
-        [
-          updated.amount,
-          updated.date,
-          updated.accountId ?? null,
-          updated.categoryId ?? null,
-          now,
-          id,
-        ]
-      );
+      if (result.changes !== 1) throw new Error('Linked shopping item changed before the transaction update.');
     }
 
     // Step 4: Persist updated transaction
@@ -558,40 +692,36 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
   });
 }
 
-export async function deleteTransaction(id: string): Promise<void> {
-  const db = await getDatabase();
-  await db.withExclusiveTransactionAsync(async (txn) => {
+export async function deleteTransactionInTransaction(
+  txn: SQLiteDatabase,
+  id: string,
+  now: string = new Date().toISOString()
+): Promise<void> {
     const tx = await txn.getFirstAsync<TransactionRow>(
       'SELECT * FROM transactions WHERE id = ? AND deletedAt IS NULL;',
       [id]
     );
     if (!tx) return; // Idempotent: repeated deletes do not reverse an asset twice.
 
-    const now = new Date().toISOString();
+    await reverseAssetEffect(txn, mapRowToTransaction(tx), now);
 
-    // 1. Deterministic asset sale reversal
-    if (tx.assetId && tx.type === 'ASSET_SALE') {
-      const asset = await txn.getFirstAsync<{ currentValue: number; isArchived: number }>(
-        'SELECT currentValue, isArchived FROM assets WHERE id = ?;',
-        [tx.assetId]
-      );
-      if (asset) {
-        if (asset.isArchived === 1 && asset.currentValue === 0 && !hasRecordedAssetMetadata(tx)) {
-          throw new Error('Cannot safely reverse asset sale: previous value was not recorded.');
-        }
-        const valToRestore = getAssetDeductedValue(tx);
-        const restoredValue = Math.max(0, asset.currentValue + valToRestore);
-        const restoredArchived = restoredValue > 0 ? 0 : 1;
-        await txn.runAsync(
-          'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',
-          [restoredValue, restoredArchived, now, tx.assetId]
-        );
-      }
+    // 2. Keep both sides of any shopping purchase relationship consistent.
+    const linkedShoppingItem = await txn.getFirstAsync<LinkedShoppingItemRow>(
+      'SELECT id, status, transactionId, purchasePrice, purchasedAt, purchaseAccountId, categoryId FROM shopping_items WHERE transactionId = ?;',
+      [id]
+    );
+    const metadataShoppingItemId = getShoppingItemId(tx.metadata);
+    if (metadataShoppingItemId !== (linkedShoppingItem?.id ?? null)) {
+      throw new Error('Shopping purchase transaction and item references are inconsistent.');
     }
-
-    // 2. Synchronize linked shopping item if this transaction was linked to one
-    if (tx.type === 'EXPENSE' || (tx.metadata && tx.metadata.includes('shoppingItemId'))) {
-      await txn.runAsync(
+    if (linkedShoppingItem) {
+      if (tx.type !== 'EXPENSE' || linkedShoppingItem.status !== 'PURCHASED') {
+        throw new Error('Cannot delete a transaction with an inconsistent shopping purchase link.');
+      }
+      if (!shoppingPurchaseMatchesTransaction(linkedShoppingItem, mapRowToTransaction(tx))) {
+        throw new Error('Shopping purchase values do not match the linked transaction.');
+      }
+      const linkResult = await txn.runAsync(
         `UPDATE shopping_items
          SET status = 'PENDING',
              purchasedAt = NULL,
@@ -600,9 +730,10 @@ export async function deleteTransaction(id: string): Promise<void> {
              transactionId = NULL,
              categoryId = NULL,
              updatedAt = ?
-         WHERE transactionId = ?;`,
-        [now, id]
+         WHERE id = ? AND transactionId = ? AND status = 'PURCHASED';`,
+        [now, linkedShoppingItem.id, id]
       );
+      if (linkResult.changes !== 1) throw new Error('Linked shopping item could not be reset.');
     }
 
     // 3. Soft-delete the transaction
@@ -610,5 +741,9 @@ export async function deleteTransaction(id: string): Promise<void> {
       'UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL;',
       [now, now, id]
     );
-  });
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.withExclusiveTransactionAsync((txn) => deleteTransactionInTransaction(txn, id));
 }

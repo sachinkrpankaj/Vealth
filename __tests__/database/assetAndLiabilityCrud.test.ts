@@ -9,7 +9,16 @@ describe('Asset & Liability Deletion Guard', () => {
 
   beforeAll(async () => {
     db = {
-      getFirstAsync: jest.fn(),
+      getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM liabilities WHERE id = ?')) {
+          return {
+            id: params[0], name: 'Personal loan', amount: 250000,
+            type: 'PERSONAL_LOAN', personId: null, dueDate: null,
+            note: null, isArchived: 0, createdAt: '2026-01-01', updatedAt: '2026-01-01',
+          };
+        }
+        return { count: 0 };
+      }),
       runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
       getAllAsync: jest.fn(async (sql: string) => {
         if (sql.includes('foreign_key_list')) {
@@ -22,6 +31,7 @@ describe('Asset & Liability Deletion Guard', () => {
       }),
       execAsync: jest.fn(),
       withTransactionAsync: jest.fn(async (fn: any) => fn(db)),
+      withExclusiveTransactionAsync: jest.fn(async (fn: any) => fn(db)),
     };
     open.mockResolvedValue(db);
     // Warm up the singleton
@@ -66,8 +76,8 @@ describe('Asset & Liability Deletion Guard', () => {
       await deleteLiability('lib-1');
 
       expect(db.runAsync).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE liabilities SET isArchived = 1'),
-        expect.arrayContaining(['lib-1'])
+        expect.stringContaining('UPDATE liabilities SET name = ?'),
+        expect.arrayContaining([1, 'lib-1'])
       );
     });
 

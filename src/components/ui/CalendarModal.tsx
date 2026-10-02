@@ -30,8 +30,10 @@ import {
   formatDateIso,
   formatDisplayDate,
   parseDateIso,
-  getQuickDateShortcuts,
+  getSelectableDateShortcuts,
+  getEffectiveDateBounds,
   isDateDisabled,
+  selectDateWithinBounds,
 } from '../../utils/dateUtils';
 
 export { isDateDisabled };
@@ -65,24 +67,20 @@ export function CalendarModal({
 }: CalendarModalProps) {
   const { colors, typography, radii, spacing, isDark } = useTheme();
 
-  const todayStr = useMemo(() => formatDateIso(new Date()), []);
-  const effectiveMaxDate = useMemo(() => {
-    if (allowFutureDates === false) {
-      if (maxDate) {
-        return maxDate < todayStr ? maxDate : todayStr;
-      }
-      return todayStr;
-    }
-    return maxDate;
-  }, [allowFutureDates, maxDate, todayStr]);
-
-  const effectiveMinDate = minDate;
+  const todayDate = new Date();
+  const todayStr = formatDateIso(todayDate);
+  const effectiveBounds = useMemo(
+    () => getEffectiveDateBounds(minDate, maxDate, allowFutureDates, todayStr),
+    [minDate, maxDate, allowFutureDates, todayStr]
+  );
+  const effectiveMinDate = effectiveBounds.minDate;
+  const effectiveMaxDate = effectiveBounds.maxDate;
 
   const checkDateDisabled = useCallback(
     (dateStr: string): boolean => {
-      return isDateDisabled(dateStr, effectiveMinDate, effectiveMaxDate, allowFutureDates, todayStr);
+      return isDateDisabled(dateStr, effectiveMinDate, effectiveMaxDate, true, todayStr);
     },
-    [effectiveMinDate, effectiveMaxDate, allowFutureDates, todayStr]
+    [effectiveMinDate, effectiveMaxDate, todayStr]
   );
 
   // Selected date inside modal before confirmation
@@ -134,9 +132,12 @@ export function CalendarModal({
 
   // Quick preset shortcuts
   const shortcuts = useMemo(() => {
-    const raw = getQuickDateShortcuts(includeFutureShortcuts && allowFutureDates !== false);
-    return raw.filter((sc) => !isDateDisabled(sc.dateStr));
-  }, [includeFutureShortcuts, allowFutureDates, effectiveMinDate, effectiveMaxDate]);
+    return getSelectableDateShortcuts(
+      includeFutureShortcuts && allowFutureDates,
+      effectiveBounds,
+      todayDate
+    );
+  }, [includeFutureShortcuts, allowFutureDates, effectiveBounds, todayStr]);
 
   // Navigate to previous month
   const handlePrevMonth = () => {
@@ -175,9 +176,10 @@ export function CalendarModal({
 
   // Apply a quick shortcut
   const handleShortcutPress = (dateStr: string) => {
-    if (checkDateDisabled(dateStr)) return;
+    const selectedDate = selectDateWithinBounds(dateStr, effectiveBounds);
+    if (!selectedDate) return;
     Haptics.selectionAsync().catch(() => {});
-    setTempSelectedDate(dateStr);
+    setTempSelectedDate(selectedDate);
     const parsed = parseDateIso(dateStr);
     if (parsed) {
       setViewYear(parsed.getFullYear());

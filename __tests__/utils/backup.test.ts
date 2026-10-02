@@ -1,4 +1,8 @@
 import { isSecurityKey, validateBackupData, VaelthBackupData } from '../../src/utils/backup';
+import { openDatabaseAsync } from 'expo-sqlite';
+import { restoreBackup } from '../../src/utils/backup';
+
+const open = openDatabaseAsync as jest.Mock;
 
 describe('Backup & Restore Integrity Engine', () => {
   describe('isSecurityKey Security Filter', () => {
@@ -100,6 +104,11 @@ describe('Backup & Restore Integrity Engine', () => {
       expect(res.error).toContain('Unsupported backup schema version');
     });
 
+    it('rejects unsupported non-integer schema versions', () => {
+      expect(validateBackupData({ ...validSampleBackup, schemaVersion: 1.5 }).isValid).toBe(false);
+      expect(validateBackupData({ ...validSampleBackup, schemaVersion: -1 }).isValid).toBe(false);
+    });
+
     it('rejects backups missing essential arrays', () => {
       const bad1 = { ...validSampleBackup, data: { ...validSampleBackup.data, accounts: null } };
       expect(validateBackupData(bad1).isValid).toBe(false);
@@ -142,11 +151,23 @@ describe('Backup & Restore Integrity Engine', () => {
       }
     });
 
-    it('approves backups with shopping lists and shopping items', () => {
+    it('approves and restores backups with valid shopping and valuation history', async () => {
       const backupWithShopping: VaelthBackupData = {
         ...validSampleBackup,
         data: {
           ...validSampleBackup.data,
+          transactions: [
+            {
+              id: 'tx-shopping',
+              type: 'EXPENSE',
+              amount: 7000,
+              date: '2026-10-01',
+              accountId: 'acc-1',
+              metadata: JSON.stringify({ shoppingItemId: 'item-1' }),
+              createdAt: '2026-10-01',
+              updatedAt: '2026-10-01',
+            },
+          ],
           shoppingLists: [
             {
               id: 'list-1',
@@ -154,6 +175,18 @@ describe('Backup & Restore Integrity Engine', () => {
               isArchived: false,
               createdAt: '2026-10-01',
               updatedAt: '2026-10-01',
+            },
+          ],
+          assets: [
+            {
+              id: 'asset-1', name: 'Home', category: 'PROPERTY', currentValue: 20000,
+              purchaseValue: 15000, purchaseDate: '2026-09-30', isArchived: false,
+              createdAt: '2026-09-30', updatedAt: '2026-10-02',
+              valuationHistory: [
+                { effectiveDate: '2026-09-30', value: 15000, source: 'PURCHASE', createdAt: '2026-09-30' },
+                { effectiveDate: '2026-10-02', value: 20000, source: 'MANUAL', createdAt: '2026-10-02' },
+              ],
+              archiveHistory: [{ effectiveDate: '2026-09-30', isArchived: false, createdAt: '2026-09-30' }],
             },
           ],
           shoppingItems: [
@@ -165,7 +198,7 @@ describe('Backup & Restore Integrity Engine', () => {
               estimatedPrice: 7500,
               purchasePrice: 7000,
               purchaseAccountId: 'acc-1',
-              transactionId: 'tx-1',
+              transactionId: 'tx-shopping',
               productUrl: 'https://example.com/milk',
               note: '2 packets',
               createdAt: '2026-10-01',
@@ -178,6 +211,30 @@ describe('Backup & Restore Integrity Engine', () => {
 
       const res = validateBackupData(backupWithShopping);
       expect(res.isValid).toBe(true);
+
+      const db: any = {
+        execAsync: jest.fn(),
+        runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
+        getAllAsync: jest.fn(async (sql: string) => {
+          if (sql.includes('PRAGMA foreign_key_list')) return [{ table: 'assets' }, { table: 'liabilities' }];
+          if (sql.includes('SELECT COUNT(*) as count FROM categories')) return [{ count: 1 }];
+          return [];
+        }),
+        withTransactionAsync: jest.fn(async (action: any) => action()),
+      };
+      open.mockResolvedValue(db);
+
+      await restoreBackup(backupWithShopping);
+
+      expect(db.withTransactionAsync).toHaveBeenCalledTimes(1);
+      expect(db.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO asset_valuations'),
+        expect.arrayContaining(['asset-1'])
+      );
+      expect(db.runAsync).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO shopping_items'),
+        expect.arrayContaining(['item-1'])
+      );
     });
 
     it('rejects backups with invalid shopping item status or missing list reference', () => {

@@ -74,6 +74,7 @@ describe('Shopping Feature Flow & Financial Integration', () => {
     categoriesTable = [
       { id: 'cat-groceries', name: 'Groceries', type: 'EXPENSE', isArchived: 0 },
       { id: 'cat-electronics', name: 'Electronics', type: 'EXPENSE', isArchived: 0 },
+      { id: 'cat-household', name: 'Household', type: 'EXPENSE', isArchived: 0 },
       { id: 'cat-salary', name: 'Salary', type: 'INCOME', isArchived: 0 },
     ];
     transactionsTable = [];
@@ -82,6 +83,21 @@ describe('Shopping Feature Flow & Financial Integration', () => {
       getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('FROM shopping_items WHERE id = ?')) {
           return shoppingItemsTable.find((i) => i.id === params[0]) || null;
+        }
+        if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
+          return shoppingItemsTable.find((i) => i.transactionId === params[0]) || null;
+        }
+        if (sql.includes('FROM shopping_lists WHERE id = ?')) {
+          return shoppingListsTable.find((l) => l.id === params[0]) || null;
+        }
+        if (sql.includes('COUNT(*) as count FROM shopping_items')) {
+          const count = shoppingItemsTable.filter(
+            (item) => item.listId === params[0] && (item.status === 'PURCHASED' || item.transactionId != null)
+          ).length;
+          return { count };
+        }
+        if (sql.includes('FROM transactions WHERE id = ?')) {
+          return transactionsTable.find((t) => t.id === params[0]) || null;
         }
         if (sql.includes('FROM accounts WHERE id = ?')) {
           return accountsTable.find((a) => a.id === params[0]) || null;
@@ -117,6 +133,12 @@ describe('Shopping Feature Flow & Financial Integration', () => {
         }
         return null;
       }),
+      getAllAsync: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM transactions')) {
+          return transactionsTable.filter((transaction) => !transaction.deletedAt);
+        }
+        return [];
+      }),
       runAsync: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('INSERT INTO transactions')) {
           transactionsTable.push({
@@ -134,7 +156,17 @@ describe('Shopping Feature Flow & Financial Integration', () => {
           });
           return { changes: 1 };
         }
-        if (sql.includes('UPDATE shopping_items')) {
+        if (sql.includes('UPDATE transactions SET deletedAt = ?')) {
+          const transaction = transactionsTable.find((t) => t.id === params[2]);
+          if (transaction) transaction.deletedAt = params[0];
+          return { changes: 1 };
+        }
+        if (sql.includes('UPDATE shopping_lists SET isArchived = 1')) {
+          const list = shoppingListsTable.find((l) => l.id === params[1]);
+          if (list) { list.isArchived = 1; list.updatedAt = params[0]; }
+          return { changes: 1 };
+        }
+        if (sql.includes("SET status = 'PURCHASED'")) {
           // [txDate, purchasePrice, purchaseAccountId, txId, categoryId, now, itemId]
           const itemId = params[6];
           const item = shoppingItemsTable.find((i) => i.id === itemId);
@@ -147,6 +179,32 @@ describe('Shopping Feature Flow & Financial Integration', () => {
             item.categoryId = params[4];
             item.updatedAt = params[5];
           }
+          return { changes: 1 };
+        }
+        if (sql.includes("SET status = 'DISCARDED'")) {
+          const item = shoppingItemsTable.find((i) => i.id === params[1]);
+          if (item) { item.status = 'DISCARDED'; item.updatedAt = params[0]; }
+          return { changes: 1 };
+        }
+        if (sql.includes("SET status = 'PENDING'")) {
+          const item = shoppingItemsTable.find((i) => i.id === params[1]);
+          if (item) {
+            item.status = 'PENDING';
+            item.purchasedAt = null;
+            item.purchasePrice = null;
+            item.purchaseAccountId = null;
+            item.transactionId = null;
+            item.categoryId = null;
+            item.updatedAt = params[0];
+          }
+          return { changes: 1 };
+        }
+        if (sql.includes('DELETE FROM shopping_items WHERE listId = ?')) {
+          shoppingItemsTable = shoppingItemsTable.filter((i) => i.listId !== params[0]);
+          return { changes: 1 };
+        }
+        if (sql.includes('DELETE FROM shopping_lists WHERE id = ?')) {
+          shoppingListsTable = shoppingListsTable.filter((l) => l.id !== params[0]);
           return { changes: 1 };
         }
         return { changes: 1 };

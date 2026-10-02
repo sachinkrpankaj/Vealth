@@ -905,7 +905,7 @@ export default function SpendingInsightsScreen() {
       {/* Category Manager Modal */}
       <Modal visible={managerVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setManagerVisible(false)} />

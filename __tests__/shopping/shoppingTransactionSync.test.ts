@@ -36,6 +36,22 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
     jest.clearAllMocks();
     scoped.runAsync.mockResolvedValue({ changes: 1 });
     db.runAsync.mockResolvedValue({ changes: 1 });
+    scoped.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM accounts WHERE id = ?')) {
+        return { id: 'acc-bank', name: 'Bank', type: 'BANK', isArchived: 0 };
+      }
+      if (sql.includes('FROM categories WHERE id = ?')) {
+        return { id: 'cat-household', type: 'EXPENSE', isArchived: 0 };
+      }
+      if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
+        return {
+          id: 'item-oil', status: 'PURCHASED', transactionId: 'tx-purchase-1',
+          purchasePrice: 150000, purchasedAt: '2026-10-01',
+          purchaseAccountId: 'acc-bank', categoryId: 'cat-groceries',
+        };
+      }
+      return null;
+    });
   });
 
   it('updateTransaction atomically updates linked shopping item when transaction financial fields change', async () => {
@@ -58,7 +74,7 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE shopping_items'),
-      [180000, '2026-10-02', 'acc-bank', 'cat-household', expect.any(String), 'tx-purchase-1']
+      [180000, '2026-10-02', 'acc-bank', 'cat-household', expect.any(String), 'item-oil', 'tx-purchase-1']
     );
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
@@ -68,20 +84,29 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
   });
 
   it('deleteTransaction reverts linked shopping item to PENDING and clears purchase fields', async () => {
-    scoped.getFirstAsync.mockResolvedValueOnce({
-      id: 'tx-purchase-delete',
-      type: 'EXPENSE',
-      amount: 250000,
-      date: '2026-10-01',
-      metadata: JSON.stringify({ shoppingItemId: 'item-milk' }),
-      deletedAt: null,
+    scoped.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM transactions WHERE id = ?')) {
+        return {
+          id: 'tx-purchase-delete', type: 'EXPENSE', amount: 250000,
+          date: '2026-10-01', metadata: JSON.stringify({ shoppingItemId: 'item-milk' }),
+          deletedAt: null,
+        };
+      }
+      if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
+        return {
+          id: 'item-milk', status: 'PURCHASED', transactionId: 'tx-purchase-delete',
+          purchasePrice: 250000, purchasedAt: '2026-10-01',
+          purchaseAccountId: null, categoryId: null,
+        };
+      }
+      return null;
     });
 
     await deleteTransaction('tx-purchase-delete');
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
       expect.stringContaining("SET status = 'PENDING'"),
-      [expect.any(String), 'tx-purchase-delete']
+      [expect.any(String), 'item-milk', 'tx-purchase-delete']
     );
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
@@ -108,20 +133,18 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
       updatedAt: '2026-10-01',
     };
 
-    db.getFirstAsync.mockImplementation(async (sql: string) => {
-      if (sql.includes('shopping_items')) {
-        return purchasedItem;
-      }
-      return null;
-    });
-
     scoped.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM shopping_items WHERE id = ?')) return purchasedItem;
+      if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return purchasedItem;
       if (sql.includes('FROM transactions WHERE id = ?')) {
         return {
           id: 'tx-coffee',
           type: 'EXPENSE',
           amount: 55000,
           date: '2026-10-01',
+          accountId: 'acc-bank',
+          categoryId: 'cat-groceries',
+          metadata: JSON.stringify({ shoppingItemId: 'item-bought' }),
           deletedAt: null,
         };
       }
@@ -135,9 +158,9 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
       [expect.any(String), expect.any(String), 'tx-coffee']
     );
 
-    expect(db.runAsync).toHaveBeenCalledWith(
+    expect(scoped.runAsync).toHaveBeenCalledWith(
       expect.stringContaining("SET status = 'PENDING'"),
-      [expect.any(String), 'item-bought']
+      expect.arrayContaining([expect.any(String), 'item-bought'])
     );
   });
 });

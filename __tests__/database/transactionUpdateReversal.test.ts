@@ -6,12 +6,29 @@ const open = openDatabaseAsync as jest.Mock;
 describe('Atomic Transaction Update & Asset Reversal', () => {
   let db: any;
   let scoped: any;
+  let currentAssetValue: number;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    currentAssetValue = 40000;
     scoped = {
-      getFirstAsync: jest.fn(),
-      runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
+      getFirstAsync: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM accounts WHERE id = ?')) {
+          return { id: 'acc-1', name: 'Main bank', type: 'BANK', isArchived: 0 };
+        }
+        if (sql.includes('FROM assets WHERE id = ?')) {
+          return { id: 'ast-laptop', currentValue: currentAssetValue, isArchived: 0 };
+        }
+        if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return null;
+        return null;
+      }),
+      getAllAsync: jest.fn(async () => []),
+      runAsync: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('UPDATE assets SET currentValue = ?')) {
+          currentAssetValue = params[0];
+        }
+        return { changes: 1 };
+      }),
     };
     db = {
       execAsync: jest.fn(),
@@ -52,8 +69,7 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
 
   it('adjusts asset valuation atomically when an ASSET_SALE transaction amount changes', async () => {
     // Current sale was ₹100, asset remaining value is ₹400
-    scoped.getFirstAsync
-      .mockResolvedValueOnce({
+    scoped.getFirstAsync.mockResolvedValueOnce({
         id: 'tx-sale-1',
         type: 'ASSET_SALE',
         amount: 10000,
@@ -62,10 +78,6 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
         assetId: 'ast-laptop',
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
-      })
-      .mockResolvedValueOnce({
-        currentValue: 40000,
-        isArchived: 0,
       });
 
     // User increases the sale amount from ₹100 to ₹150 (+₹50 delta)
@@ -85,8 +97,8 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
 
   it('restores asset valuation atomically when an ASSET_SALE transaction amount decreases', async () => {
     // Current sale was ₹200, asset remaining value is ₹100
-    scoped.getFirstAsync
-      .mockResolvedValueOnce({
+    currentAssetValue = 10000;
+    scoped.getFirstAsync.mockResolvedValueOnce({
         id: 'tx-sale-2',
         type: 'ASSET_SALE',
         amount: 20000,
@@ -95,10 +107,6 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
         assetId: 'ast-laptop',
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
-      })
-      .mockResolvedValueOnce({
-        currentValue: 10000,
-        isArchived: 0,
       });
 
     // User decreases the sale amount from ₹200 to ₹120 (-₹80 delta)

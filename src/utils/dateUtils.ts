@@ -24,6 +24,39 @@ const MONTH_SHORT_NAMES = [
 
 export const WEEKDAYS_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
+export interface EffectiveDateBounds {
+  minDate?: string;
+  maxDate?: string;
+}
+
+export function getEffectiveDateBounds(
+  minDate?: string,
+  maxDate?: string,
+  allowFutureDates = true,
+  todayStr: string = getTodayLocalDateString()
+): EffectiveDateBounds {
+  const effectiveMaxDate = allowFutureDates
+    ? maxDate
+    : maxDate && maxDate < todayStr
+      ? maxDate
+      : todayStr;
+  return { minDate, maxDate: effectiveMaxDate };
+}
+
+export function isDateOutsideBounds(dateStr: string, bounds: EffectiveDateBounds): boolean {
+  return !!(
+    (bounds.minDate && dateStr < bounds.minDate) ||
+    (bounds.maxDate && dateStr > bounds.maxDate)
+  );
+}
+
+export function selectDateWithinBounds(
+  candidateDate: string,
+  bounds: EffectiveDateBounds
+): string | null {
+  return isDateOutsideBounds(candidateDate, bounds) ? null : candidateDate;
+}
+
 /**
  * Format a Date object to YYYY-MM-DD in local time
  */
@@ -68,17 +101,10 @@ export function isDateDisabled(
   allowFutureDates: boolean = true,
   todayStr: string = getTodayLocalDateString()
 ): boolean {
-  let effectiveMax = maxDate;
-  if (allowFutureDates === false) {
-    if (maxDate) {
-      effectiveMax = maxDate < todayStr ? maxDate : todayStr;
-    } else {
-      effectiveMax = todayStr;
-    }
-  }
-  if (minDate && dateStr < minDate) return true;
-  if (effectiveMax && dateStr > effectiveMax) return true;
-  return false;
+  return isDateOutsideBounds(
+    dateStr,
+    getEffectiveDateBounds(minDate, maxDate, allowFutureDates, todayStr)
+  );
 }
 
 /**
@@ -225,8 +251,10 @@ export function getMonthMatrix(year: number, month: number, referenceToday?: Dat
 /**
  * Generate quick shortcuts for date picking
  */
-export function getQuickDateShortcuts(includeFuture = true): Array<{ label: string; dateStr: string }> {
-  const now = new Date();
+export function getQuickDateShortcuts(
+  includeFuture = true,
+  now: Date = new Date()
+): Array<{ label: string; dateStr: string }> {
   const todayStr = formatDateIso(now);
 
   const yesterday = new Date(now);
@@ -249,4 +277,15 @@ export function getQuickDateShortcuts(includeFuture = true): Array<{ label: stri
   }
 
   return presets;
+}
+
+export function getSelectableDateShortcuts(
+  includeFuture: boolean,
+  bounds: EffectiveDateBounds,
+  referenceDate: Date = new Date()
+): Array<{ label: string; dateStr: string }> {
+  const todayStr = getTodayLocalDateString(referenceDate);
+  return getQuickDateShortcuts(includeFuture, referenceDate).filter(
+    (shortcut) => !isDateDisabled(shortcut.dateStr, bounds.minDate, bounds.maxDate, true, todayStr)
+  );
 }

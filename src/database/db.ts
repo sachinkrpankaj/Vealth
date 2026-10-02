@@ -36,6 +36,33 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('ALTER TABLE transactions ADD COLUMN metadata TEXT;');
   } catch {}
 
+  // Preserve only values that can still be observed in a legacy database.
+  // The purchase amount/date is a known starting point; the existing mutable
+  // value is anchored at its last recorded update date, never projected backward.
+  try {
+    await db.execAsync(`
+      INSERT OR IGNORE INTO asset_valuations (id, assetId, effectiveDate, value, source, createdAt)
+      SELECT 'legacy-purchase-' || id, id, purchaseDate, purchaseValue, 'PURCHASE', createdAt
+      FROM assets;
+
+      INSERT OR IGNORE INTO asset_valuations (id, assetId, effectiveDate, value, source, createdAt)
+      SELECT 'legacy-current-' || id, id, substr(updatedAt, 1, 10), currentValue, 'LEGACY_BASELINE', updatedAt
+      FROM assets;
+
+      INSERT OR IGNORE INTO asset_archive_history (id, assetId, effectiveDate, isArchived, createdAt)
+      SELECT 'legacy-current-' || id, id, substr(updatedAt, 1, 10), isArchived, updatedAt
+      FROM assets;
+
+      INSERT OR IGNORE INTO liability_valuations (id, liabilityId, effectiveDate, amount, source, createdAt)
+      SELECT 'legacy-current-' || id, id, substr(updatedAt, 1, 10), amount, 'LEGACY_BASELINE', updatedAt
+      FROM liabilities;
+
+      INSERT OR IGNORE INTO liability_archive_history (id, liabilityId, effectiveDate, isArchived, createdAt)
+      SELECT 'legacy-current-' || id, id, substr(updatedAt, 1, 10), isArchived, updatedAt
+      FROM liabilities;
+    `);
+  } catch {}
+
   // Shopping feature tables migration
   try {
     await db.execAsync(`

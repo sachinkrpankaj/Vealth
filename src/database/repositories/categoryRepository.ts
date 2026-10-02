@@ -1,5 +1,5 @@
 import { getDatabase } from '../db';
-import { Category, CategoryType } from '../../domain/finance/types';
+import { Category, CategoryType, CATEGORY_TYPES } from '../../domain/finance/types';
 
 interface CategoryRow {
   id: string;
@@ -92,14 +92,18 @@ export async function ensureMonthlyGeneralCategory(date: Date = new Date()): Pro
   const id = `cat-general-${monthYear}`;
 
   const existing = await db.getFirstAsync<CategoryRow>(
-    'SELECT * FROM categories WHERE type = ? AND (id = ? OR monthYear = ?);',
-    ['EXPENSE', id, monthYear]
+    'SELECT * FROM categories WHERE id = ?;',
+    [id]
   );
 
   if (existing) {
     // If it existed without monthYear set, update it
-    if (!existing.monthYear) {
-      await db.runAsync('UPDATE categories SET monthYear = ? WHERE id = ?;', [monthYear, existing.id]);
+    if (existing.type !== 'EXPENSE' || existing.monthYear !== monthYear) {
+      await db.runAsync(
+        "UPDATE categories SET type = 'EXPENSE', monthYear = ? WHERE id = ?;",
+        [monthYear, id]
+      );
+      existing.type = 'EXPENSE';
       existing.monthYear = monthYear;
     }
     return mapRowToCategory(existing);
@@ -107,22 +111,25 @@ export async function ensureMonthlyGeneralCategory(date: Date = new Date()): Pro
 
   const now = new Date().toISOString();
   await db.runAsync(
-    `INSERT INTO categories (id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt)
+    `INSERT OR IGNORE INTO categories (id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt)
      VALUES (?, ?, 'EXPENSE', 'Folder', '#94A3B8', 0, 0, ?, ?);`,
     [id, generalName, monthYear, now]
   );
 
-  return {
-    id,
-    name: generalName,
-    type: 'EXPENSE',
-    icon: 'Folder',
-    color: '#94A3B8',
-    isDefault: false,
-    isArchived: false,
-    monthYear,
-    createdAt: now,
-  };
+  const canonical = await db.getFirstAsync<CategoryRow>(
+    'SELECT * FROM categories WHERE id = ?;',
+    [id]
+  );
+  if (!canonical) throw new Error(`Unable to ensure monthly General category ${id}.`);
+  if (canonical.type !== 'EXPENSE' || canonical.monthYear !== monthYear) {
+    await db.runAsync(
+      "UPDATE categories SET type = 'EXPENSE', monthYear = ? WHERE id = ?;",
+      [monthYear, id]
+    );
+    canonical.type = 'EXPENSE';
+    canonical.monthYear = monthYear;
+  }
+  return mapRowToCategory(canonical);
 }
 
 export interface GetSelectableCategoriesOptions {
@@ -209,6 +216,7 @@ export async function createCategory(data: {
   const id = data.id || generateEntityId('cat');
   const now = new Date().toISOString();
   const type = data.type || 'EXPENSE';
+  if (!CATEGORY_TYPES.includes(type)) throw new Error(`Invalid category type: ${type}`);
   const icon = data.icon || 'Folder';
   const isDefault = data.isDefault ? 1 : 0;
   const isArchived = 0;

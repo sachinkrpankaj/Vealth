@@ -1,9 +1,12 @@
 import { getDatabase } from '../db';
-import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus } from '../../domain/finance/types';
+import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus, Transaction } from '../../domain/finance/types';
 import { formatDateIso, parseLocalDate } from '../../utils/dateUtils';
 import { formatRupee } from '../../domain/finance/currency';
 import { generateEntityId } from '../../utils/idGenerator';
-import { deleteTransaction } from './transactionRepository';
+import {
+  deleteTransactionInTransaction,
+  validateTransactionForInsertInTransaction,
+} from './transactionRepository';
 
 interface ShoppingListRow {
   id: string;
@@ -170,39 +173,34 @@ export async function deleteShoppingList(
   id: string
 ): Promise<{ deleted: boolean; archivedInstead: boolean; message: string }> {
   const db = await getDatabase();
-  const list = await getShoppingListById(id);
-  if (!list) {
-    throw new Error(`Shopping list with id "${id}" not found.`);
-  }
-
-  // Check if any items in this list are purchased or linked to financial transactions
-  const purchasedRef = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM shopping_items
-     WHERE listId = ? AND (status = 'PURCHASED' OR transactionId IS NOT NULL);`,
-    [id]
-  );
-
-  if ((purchasedRef?.count ?? 0) > 0) {
-    // Cannot hard delete because it contains financial history. Safely archive instead.
-    await archiveShoppingList(id, true);
-    return {
-      deleted: false,
-      archivedInstead: true,
-      message: `"${list.name}" contains purchased items with financial history and was safely archived instead of deleted.`,
-    };
-  }
-
-  // Safe to delete because no purchased items or financial transactions exist
+  let result: { deleted: boolean; archivedInstead: boolean; message: string } | null = null;
   await db.withExclusiveTransactionAsync(async (txn) => {
+    const list = await txn.getFirstAsync<ShoppingListRow>('SELECT * FROM shopping_lists WHERE id = ?;', [id]);
+    if (!list) throw new Error(`Shopping list with id "${id}" not found.`);
+    const purchasedRef = await txn.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM shopping_items
+       WHERE listId = ? AND (status = 'PURCHASED' OR transactionId IS NOT NULL);`,
+      [id]
+    );
+    if ((purchasedRef?.count ?? 0) > 0) {
+      await txn.runAsync('UPDATE shopping_lists SET isArchived = 1, updatedAt = ? WHERE id = ?;', [new Date().toISOString(), id]);
+      result = {
+        deleted: false,
+        archivedInstead: true,
+        message: `"${list.name}" contains purchased items with financial history and was safely archived instead of deleted.`,
+      };
+      return;
+    }
     await txn.runAsync('DELETE FROM shopping_items WHERE listId = ?;', [id]);
     await txn.runAsync('DELETE FROM shopping_lists WHERE id = ?;', [id]);
+    result = {
+      deleted: true,
+      archivedInstead: false,
+      message: `Shopping list "${list.name}" was permanently deleted.`,
+    };
   });
-
-  return {
-    deleted: true,
-    archivedInstead: false,
-    message: `Shopping list "${list.name}" was permanently deleted.`,
-  };
+  if (!result) throw new Error('Failed to delete shopping list.');
+  return result;
 }
 
 export async function getShoppingListSummaries(includeArchived = false): Promise<ShoppingListSummary[]> {
@@ -353,109 +351,124 @@ export async function updateShoppingItem(
   }
 ): Promise<ShoppingItem> {
   const db = await getDatabase();
-  const current = await getShoppingItemById(id);
-  if (!current) {
-    throw new Error(`Shopping item "${id}" not found.`);
-  }
-
-  const newName = updates.name !== undefined ? updates.name.trim() : current.name;
-  if (!newName) {
-    throw new Error('Product name cannot be blank.');
-  }
-
-  const newNote = updates.note !== undefined ? updates.note?.trim() || null : (current.note ?? null);
-  const newUrl = updates.productUrl !== undefined ? normalizeProductUrl(updates.productUrl) : (current.productUrl ?? null);
-  const newEstPrice =
-    updates.estimatedPrice !== undefined
-      ? (updates.estimatedPrice != null && Number.isSafeInteger(updates.estimatedPrice) && updates.estimatedPrice > 0
-          ? updates.estimatedPrice
-          : null)
-      : (current.estimatedPrice ?? null);
-
   const now = new Date().toISOString();
-
-  await db.runAsync(
-    `UPDATE shopping_items
-     SET name = ?, note = ?, productUrl = ?, estimatedPrice = ?, updatedAt = ?
-     WHERE id = ?;`,
-    [newName, newNote, newUrl, newEstPrice, now, id]
-  );
-
-  return {
-    ...current,
-    name: newName,
-    note: newNote ?? undefined,
-    productUrl: newUrl ?? undefined,
-    estimatedPrice: newEstPrice ?? undefined,
-    updatedAt: now,
-  };
+  let result: ShoppingItem | null = null;
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const row = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
+    if (!row) throw new Error(`Shopping item "${id}" not found.`);
+    const current = mapRowToShoppingItem(row);
+    const newName = updates.name !== undefined ? updates.name.trim() : current.name;
+    if (!newName) throw new Error('Product name cannot be blank.');
+    const newNote = updates.note !== undefined ? updates.note?.trim() || null : (current.note ?? null);
+    const newUrl = updates.productUrl !== undefined ? normalizeProductUrl(updates.productUrl) : (current.productUrl ?? null);
+    const newEstPrice = updates.estimatedPrice !== undefined
+      ? (updates.estimatedPrice != null && Number.isSafeInteger(updates.estimatedPrice) && updates.estimatedPrice > 0
+          ? updates.estimatedPrice : null)
+      : (current.estimatedPrice ?? null);
+    await txn.runAsync(
+      `UPDATE shopping_items SET name = ?, note = ?, productUrl = ?, estimatedPrice = ?, updatedAt = ? WHERE id = ?;`,
+      [newName, newNote, newUrl, newEstPrice, now, id]
+    );
+    result = {
+      ...current,
+      name: newName,
+      note: newNote ?? undefined,
+      productUrl: newUrl ?? undefined,
+      estimatedPrice: newEstPrice ?? undefined,
+      updatedAt: now,
+    };
+  });
+  if (!result) throw new Error('Failed to update shopping item.');
+  return result;
 }
 
 export async function discardShoppingItem(id: string): Promise<void> {
   const db = await getDatabase();
-  const current = await getShoppingItemById(id);
-  if (!current) {
-    throw new Error(`Shopping item "${id}" not found.`);
-  }
-
-  if (current.status === 'PURCHASED') {
-    throw new Error('Cannot discard an already purchased shopping item.');
-  }
-
   const now = new Date().toISOString();
-  await db.runAsync(
-    `UPDATE shopping_items SET status = 'DISCARDED', updatedAt = ? WHERE id = ?;`,
-    [now, id]
-  );
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const current = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
+    if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    if (current.status === 'PURCHASED' || current.transactionId) {
+      throw new Error('Cannot discard an already purchased shopping item.');
+    }
+    await txn.runAsync(
+      `UPDATE shopping_items SET status = 'DISCARDED', updatedAt = ? WHERE id = ? AND transactionId IS NULL AND status <> 'PURCHASED';`,
+      [now, id]
+    );
+  });
 }
 
 export async function restoreShoppingItem(id: string): Promise<void> {
   const db = await getDatabase();
-  const current = await getShoppingItemById(id);
-  if (!current) {
-    throw new Error(`Shopping item "${id}" not found.`);
-  }
-
   const now = new Date().toISOString();
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const current = await txn.getFirstAsync<ShoppingItemRow>(
+      'SELECT * FROM shopping_items WHERE id = ?;',
+      [id]
+    );
+    if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    if (current.status === 'PENDING') return;
 
-  if (current.status === 'PURCHASED') {
-    // Transactional reversal: soft-delete the linked financial transaction so financial state stays in sync
-    if (current.transactionId) {
-      await deleteTransaction(current.transactionId);
+    if (current.status === 'PURCHASED' && !current.transactionId) {
+      throw new Error('Cannot restore shopping item because its purchase transaction is missing.');
     }
-    await db.runAsync(
+
+    if (current.status === 'PURCHASED' && current.transactionId) {
+      const linked = await txn.getFirstAsync<{
+        id: string;
+        type: string;
+        amount: number;
+        date: string;
+        accountId: string | null;
+        categoryId: string | null;
+        metadata: string | null;
+        deletedAt: string | null;
+      }>('SELECT id, type, amount, date, accountId, categoryId, metadata, deletedAt FROM transactions WHERE id = ?;', [current.transactionId]);
+      if (!linked) {
+        throw new Error('Cannot restore shopping item because its linked transaction is missing.');
+      }
+      if (
+        linked.type !== 'EXPENSE' ||
+        String(current.purchasedAt || '').slice(0, 10) !== linked.date ||
+        current.purchasePrice !== linked.amount ||
+        (current.purchaseAccountId ?? null) !== (linked.accountId ?? null) ||
+        (current.categoryId ?? null) !== (linked.categoryId ?? null)
+      ) {
+        throw new Error('Cannot restore shopping item because its linked transaction is inconsistent.');
+      }
+      if (!linked.deletedAt) {
+        let metadata: any = null;
+        try { metadata = linked.metadata ? JSON.parse(linked.metadata) : null; } catch {}
+        if (metadata?.shoppingItemId !== id) {
+          throw new Error('Cannot restore shopping item because its linked transaction is inconsistent.');
+        }
+        await deleteTransactionInTransaction(txn, current.transactionId, now);
+      }
+    }
+
+    await txn.runAsync(
       `UPDATE shopping_items
-       SET status = 'PENDING',
-           purchasedAt = NULL,
-           purchasePrice = NULL,
-           purchaseAccountId = NULL,
-           transactionId = NULL,
-           categoryId = NULL,
-           updatedAt = ?
+       SET status = 'PENDING', purchasedAt = NULL, purchasePrice = NULL,
+           purchaseAccountId = NULL, transactionId = NULL, categoryId = NULL, updatedAt = ?
        WHERE id = ?;`,
       [now, id]
     );
-  } else {
-    // Normal restore from DISCARDED
-    await db.runAsync(
-      `UPDATE shopping_items SET status = 'PENDING', updatedAt = ? WHERE id = ?;`,
-      [now, id]
-    );
-  }
+  });
 }
 
 export async function deleteShoppingItem(id: string): Promise<void> {
   const db = await getDatabase();
-  const current = await getShoppingItemById(id);
-  if (!current) {
-    throw new Error(`Shopping item "${id}" not found.`);
-  }
-
-  if (current.status === 'PURCHASED' || current.transactionId) {
-    throw new Error('Cannot delete a purchased shopping item with a linked financial transaction. Preserving history.');
-  }
-
-  await db.runAsync('DELETE FROM shopping_items WHERE id = ?;', [id]);
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const current = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
+    if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    if (current.status === 'PURCHASED' || current.transactionId) {
+      throw new Error('Cannot delete a purchased shopping item with a linked financial transaction. Preserving history.');
+    }
+    await txn.runAsync(
+      `DELETE FROM shopping_items WHERE id = ? AND transactionId IS NULL AND status <> 'PURCHASED';`,
+      [id]
+    );
+  });
 }
 
 /**
@@ -549,8 +562,8 @@ export async function purchaseShoppingItem(params: {
     // 4. Verify category if provided
     let verifiedCategoryId: string | null = null;
     if (categoryId && categoryId.trim() !== '') {
-      const category = await txn.getFirstAsync<{ id: string; name: string; type: string }>(
-        'SELECT id, name, type FROM categories WHERE id = ?;',
+      const category = await txn.getFirstAsync<{ id: string; name: string; type: string; isArchived: number }>(
+        'SELECT id, name, type, isArchived FROM categories WHERE id = ?;',
         [categoryId.trim()]
       );
       if (!category) {
@@ -558,6 +571,9 @@ export async function purchaseShoppingItem(params: {
       }
       if (category.type !== 'EXPENSE') {
         throw new Error('Shopping purchases must use an Expense category.');
+      }
+      if (category.isArchived === 1) {
+        throw new Error('Archived categories cannot be used for new shopping purchases.');
       }
       verifiedCategoryId = category.id;
     }
@@ -569,6 +585,20 @@ export async function purchaseShoppingItem(params: {
       shoppingListId: itemRow.listId,
       productName: itemRow.name,
     });
+
+    const transaction: Transaction = {
+      id: txId,
+      type: 'EXPENSE',
+      amount: purchasePrice,
+      date: txDate,
+      accountId: purchaseAccountId,
+      categoryId: verifiedCategoryId,
+      note: txNote,
+      metadata: txMetadata,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await validateTransactionForInsertInTransaction(txn, transaction);
 
     await txn.runAsync(
       `INSERT INTO transactions (

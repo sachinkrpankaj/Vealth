@@ -373,7 +373,7 @@ export default function PersonDetailScreen() {
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <View
