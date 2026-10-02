@@ -26,6 +26,7 @@ import { updateLiability, deleteLiability, archiveLiability } from '../../src/da
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { KeyboardAwareScrollView } from '../../src/components/ui/KeyboardAwareScrollView';
 import { Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Trash2, Edit2, X } from 'lucide-react-native';
 
@@ -231,65 +232,72 @@ export default function LiabilitiesListScreen() {
               </Pressable>
             </View>
 
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Liability Name</Text>
-            <View
-              style={[
-                styles.inputBox,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radii.md,
-                  marginBottom: 14,
-                },
-              ]}
+            <KeyboardAwareScrollView
+              style={{ maxHeight: 420 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              extraScrollHeight={100}
             >
-              <TextInput
-                value={editName}
-                onChangeText={setEditName}
-                style={[styles.textInput, { color: colors.textPrimary }]}
-                placeholder="Liability name"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Liability Name</Text>
+              <View
+                style={[
+                  styles.inputBox,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderRadius: radii.md,
+                    marginBottom: 14,
+                  },
+                ]}
+              >
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  style={[styles.textInput, { color: colors.textPrimary }]}
+                  placeholder="Liability name"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
 
-            <AmountInput
-              label="Remaining Obligation"
-              value={editAmount}
-              onChangeAmount={setEditAmount}
-            />
+              <AmountInput
+                label="Remaining Obligation"
+                value={editAmount}
+                onChangeAmount={setEditAmount}
+              />
 
-            <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>Note</Text>
-            <View
-              style={[
-                styles.inputBox,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderRadius: radii.md,
-                  marginBottom: 20,
-                },
-              ]}
-            >
-              <TextInput
-                value={editNote}
-                onChangeText={setEditNote}
-                style={[styles.textInput, { color: colors.textPrimary }]}
-                placeholder="Optional note"
-                placeholderTextColor={colors.textMuted}
-              />
-            </View>
+              <Text style={[styles.fieldLabel, { color: colors.textSecondary, marginTop: 12 }]}>Note</Text>
+              <View
+                style={[
+                  styles.inputBox,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderRadius: radii.md,
+                    marginBottom: 20,
+                  },
+                ]}
+              >
+                <TextInput
+                  value={editNote}
+                  onChangeText={setEditNote}
+                  style={[styles.textInput, { color: colors.textPrimary }]}
+                  placeholder="Optional note"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
 
-            <View style={{ gap: 10 }}>
-              <PrimaryButton
-                title="Save Changes"
-                onPress={handleSaveEdit}
-                loading={isSaving}
-              />
-              <SecondaryButton
-                title="Delete Liability"
-                onPress={handleDelete}
-              />
-            </View>
+              <View style={{ gap: 10, marginTop: 8 }}>
+                <PrimaryButton
+                  title="Save Changes"
+                  onPress={handleSaveEdit}
+                  loading={isSaving}
+                />
+                <SecondaryButton
+                  title="Delete Liability"
+                  onPress={handleDelete}
+                />
+              </View>
+            </KeyboardAwareScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

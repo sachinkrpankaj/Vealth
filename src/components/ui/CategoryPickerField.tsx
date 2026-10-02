@@ -501,106 +501,108 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               </Pressable>
             </View>
 
-            <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>NAME</Text>
-            <TextInput
-              value={newCatName}
-              onChangeText={setNewCatName}
-              placeholder="e.g. Groceries, Gym, Coffee"
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.textInput,
-                {
-                  color: colors.textPrimary,
-                  backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-                  borderColor: colors.border,
-                  borderRadius: radii.sm,
-                },
-              ]}
-              autoFocus
-            />
+            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" extraScrollHeight={100}>
+              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>NAME</Text>
+              <TextInput
+                value={newCatName}
+                onChangeText={setNewCatName}
+                placeholder="e.g. Groceries, Gym, Coffee"
+                placeholderTextColor={colors.textMuted}
+                style={[
+                  styles.textInput,
+                  {
+                    color: colors.textPrimary,
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    borderColor: colors.border,
+                    borderRadius: radii.sm,
+                  },
+                ]}
+                autoFocus
+              />
 
-            <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 14 }]}>
-              ACCENT COLOR
-            </Text>
-            <View style={styles.colorPalette}>
-              {COLOR_PALETTE.map((col) => (
-                <Pressable
-                  key={col}
-                  onPress={() => setNewCatColor(col)}
-                  style={[
-                    styles.colorDot,
-                    {
-                      backgroundColor: col,
-                      borderColor: newCatColor === col ? colors.textPrimary : 'transparent',
-                      borderWidth: newCatColor === col ? 2 : 0,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-
-            <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 14 }]}>
-              ICON
-            </Text>
-            <View style={styles.iconPalette}>
-              {Object.keys(ICON_MAP).map((iconKey) => {
-                const IconComp = ICON_MAP[iconKey];
-                const isSelected = newCatIcon === iconKey;
-                return (
+              <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+                ACCENT COLOR
+              </Text>
+              <View style={styles.colorPalette}>
+                {COLOR_PALETTE.map((col) => (
                   <Pressable
-                    key={iconKey}
-                    onPress={() => setNewCatIcon(iconKey)}
+                    key={col}
+                    onPress={() => setNewCatColor(col)}
                     style={[
-                      styles.iconDot,
+                      styles.colorDot,
                       {
-                        backgroundColor: isSelected
-                          ? `${newCatColor}25`
-                          : isDark
-                          ? 'rgba(255,255,255,0.06)'
-                          : 'rgba(0,0,0,0.04)',
-                        borderColor: isSelected ? newCatColor : colors.borderSubtle,
-                        borderWidth: isSelected ? 2 : 1,
-                        borderRadius: radii.sm,
+                        backgroundColor: col,
+                        borderColor: newCatColor === col ? colors.textPrimary : 'transparent',
+                        borderWidth: newCatColor === col ? 2 : 0,
                       },
                     ]}
-                    accessibilityLabel={`Select ${iconKey} icon`}
-                  >
-                    <IconComp size={16} color={isSelected ? newCatColor : colors.textMuted} />
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <View style={styles.createModalActions}>
-              {editingCategory && !isMonthlyGeneralCategory(editingCategory) && (
-                <Pressable
-                  onPress={() => handleArchive(editingCategory)}
-                  style={[styles.archiveBtn, { borderColor: colors.borderSubtle }]}
-                >
-                  <Archive size={14} color="#EF4444" />
-                  <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '600' }}>
-                    Archive
-                  </Text>
-                </Pressable>
-              )}
-
-              <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
-                <Pressable
-                  onPress={() => setIsManaging(false)}
-                  style={[styles.cancelBtn, { borderColor: colors.border }]}
-                >
-                  <Text style={{ color: colors.textSecondary }}>Cancel</Text>
-                </Pressable>
-                <Pressable
-                  onPress={handleSaveCategory}
-                  style={[styles.saveBtn, { backgroundColor: colors.accent }]}
-                >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
-                    Save
-                  </Text>
-                </Pressable>
+                  />
+                ))}
               </View>
-            </View>
+
+              <Text style={[styles.inputLabel, { color: colors.textSecondary, marginTop: 14 }]}>
+                ICON
+              </Text>
+              <View style={styles.iconPalette}>
+                {Object.keys(ICON_MAP).map((iconKey) => {
+                  const IconComp = ICON_MAP[iconKey];
+                  const isSelected = newCatIcon === iconKey;
+                  return (
+                    <Pressable
+                      key={iconKey}
+                      onPress={() => setNewCatIcon(iconKey)}
+                      style={[
+                        styles.iconDot,
+                        {
+                          backgroundColor: isSelected
+                            ? `${newCatColor}25`
+                            : isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : 'rgba(0,0,0,0.04)',
+                          borderColor: isSelected ? newCatColor : colors.borderSubtle,
+                          borderWidth: isSelected ? 2 : 1,
+                          borderRadius: radii.sm,
+                        },
+                      ]}
+                      accessibilityLabel={`Select ${iconKey} icon`}
+                    >
+                      <IconComp size={16} color={isSelected ? newCatColor : colors.textMuted} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <View style={styles.createModalActions}>
+                {editingCategory && !isMonthlyGeneralCategory(editingCategory) && (
+                  <Pressable
+                    onPress={() => handleArchive(editingCategory)}
+                    style={[styles.archiveBtn, { borderColor: colors.borderSubtle }]}
+                  >
+                    <Archive size={14} color="#EF4444" />
+                    <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '600' }}>
+                      Archive
+                    </Text>
+                  </Pressable>
+                )}
+
+                <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+                  <Pressable
+                    onPress={() => setIsManaging(false)}
+                    style={[styles.cancelBtn, { borderColor: colors.border }]}
+                  >
+                    <Text style={{ color: colors.textSecondary }}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={handleSaveCategory}
+                    style={[styles.saveBtn, { backgroundColor: colors.accent }]}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                      Save
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            </KeyboardAwareScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

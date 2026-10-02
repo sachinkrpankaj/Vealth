@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   ScrollView,
   ScrollViewProps,
@@ -33,29 +33,38 @@ export const KeyboardAwareScrollView = React.forwardRef<
     ref
   ) => {
     const internalRef = useRef<ScrollView>(null);
-    const scrollViewRef = (ref as React.RefObject<ScrollView | null>) || internalRef;
     const [keyboardHeight, setKeyboardHeight] = useState(0);
+    const isMountedRef = useRef(true);
+    const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-    const scrollToFocusedInput = () => {
+    // Merge forwarded ref with internal ref
+    const setRef = useCallback(
+      (node: ScrollView | null) => {
+        internalRef.current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref && typeof ref === 'object') {
+          (ref as React.MutableRefObject<ScrollView | null>).current = node;
+        }
+      },
+      [ref]
+    );
+
+    const fallbackScrollResponder = (currentlyFocusedInput: any) => {
       try {
-        const currentlyFocusedInput = TextInput.State.currentlyFocusedInput
-          ? TextInput.State.currentlyFocusedInput()
-          : null;
-
-        if (currentlyFocusedInput && scrollViewRef.current) {
-          const reactTag = findNodeHandle(currentlyFocusedInput as any);
-          if (reactTag) {
-            const responder = (scrollViewRef.current as any).getScrollResponder?.();
-            if (
-              responder &&
-              typeof responder.scrollResponderScrollNativeHandleToKeyboard === 'function'
-            ) {
-              responder.scrollResponderScrollNativeHandleToKeyboard(
-                reactTag,
-                extraScrollHeight,
-                true
-              );
-            }
+        if (!internalRef.current) return;
+        const reactTag = findNodeHandle(currentlyFocusedInput);
+        if (reactTag) {
+          const responder = (internalRef.current as any).getScrollResponder?.();
+          if (
+            responder &&
+            typeof responder.scrollResponderScrollNativeHandleToKeyboard === 'function'
+          ) {
+            responder.scrollResponderScrollNativeHandleToKeyboard(
+              reactTag,
+              extraScrollHeight,
+              true
+            );
           }
         }
       } catch {
@@ -63,24 +72,75 @@ export const KeyboardAwareScrollView = React.forwardRef<
       }
     };
 
+    const scrollToFocusedInput = useCallback(() => {
+      if (!isMountedRef.current || !internalRef.current) return;
+
+      try {
+        const currentlyFocusedInput = TextInput.State.currentlyFocusedInput
+          ? TextInput.State.currentlyFocusedInput()
+          : null;
+
+        if (!currentlyFocusedInput) return;
+
+        const containerNode = findNodeHandle(internalRef.current);
+        const targetNode = currentlyFocusedInput as any;
+
+        if (
+          containerNode &&
+          targetNode &&
+          typeof targetNode.measureLayout === 'function'
+        ) {
+          targetNode.measureLayout(
+            containerNode,
+            (x: number, y: number, width: number, height: number) => {
+              if (!isMountedRef.current || !internalRef.current) return;
+              // Scroll to position input comfortably above bottom (accounting for labels/CTA)
+              const targetY = Math.max(
+                0,
+                y - (extraScrollHeight > 60 ? 60 : extraScrollHeight)
+              );
+              internalRef.current.scrollTo({ y: targetY, animated: true });
+            },
+            () => {
+              // Fallback to ScrollResponder native method
+              fallbackScrollResponder(currentlyFocusedInput);
+            }
+          );
+        } else {
+          fallbackScrollResponder(currentlyFocusedInput);
+        }
+      } catch {
+        // Best effort
+      }
+    }, [extraScrollHeight]);
+
+    const scheduleScroll = useCallback(() => {
+      scrollToFocusedInput();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = setTimeout(
+        () => {
+          if (isMountedRef.current) {
+            scrollToFocusedInput();
+          }
+        },
+        Platform.OS === 'android' ? 180 : 80
+      );
+    }, [scrollToFocusedInput]);
+
     useEffect(() => {
+      isMountedRef.current = true;
       const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
       const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
 
       const onShow = (e: KeyboardEvent) => {
+        if (!isMountedRef.current) return;
         const height = e.endCoordinates ? e.endCoordinates.height : 0;
         setKeyboardHeight(height);
-
-        // Auto scroll to focused input when keyboard opens
-        setTimeout(
-          () => {
-            scrollToFocusedInput();
-          },
-          Platform.OS === 'android' ? 120 : 50
-        );
+        scheduleScroll();
       };
 
       const onHide = () => {
+        if (!isMountedRef.current) return;
         setKeyboardHeight(0);
       };
 
@@ -88,19 +148,16 @@ export const KeyboardAwareScrollView = React.forwardRef<
       const hideSub = Keyboard.addListener(hideEvent, onHide);
 
       return () => {
+        isMountedRef.current = false;
+        if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
         showSub.remove();
         hideSub.remove();
       };
-    }, [extraScrollHeight]);
+    }, [scheduleScroll]);
 
     const handleChildFocus = (e: any) => {
       onFocus?.(e);
-      setTimeout(
-        () => {
-          scrollToFocusedInput();
-        },
-        Platform.OS === 'android' ? 80 : 30
-      );
+      scheduleScroll();
     };
 
     const flattenedContent = StyleSheet.flatten(contentContainerStyle) || {};
@@ -109,16 +166,14 @@ export const KeyboardAwareScrollView = React.forwardRef<
         ? flattenedContent.paddingBottom
         : 20;
 
-    // On Android, provide extra scrollable clearance when keyboard is active
+    // Provide extra scrollable clearance when keyboard is active
     const dynamicPaddingBottom =
       basePaddingBottom +
-      (keyboardHeight > 0
-        ? Math.max(keyboardHeight * 0.4, extraScrollHeight + 40)
-        : 0);
+      (keyboardHeight > 0 ? Math.max(extraScrollHeight + 40, 120) : 0);
 
     return (
       <ScrollView
-        ref={scrollViewRef}
+        ref={setRef}
         style={[styles.scroll, style]}
         contentContainerStyle={[
           contentContainerStyle,
