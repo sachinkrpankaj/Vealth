@@ -10,6 +10,7 @@ describe('transaction deletion atomic asset reversal', () => {
   beforeAll(async () => {
     scoped = {
       getFirstAsync: jest.fn(),
+      getAllAsync: jest.fn().mockResolvedValue([]),
       runAsync: jest.fn().mockResolvedValue({ changes: 1 }),
     };
     db = {

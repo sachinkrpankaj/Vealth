@@ -9,6 +9,7 @@ import {
 } from '../../domain/finance/types';
 import { getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { validateTransactionRequiredFields } from '../../domain/finance/validator';
+import { reconcileAssetState } from './assetStateRepository';
 
 interface TransactionRow {
   id: string;
@@ -567,10 +568,21 @@ export async function createTransaction(
   const newTransaction: Transaction = { ...tx, createdAt: now, updatedAt: now, metadata: metadata ?? undefined };
 
   await db.withExclusiveTransactionAsync(async (txn) => {
+    const today = getTodayLocalDateString();
+    const reconciledAssets = await reconcileAssetState(
+      txn,
+      ASSET_TRANSACTION_TYPES.has(newTransaction.type) ? [newTransaction.assetId] : [],
+      now,
+      today
+    );
     const shoppingItemId = await validateTransactionForInsertInTransaction(txn, newTransaction);
-    // Validation and relationship checks run once through the shared path above.
-    // Asset transaction effects are cached only on/after their effective date.
-    metadata = await applyAssetEffect(txn, { ...newTransaction, metadata: metadata ?? undefined }, now);
+    // Assets with dated valuation history are materialized from source events after
+    // insertion. Only pre-history databases use the legacy incremental fallback.
+    if (ASSET_TRANSACTION_TYPES.has(newTransaction.type) && !reconciledAssets.has(newTransaction.assetId!)) {
+      metadata = await applyAssetEffect(txn, { ...newTransaction, metadata: metadata ?? undefined }, now);
+    } else if (ASSET_TRANSACTION_TYPES.has(newTransaction.type)) {
+      metadata = clearAssetMetadata(metadata);
+    }
 
     // 4. Insert transaction
     await txn.runAsync(
@@ -595,6 +607,15 @@ export async function createTransaction(
         tx.deletedAt ?? null,
       ]
     );
+
+    if (ASSET_TRANSACTION_TYPES.has(newTransaction.type) && reconciledAssets.has(newTransaction.assetId!)) {
+      await reconcileAssetState(txn, [newTransaction.assetId], now, today);
+      const materialized = await txn.getFirstAsync<{ metadata: string | null }>(
+        'SELECT metadata FROM transactions WHERE id = ?;',
+        [newTransaction.id]
+      );
+      metadata = materialized?.metadata ?? null;
+    }
 
     if (shoppingItemId) {
       const linked = await txn.runAsync(
@@ -646,6 +667,14 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
       if (updated.type !== 'EXPENSE' && updated.type !== 'INCOME') updated.categoryId = undefined;
     }
 
+    const today = getTodayLocalDateString();
+    const reconciledAssets = await reconcileAssetState(
+      txn,
+      [currentTransaction.assetId, updated.assetId],
+      now,
+      today
+    );
+
     await validateFinalTransaction(txn, updated, { existing: currentTransaction, excludeId: id });
     const shoppingItemId = await validateShoppingLinkForUpdate(
       txn,
@@ -654,8 +683,20 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
       updated
     );
 
-    await reverseAssetEffect(txn, currentTransaction, now);
-    updated.metadata = await applyAssetEffect(txn, updated, now) ?? undefined;
+    if (
+      ASSET_TRANSACTION_TYPES.has(currentTransaction.type) &&
+      currentTransaction.assetId &&
+      !reconciledAssets.has(currentTransaction.assetId)
+    ) {
+      await reverseAssetEffect(txn, currentTransaction, now);
+    }
+    if (ASSET_TRANSACTION_TYPES.has(updated.type) && updated.assetId) {
+      if (reconciledAssets.has(updated.assetId)) {
+        updated.metadata = clearAssetMetadata(updated.metadata) ?? undefined;
+      } else {
+        updated.metadata = await applyAssetEffect(txn, updated, now) ?? undefined;
+      }
+    }
 
     if (shoppingItemId) {
       const result = await txn.runAsync(
@@ -689,6 +730,13 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
         id,
       ]
     );
+
+    await reconcileAssetState(
+      txn,
+      [currentTransaction.assetId, updated.assetId],
+      now,
+      today
+    );
   });
 }
 
@@ -703,7 +751,15 @@ export async function deleteTransactionInTransaction(
     );
     if (!tx) return; // Idempotent: repeated deletes do not reverse an asset twice.
 
-    await reverseAssetEffect(txn, mapRowToTransaction(tx), now);
+    const transaction = mapRowToTransaction(tx);
+    const reconciledAssets = await reconcileAssetState(txn, [transaction.assetId], now);
+    if (
+      ASSET_TRANSACTION_TYPES.has(transaction.type) &&
+      transaction.assetId &&
+      !reconciledAssets.has(transaction.assetId)
+    ) {
+      await reverseAssetEffect(txn, transaction, now);
+    }
 
     // 2. Keep both sides of any shopping purchase relationship consistent.
     const linkedShoppingItem = await txn.getFirstAsync<LinkedShoppingItemRow>(
@@ -741,6 +797,7 @@ export async function deleteTransactionInTransaction(
       'UPDATE transactions SET deletedAt = ?, updatedAt = ? WHERE id = ? AND deletedAt IS NULL;',
       [now, now, id]
     );
+    await reconcileAssetState(txn, [transaction.assetId], now);
 }
 
 export async function deleteTransaction(id: string): Promise<void> {

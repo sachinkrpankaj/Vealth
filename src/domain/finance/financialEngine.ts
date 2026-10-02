@@ -376,7 +376,11 @@ export function calculateAssetValueAsOf(
         isAfterValuation(tx, valuation) &&
         (tx.type === 'ASSET_SALE' || tx.type === 'ASSET_PURCHASE')
     )
-    .sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+    .sort((a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.id.localeCompare(b.id)
+    );
 
   for (const tx of effectiveTransactions) {
     if (tx.type === 'ASSET_PURCHASE') {
@@ -402,20 +406,38 @@ export function isAssetArchivedAsOf(
       (a.createdAt || '').localeCompare(b.createdAt || '')
     );
   const latestState = history[history.length - 1];
-  if (!latestState) {
-    // Legacy/synthetic data without an archive timeline is only trustworthy for today.
-    return !asset.archiveHistory?.length && asOfDate >= getTodayLocalDateString()
+  // Legacy/synthetic data without an archive timeline is only trustworthy for today.
+  let archived = latestState
+    ? latestState.isArchived
+    : !asset.archiveHistory?.length && asOfDate >= getTodayLocalDateString()
       ? asset.isArchived
       : false;
+  const orderedEvents = getActiveTransactions(transactions)
+    .filter(
+      (tx) =>
+        tx.assetId === asset.id &&
+        tx.date <= asOfDate &&
+        (tx.type === 'ASSET_SALE' || tx.type === 'ASSET_PURCHASE')
+    )
+    .sort((a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.id.localeCompare(b.id)
+    );
+
+  const preceding: Transaction[] = [];
+  for (const event of orderedEvents) {
+    const afterArchiveState = !latestState || isAfterValuation(event, latestState);
+    if (afterArchiveState) {
+      if (event.type === 'ASSET_PURCHASE') {
+        archived = false;
+      } else if (calculateAssetValueAsOf(asset, [...preceding, event], event.date) === 0) {
+        archived = true;
+      }
+    }
+    preceding.push(event);
   }
-  if (!latestState.isArchived) return false;
-  return !getActiveTransactions(transactions).some(
-    (tx) =>
-      tx.assetId === asset.id &&
-      tx.type === 'ASSET_PURCHASE' &&
-      tx.date <= asOfDate &&
-      isAfterValuation(tx, latestState)
-  );
+  return archived;
 }
 
 export function calculateTotalPhysicalAssets(

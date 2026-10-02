@@ -143,6 +143,7 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
       deletedAt: null,
     };
 
+    mockAsset.currentValue = 3000000;
     scoped.getFirstAsync
       .mockResolvedValueOnce(middleSale)
       .mockResolvedValueOnce({ currentValue: 3000000, isArchived: 0 });
@@ -199,6 +200,8 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
       deletedAt: null,
     };
 
+    mockAsset.currentValue = 0;
+    mockAsset.isArchived = 1;
     scoped.getFirstAsync
       .mockResolvedValueOnce(liquidationSale)
       .mockResolvedValueOnce({ currentValue: 0, isArchived: 1 });

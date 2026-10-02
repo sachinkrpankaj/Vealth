@@ -3,6 +3,7 @@ import { Asset, AssetArchiveState, AssetCategory, AssetValuation, Transaction, A
 import { calculateAssetValueAsOf, isAssetArchivedAsOf } from '../../domain/finance/financialEngine';
 import { getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { generateEntityId } from '../../utils/idGenerator';
+import { reconcileAssetState } from './assetStateRepository';
 
 interface AssetRow {
   id: string;
@@ -128,12 +129,7 @@ async function hydrateAssets(rows: AssetRow[]): Promise<Asset[]> {
     };
     if (valuationHistory.length) {
       hydrated.currentValue = calculateAssetValueAsOf(hydrated, transactions, today);
-      hydrated.isArchived =
-        isAssetArchivedAsOf(hydrated, today, transactions) ||
-        (hydrated.currentValue === 0 &&
-          transactions.some(
-            (tx) => tx.assetId === hydrated.id && tx.type === 'ASSET_SALE' && tx.date <= today
-          ));
+      hydrated.isArchived = isAssetArchivedAsOf(hydrated, today, transactions);
     }
     return hydrated;
   });
@@ -170,6 +166,12 @@ async function recordArchiveState(
 
 export async function getAllAssets(includeArchived = false): Promise<Asset[]> {
   const db = await getDatabase();
+  const initialRows = await db.getAllAsync<AssetRow>('SELECT * FROM assets ORDER BY createdAt DESC;');
+  if (initialRows.length) {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await reconcileAssetState(txn, initialRows.map((asset) => asset.id));
+    });
+  }
   const rows = await db.getAllAsync<AssetRow>('SELECT * FROM assets ORDER BY createdAt DESC;');
   const assets = await hydrateAssets(rows);
   return includeArchived ? assets : assets.filter((asset) => !asset.isArchived);
@@ -177,6 +179,9 @@ export async function getAllAssets(includeArchived = false): Promise<Asset[]> {
 
 export async function getAssetById(id: string): Promise<Asset | null> {
   const db = await getDatabase();
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    await reconcileAssetState(txn, [id]);
+  });
   const row = await db.getFirstAsync<AssetRow>('SELECT * FROM assets WHERE id = ?;', [id]);
   if (!row) return null;
   const [asset] = await hydrateAssets([row]);
