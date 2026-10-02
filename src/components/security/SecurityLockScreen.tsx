@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, Platform, BackHandler } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, BackHandler, ActivityIndicator } from 'react-native';
 import { Lock, Fingerprint, Delete } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSecurityStore } from '../../stores/useSecurityStore';
@@ -11,15 +11,18 @@ export const SecurityLockScreen: React.FC = () => {
   const {
     isLocked,
     isBiometricEnabled,
+    securityConfigError,
     lockoutUntil,
     getRemainingLockoutSeconds,
     verifyPin,
     authenticateWithBiometrics,
+    checkSecurityConfig,
   } = useSecurityStore();
 
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
   const [remainingLockout, setRemainingLockout] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   // Prevent hardware back button from closing or bypassing the lock screen on Android
   useEffect(() => {
@@ -43,12 +46,50 @@ export const SecurityLockScreen: React.FC = () => {
   }, [isLocked, lockoutUntil]);
 
   useEffect(() => {
-    if (isLocked && isBiometricEnabled && remainingLockout === 0) {
+    if (isLocked && isBiometricEnabled && !securityConfigError && remainingLockout === 0) {
       authenticateWithBiometrics();
     }
-  }, [isLocked, isBiometricEnabled, remainingLockout]);
+  }, [isLocked, isBiometricEnabled, securityConfigError, remainingLockout]);
 
   if (!isLocked) return null;
+
+  if (securityConfigError) {
+    return (
+      <Modal visible animationType="fade" transparent={false} onRequestClose={() => {}}>
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+          <View style={styles.header}>
+            <VealthLogo size={64} style={{ marginBottom: 12 }} />
+            <Text style={[styles.title, { color: colors.textPrimary, fontSize: typography.fontSizes.headingMd }]}>
+              Vaelth is locked
+            </Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary, textAlign: 'center' }]}>
+              {securityConfigError}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={async () => {
+              if (isRetrying) return;
+              setIsRetrying(true);
+              try {
+                await checkSecurityConfig();
+              } finally {
+                setIsRetrying(false);
+              }
+            }}
+            disabled={isRetrying}
+            style={[styles.retryButton, { backgroundColor: colors.accent, borderRadius: radii.full }]}
+          >
+            {isRetrying ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <Text style={[styles.retryButtonText, { color: colors.background }]}>Try Again</Text>
+            )}
+          </Pressable>
+        </View>
+      </Modal>
+    );
+  }
 
   const isLockedOut = remainingLockout > 0;
 
@@ -259,5 +300,18 @@ const styles = StyleSheet.create({
   keyText: {
     fontSize: 26,
     fontWeight: '600',
+  },
+  retryButton: {
+    minHeight: 48,
+    minWidth: 144,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 32,
+    paddingHorizontal: 24,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

@@ -83,7 +83,11 @@ export function validateTransactionRequiredFields(params: {
   const amountValidation = validateAmount(params.amount);
   if (!amountValidation.isValid) return amountValidation;
 
-  if (!params.date || !parseLocalDate(params.date)) {
+  if (
+    !params.date ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(params.date) ||
+    !parseLocalDate(params.date)
+  ) {
     return { isValid: false, error: 'Enter a valid calendar date in YYYY-MM-DD format.' };
   }
 

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 let SecureStore: typeof import('expo-secure-store') | null = null;
 try {
@@ -14,6 +15,8 @@ import { getSetting, setSetting } from '../database/repositories/settingsReposit
 const SECURE_PIN_HASH_KEY = 'vaelth_security_pin_hash';
 const LEGACY_PIN_SALT = 'vaelth_salt_sec_v1_';
 const PBKDF2_ITERATIONS = 10000;
+const SECURITY_CONFIG_ERROR =
+  'Unable to verify your security settings. Your data is staying locked. Check device storage and try again.';
 
 // In-memory fallback for environments where SecureStore is unavailable (e.g. unit tests or unlinked builds)
 const fallbackSecureMemory = new Map<string, string>();
@@ -280,18 +283,24 @@ async function isSecureStoreAvailable(): Promise<boolean> {
 }
 
 async function getSecureItem(key: string): Promise<string | null> {
+  const isTest = isTestEnvironment();
+  if (!SecureStore) {
+    if (isTest) return fallbackSecureMemory.get(key) ?? null;
+    throw new Error('Hardware-backed SecureStore is unavailable on this device.');
+  }
+
   const available = await isSecureStoreAvailable();
-  if (available && SecureStore) {
-    try {
-      return await SecureStore.getItemAsync(key);
-    } catch (e) {
-      if (!isTestEnvironment()) throw e;
-    }
+  if (!available) {
+    if (isTest) return fallbackSecureMemory.get(key) ?? null;
+    throw new Error('Hardware-backed SecureStore is unavailable on this device.');
   }
-  if (isTestEnvironment()) {
-    return fallbackSecureMemory.get(key) ?? null;
+
+  try {
+    return await SecureStore.getItemAsync(key);
+  } catch (e) {
+    if (isTest) return fallbackSecureMemory.get(key) ?? null;
+    throw e;
   }
-  return null;
 }
 
 async function setSecureItem(key: string, value: string): Promise<void> {
@@ -316,17 +325,32 @@ async function setSecureItem(key: string, value: string): Promise<void> {
 }
 
 async function deleteSecureItem(key: string): Promise<void> {
-  const available = await isSecureStoreAvailable();
-  if (available && SecureStore) {
-    try {
-      await SecureStore.deleteItemAsync(key);
+  const isTest = isTestEnvironment();
+  if (!SecureStore) {
+    if (isTest) {
+      fallbackSecureMemory.delete(key);
       return;
-    } catch (e) {
-      if (!isTestEnvironment()) throw e;
     }
+    throw new Error('Hardware-backed SecureStore is unavailable; PIN could not be disabled.');
   }
-  if (isTestEnvironment()) {
-    fallbackSecureMemory.delete(key);
+
+  const available = await isSecureStoreAvailable();
+  if (!available) {
+    if (isTest) {
+      fallbackSecureMemory.delete(key);
+      return;
+    }
+    throw new Error('Hardware-backed SecureStore is unavailable; PIN could not be disabled.');
+  }
+
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch (e) {
+    if (isTest) {
+      fallbackSecureMemory.delete(key);
+      return;
+    }
+    throw new Error('Failed to remove the PIN from hardware-backed keystore.');
   }
 }
 
@@ -335,6 +359,7 @@ interface SecurityState {
   isBiometricEnabled: boolean;
   isLocked: boolean;
   hasCheckedAuth: boolean;
+  securityConfigError: string | null;
   failedAttempts: number;
   lockoutUntil: number | null;
   getRemainingLockoutSeconds: () => number;
@@ -353,6 +378,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   isBiometricEnabled: false,
   isLocked: false,
   hasCheckedAuth: false,
+  securityConfigError: null,
   failedAttempts: 0,
   lockoutUntil: null,
 
@@ -368,6 +394,8 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   checkSecurityConfig: async () => {
+    const previouslyHadPin = get().isPinEnabled;
+    set({ hasCheckedAuth: false, isLocked: true, securityConfigError: null });
     try {
       // 1. Check for legacy raw PIN in SQLite app_settings to migrate
       const legacyRawPin = await getSetting('security_pin');
@@ -379,8 +407,27 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         await setSetting('security_pin', '');
       }
 
+      // Expo SecureStore has no web implementation. Keep web usable when no
+      // PIN was configured there; PIN protection remains available on native.
+      if (Platform.OS === 'web' && !(await isSecureStoreAvailable())) {
+        if (previouslyHadPin) {
+          throw new Error(SECURITY_CONFIG_ERROR);
+        }
+        set({
+          isPinEnabled: false,
+          isBiometricEnabled: false,
+          isLocked: false,
+          hasCheckedAuth: true,
+          securityConfigError: null,
+        });
+        return;
+      }
+
       // 2. Read PIN status strictly from SecureStore
       const savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
+      if (!savedHash && previouslyHadPin) {
+        throw new Error(SECURITY_CONFIG_ERROR);
+      }
       const isPinEnabled = Boolean(savedHash);
 
       // 3. Biometric preference from app_settings
@@ -392,9 +439,10 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         isBiometricEnabled,
         isLocked: isPinEnabled,
         hasCheckedAuth: true,
+        securityConfigError: null,
       });
     } catch {
-      set({ hasCheckedAuth: true, isLocked: false });
+      set({ hasCheckedAuth: true, isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
     }
   },
 
@@ -418,6 +466,9 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   setBiometricEnabled: async (enabled: boolean) => {
+    if (enabled && !get().isPinEnabled) {
+      throw new Error('Set a PIN before enabling biometric unlock.');
+    }
     await setSetting('security_biometric', enabled ? 'true' : 'false');
     set({ isBiometricEnabled: enabled });
   },
@@ -429,8 +480,19 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     }
 
-    const savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
-    if (!savedHash) return false;
+    let savedHash: string | null;
+    try {
+      savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
+    } catch {
+      set({ isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
+      return false;
+    }
+    if (!savedHash) {
+      if (get().isPinEnabled) {
+        set({ isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
+      }
+      return false;
+    }
 
     let isMatch = false;
 
@@ -482,6 +544,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
 
   authenticateWithBiometrics: async () => {
     try {
+      if (!get().isBiometricEnabled || !get().isPinEnabled) return false;
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return false;

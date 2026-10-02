@@ -1,6 +1,6 @@
 import { getDatabase } from '../db';
 import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus } from '../../domain/finance/types';
-import { formatDateIso } from '../../utils/dateUtils';
+import { formatDateIso, parseLocalDate } from '../../utils/dateUtils';
 import { formatRupee } from '../../domain/finance/currency';
 import { generateEntityId } from '../../utils/idGenerator';
 import { deleteTransaction } from './transactionRepository';
@@ -482,6 +482,9 @@ export async function purchaseShoppingItem(params: {
   const db = await getDatabase();
   const now = new Date().toISOString();
   const txDate = purchaseDate || formatDateIso(new Date());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate) || !parseLocalDate(txDate)) {
+    throw new Error('Purchase date must be a valid calendar date in YYYY-MM-DD format.');
+  }
   const txId = generateUniqueId('tx');
 
   let updatedItem: ShoppingItem | null = null;
@@ -515,21 +518,21 @@ export async function purchaseShoppingItem(params: {
     }
 
     // 3. Verify source balance
-    // Calculate live balance for this account
+    // Validate against the account balance on the selected purchase date.
     const txCredits = await txn.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
        WHERE deletedAt IS NULL AND (
          (accountId = ? AND type IN ('INCOME', 'BORROW', 'REPAYMENT_RECEIVED', 'ASSET_SALE'))
          OR (destinationAccountId = ? AND type = 'TRANSFER')
-       );`,
-      [purchaseAccountId, purchaseAccountId]
+       ) AND date <= ?;`,
+      [purchaseAccountId, purchaseAccountId, txDate]
     );
     const txDebits = await txn.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
        WHERE deletedAt IS NULL AND accountId = ? AND type IN (
          'EXPENSE', 'LEND', 'REPAYMENT_MADE', 'TRANSFER', 'ASSET_PURCHASE'
-       );`,
-      [purchaseAccountId]
+       ) AND date <= ?;`,
+      [purchaseAccountId, txDate]
     );
 
     const currentBalance =

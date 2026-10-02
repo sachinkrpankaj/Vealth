@@ -134,17 +134,25 @@ const VALID_TRANSACTION_TYPES = new Set([
   'REPAYMENT_MADE',
   'ASSET_PURCHASE',
   'ASSET_SALE',
+  'OTHER',
 ]);
 const VALID_LIABILITY_TYPES = new Set(['PERSONAL_LOAN', 'CREDIT_CARD', 'BORROWED_MONEY', 'OTHER']);
 const VALID_CATEGORY_TYPES = new Set(['EXPENSE', 'INCOME']);
 
-function isValidCalendarDate(dateStr: any): boolean {
+function isValidCalendarDate(dateStr: any, allowDateTime = false): boolean {
   if (typeof dateStr !== 'string') return false;
-  const clean = dateStr.slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
-  const parsed = parseLocalDate(clean);
+  const dateOnly = allowDateTime ? dateStr.slice(0, 10) : dateStr;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) return false;
+  if (
+    allowDateTime &&
+    dateStr !== dateOnly &&
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/i.test(dateStr)
+  ) {
+    return false;
+  }
+  const parsed = parseLocalDate(dateOnly);
   if (!parsed) return false;
-  return formatDateIso(parsed) === clean;
+  return formatDateIso(parsed) === dateOnly && (dateStr === dateOnly || Number.isFinite(Date.parse(dateStr)));
 }
 
 export function validateBackupData(parsed: any): { isValid: boolean; error?: string } {
@@ -343,7 +351,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
           (i.status !== 'PURCHASED' ||
             (validMoney(i.purchasePrice) &&
               i.purchasePrice > 0 &&
-              isValidCalendarDate(i.purchasedAt) &&
+              isValidCalendarDate(i.purchasedAt, true) &&
               validId(i.transactionId) &&
               transactionIds.has(i.transactionId) &&
               exists(i.purchaseAccountId, accountIds) &&

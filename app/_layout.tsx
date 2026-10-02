@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { LogBox, AppState } from 'react-native';
+import { LogBox, AppState, ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
@@ -28,6 +28,7 @@ import { useFonts } from 'expo-font';
 function RootStack() {
   const { colors, isDark } = useTheme();
   const checkSecurityConfig = useSecurityStore((state) => state.checkSecurityConfig);
+  const hasCheckedAuth = useSecurityStore((state) => state.hasCheckedAuth);
   const setThemeMode = useThemeStore((state) => state.setThemeMode);
 
   useEffect(() => {
@@ -56,6 +57,15 @@ function RootStack() {
 
     checkSecurityConfig().catch((e) => console.error('Failed to check security:', e));
   }, []);
+
+  // Do not mount financial screens until the secure PIN state has been checked.
+  if (!hasCheckedAuth) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
 
   const modalScreenOptions = {
     presentation: 'modal' as const,

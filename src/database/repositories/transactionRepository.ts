@@ -1,6 +1,7 @@
 import { getDatabase } from '../db';
 import { Transaction, TransactionType } from '../../domain/finance/types';
 import { getTodayLocalDateString } from '../../utils/dateUtils';
+import { validateTransactionRequiredFields } from '../../domain/finance/validator';
 
 interface TransactionRow {
   id: string;
@@ -193,6 +194,7 @@ const VALID_TRANSACTION_TYPES = new Set<TransactionType>([
   'REPAYMENT_MADE',
   'ASSET_PURCHASE',
   'ASSET_SALE',
+  'OTHER',
 ]);
 
 export async function createTransaction(
@@ -205,8 +207,17 @@ export async function createTransaction(
   if (!Number.isFinite(tx.amount) || !Number.isSafeInteger(tx.amount) || tx.amount <= 0) {
     throw new Error('Transaction amount must be a positive safe integer in paise.');
   }
-  if (!tx.date || !/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) {
-    throw new Error('Transaction date must be a valid calendar date in YYYY-MM-DD format.');
+  const requiredFields = validateTransactionRequiredFields({
+    type: tx.type,
+    amount: tx.amount,
+    date: tx.date,
+    accountId: tx.accountId,
+    destinationAccountId: tx.destinationAccountId,
+    personId: tx.personId,
+    assetId: tx.assetId,
+  });
+  if (!requiredFields.isValid) {
+    throw new Error(requiredFields.error || 'Transaction is missing required fields.');
   }
 
   const db = await getDatabase();
@@ -266,8 +277,8 @@ export async function createTransaction(
 
       if (tx.type === 'REPAYMENT_RECEIVED' || tx.type === 'REPAYMENT_MADE') {
         const activeTx = await txn.getAllAsync<TransactionRow>(
-          'SELECT * FROM transactions WHERE personId = ? AND deletedAt IS NULL;',
-          [tx.personId]
+          'SELECT * FROM transactions WHERE personId = ? AND deletedAt IS NULL AND date <= ?;',
+          [tx.personId, tx.date]
         );
         let debtBalance = 0;
         for (const t of activeTx) {
@@ -375,9 +386,6 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
 
     const now = new Date().toISOString();
     const effectiveDate = updates.date || current.date || getTodayLocalDateString();
-    if (updates.date && !/^\d{4}-\d{2}-\d{2}$/.test(updates.date)) {
-      throw new Error('Transaction date must be a valid calendar date in YYYY-MM-DD format.');
-    }
     const updated: Transaction = {
       ...mapRowToTransaction(current),
       ...updates,
@@ -390,6 +398,42 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
     }
     if (!Number.isFinite(updated.amount) || !Number.isSafeInteger(updated.amount) || updated.amount <= 0) {
       throw new Error('Transaction amount must be a positive safe integer in paise.');
+    }
+
+    const requiredFields = validateTransactionRequiredFields({
+      type: updated.type,
+      amount: updated.amount,
+      date: updated.date,
+      accountId: updated.accountId,
+      destinationAccountId: updated.destinationAccountId,
+      personId: updated.personId,
+      assetId: updated.assetId,
+    });
+    if (!requiredFields.isValid) {
+      throw new Error(requiredFields.error || 'Transaction is missing required fields.');
+    }
+
+    if (updated.type === 'REPAYMENT_RECEIVED' || updated.type === 'REPAYMENT_MADE') {
+      if (!updated.personId) {
+        throw new Error(`${updated.type} requires a valid personId.`);
+      }
+      const outstandingTransactions = await txn.getAllAsync<{ type: string; amount: number }>(
+        `SELECT type, amount FROM transactions
+         WHERE personId = ? AND deletedAt IS NULL AND id <> ? AND date <= ?;`,
+        [updated.personId, id, updated.date]
+      );
+      const debtType = updated.type === 'REPAYMENT_RECEIVED' ? 'LEND' : 'BORROW';
+      let outstanding = 0;
+      for (const existingTx of outstandingTransactions) {
+        if (existingTx.type === debtType) outstanding += existingTx.amount;
+        else if (existingTx.type === updated.type) outstanding -= existingTx.amount;
+      }
+      if (outstanding <= 0) {
+        throw new Error('There is no outstanding balance recorded to repay.');
+      }
+      if (updated.amount > outstanding) {
+        throw new Error(`Repayment amount exceeds outstanding balance of ${outstanding}.`);
+      }
     }
 
     // Asset effect handling:

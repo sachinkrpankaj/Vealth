@@ -33,12 +33,16 @@ export default function SecuritySettingsScreen() {
       return;
     }
 
-    await setPin(newPin);
-    setShowSetup(false);
-    setNewPin('');
-    setConfirmPin('');
-    setError(null);
-    Alert.alert('Success', 'Security PIN has been set.');
+    try {
+      await setPin(newPin);
+      setShowSetup(false);
+      setNewPin('');
+      setConfirmPin('');
+      setError(null);
+      Alert.alert('Success', 'Security PIN has been set.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save the PIN securely.');
+    }
   };
 
   const handleDisablePin = () => {
@@ -51,8 +55,15 @@ export default function SecuritySettingsScreen() {
           text: 'Disable',
           style: 'destructive',
           onPress: async () => {
-            await setPin(null);
-            await setBiometricEnabled(false);
+            try {
+              await setPin(null);
+              await setBiometricEnabled(false);
+            } catch (err) {
+              Alert.alert(
+                'Security Error',
+                err instanceof Error ? err.message : 'Failed to disable the PIN securely.'
+              );
+            }
           },
         },
       ]
@@ -216,7 +227,16 @@ export default function SecuritySettingsScreen() {
 
           <Switch
             value={isBiometricEnabled}
-            onValueChange={setBiometricEnabled}
+            onValueChange={async (enabled) => {
+              try {
+                await setBiometricEnabled(enabled);
+              } catch (err) {
+                Alert.alert(
+                  'Security Error',
+                  err instanceof Error ? err.message : 'Failed to update biometric settings.'
+                );
+              }
+            }}
             disabled={!isPinEnabled}
             trackColor={{ false: colors.surfaceSubtle, true: colors.accent }}
           />
