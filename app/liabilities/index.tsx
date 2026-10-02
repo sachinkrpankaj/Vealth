@@ -26,7 +26,7 @@ import { updateLiability, deleteLiability, archiveLiability } from '../../src/da
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
-import { Modal, TextInput, Alert } from 'react-native';
+import { Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Trash2, Edit2, X } from 'lucide-react-native';
 
 export default function LiabilitiesListScreen() {
@@ -215,7 +215,10 @@ export default function LiabilitiesListScreen() {
         animationType="fade"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Manage Liability</Text>
@@ -288,7 +291,7 @@ export default function LiabilitiesListScreen() {
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenContainer>
   );

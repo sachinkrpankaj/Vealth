@@ -30,7 +30,7 @@ import { updateAsset, deleteAsset, archiveAsset } from '../../src/database/repos
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
-import { Modal, TextInput, Alert } from 'react-native';
+import { Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { Trash2, Edit2, X, Archive } from 'lucide-react-native';
 
 export default function AssetsListScreen() {
@@ -217,7 +217,10 @@ export default function AssetsListScreen() {
         animationType="fade"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Manage Asset</Text>
@@ -290,7 +293,7 @@ export default function AssetsListScreen() {
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenContainer>
   );

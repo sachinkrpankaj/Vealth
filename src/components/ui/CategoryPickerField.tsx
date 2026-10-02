@@ -8,7 +8,10 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import {
   Tag,
   Plus,
@@ -271,7 +274,10 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
 
       {/* Main Selection Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
           <Pressable style={styles.modalBackdrop} onPress={() => setModalVisible(false)} />
           <View
             style={[
@@ -467,12 +473,15 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               </View>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Create / Edit Category Modal */}
       <Modal visible={isManaging} animationType="fade" transparent>
-        <View style={styles.createModalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.createModalOverlay}
+        >
           <View
             style={[
               styles.createModalCard,
@@ -593,7 +602,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               </View>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

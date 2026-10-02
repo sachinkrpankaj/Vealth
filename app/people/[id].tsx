@@ -33,6 +33,7 @@ import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { KeyboardAwareScrollView } from '../../src/components/ui/KeyboardAwareScrollView';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -372,7 +373,7 @@ export default function PersonDetailScreen() {
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
           style={styles.modalBackdrop}
         >
           <View
@@ -397,10 +398,11 @@ export default function PersonDetailScreen() {
               </LiquidGlassCard>
             </View>
 
-            <ScrollView
+            <KeyboardAwareScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 24 }}
+              extraScrollHeight={100}
             >
               {/* Avatar Preview */}
               <View style={styles.modalAvatarRow}>
@@ -553,7 +555,7 @@ export default function PersonDetailScreen() {
                 loading={isSavingEdit}
                 disabled={!editName.trim() || isSavingEdit}
               />
-            </ScrollView>
+            </KeyboardAwareScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

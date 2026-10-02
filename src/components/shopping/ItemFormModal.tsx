@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +13,7 @@ import { X, AlertCircle } from 'lucide-react-native';
 import { ShoppingItem } from '../../domain/finance/types';
 import { AmountInput } from '../ui/AmountInput';
 import { PrimaryButton } from '../ui/PrimaryButton';
+import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { useTheme } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -115,7 +115,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.modalOverlay}
       >
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
@@ -127,7 +127,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
               backgroundColor: colors.surfaceElevated || colors.surface,
               borderTopLeftRadius: radii.xl,
               borderTopRightRadius: radii.xl,
-              paddingBottom: Math.max(insets.bottom, 20),
+              paddingBottom: Math.max(insets.bottom, 16),
             },
           ]}
         >
@@ -156,10 +156,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           </View>
 
           {/* Form Scroll Area */}
-          <ScrollView
+          <KeyboardAwareScrollView
             style={styles.scrollArea}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            extraScrollHeight={100}
           >
             {/* Product Name */}
             <Text
@@ -287,7 +288,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             ) : null}
 
             <View style={{ height: 16 }} />
-          </ScrollView>
+          </KeyboardAwareScrollView>
 
           {/* Bottom Pinned Action CTA */}
           <View style={styles.actionsContainer}>
@@ -318,7 +319,7 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 20,
     elevation: 20,
     zIndex: 1,
     shadowColor: '#000',

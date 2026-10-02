@@ -8,6 +8,7 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import Svg, {
   Defs,
@@ -218,7 +219,10 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalBackdrop}
+        >
           <LiquidGlassCard
             radius={28}
             padding={20}
@@ -398,7 +402,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               <Text style={styles.confirmBtnText}>Apply Color</Text>
             </LiquidGlassCard>
           </LiquidGlassCard>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

@@ -5,8 +5,6 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  ScrollView,
-  Alert,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +16,7 @@ import { AmountInput } from './AmountInput';
 import { DatePickerField } from './DatePickerField';
 import { PrimaryButton } from './PrimaryButton';
 import { LiquidGlassCard } from './LiquidGlassCard';
+import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { createTransaction } from '../../database/repositories/transactionRepository';
 import { formatRupee } from '../../domain/finance/currency';
 import { formatDateIso } from '../../utils/dateUtils';
@@ -206,7 +205,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       onRequestClose={() => handleSmoothClose()}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={styles.modalOverlay}
       >
         <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
@@ -254,197 +253,198 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
               </LiquidGlassCard>
             </View>
 
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 16 }}
-          >
-            {/* Unpaid Bill summary pill */}
-            <View
-              style={[
-                styles.summaryBox,
-                {
-                  backgroundColor: isDark ? 'rgba(212, 163, 115, 0.12)' : 'rgba(212, 163, 115, 0.08)',
-                  borderColor: colors.gold + '40',
-                  borderRadius: radii.lg,
-                },
-              ]}
+            <KeyboardAwareScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 16 }}
+              extraScrollHeight={100}
             >
-              <View style={styles.summaryRow}>
-                <CreditCardIcon size={20} color={colors.gold} />
-                <Text
-                  style={[
-                    styles.summaryLabel,
-                    { color: colors.textSecondary, fontFamily: typography.fontFamilies.medium },
-                  ]}
-                >
-                  Unpaid Statement Bill:
-                </Text>
-              </View>
-              <Text
+              {/* Unpaid Bill summary pill */}
+              <View
                 style={[
-                  styles.summaryAmount,
-                  { color: colors.gold, fontFamily: typography.fontFamilies.extrabold },
+                  styles.summaryBox,
+                  {
+                    backgroundColor: isDark ? 'rgba(212, 163, 115, 0.12)' : 'rgba(212, 163, 115, 0.08)',
+                    borderColor: colors.gold + '40',
+                    borderRadius: radii.lg,
+                  },
                 ]}
               >
-                {formatRupee(unpaidBillAmount)}
-              </Text>
-            </View>
-
-            {/* 1. Payment Amount */}
-            <View style={{ marginTop: 14 }}>
-              <AmountInput
-                label="Amount to Pay"
-                value={paymentAmount}
-                onChangeAmount={(amt) => {
-                  setPaymentAmount(amt);
-                  if (amt > unpaidBillAmount) {
-                    setError(`Payment cannot exceed unpaid bill of ${formatRupee(unpaidBillAmount)}`);
-                  } else if (error) {
-                    setError(null);
-                  }
-                }}
-                placeholder="0.00"
-              />
-            </View>
-
-            {/* 2. When (Payment Date) - Opens Calendar Date Picker */}
-            <View style={{ marginTop: 14 }}>
-              <DatePickerField
-                label="Payment Date *"
-                value={paymentDate}
-                onChange={setPaymentDate}
-              />
-            </View>
-
-            {/* 3. By using which account he paid the bill (Strictly NO Cash accounts!) */}
-            <View style={{ marginTop: 16 }}>
-              <Text
-                style={[
-                  styles.fieldLabel,
-                  { color: colors.textSecondary, fontFamily: typography.fontFamilies.semibold },
-                ]}
-              >
-                Paid Using Account *
-              </Text>
-              <Text
-                style={[
-                  styles.fieldHelper,
-                  { color: colors.textMuted, fontFamily: typography.fontFamilies.regular },
-                ]}
-              >
-                Balance will be cut from this account (cash accounts excluded)
-              </Text>
-
-              {eligibleAccounts.length === 0 ? (
-                <View
-                  style={[
-                    styles.noBankWarning,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.negative + '40',
-                      borderRadius: radii.md,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.warningText, { color: colors.negative }]}>
-                    No bank accounts available. Please add a bank account first to pay credit card bills.
+                <View style={styles.summaryRow}>
+                  <CreditCardIcon size={20} color={colors.gold} />
+                  <Text
+                    style={[
+                      styles.summaryLabel,
+                      { color: colors.textSecondary, fontFamily: typography.fontFamilies.medium },
+                    ]}
+                  >
+                    Unpaid Statement Bill:
                   </Text>
                 </View>
-              ) : (
-                <View style={styles.accountsList}>
-                  {eligibleAccounts.map((acc) => {
-                    const isSelected = selectedAccountId === acc.id;
-                    const bal = accountBalances.get(acc.id) ?? acc.openingBalance;
-                    const Icon = getAccountIcon(acc.type);
+                <Text
+                  style={[
+                    styles.summaryAmount,
+                    { color: colors.gold, fontFamily: typography.fontFamilies.extrabold },
+                  ]}
+                >
+                  {formatRupee(unpaidBillAmount)}
+                </Text>
+              </View>
 
-                    return (
-                      <LiquidGlassCard
-                        key={acc.id}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-                          setSelectedAccountId(acc.id);
-                          if (error) setError(null);
-                        }}
-                        accessibilityLabel={`Pay using ${acc.name}`}
-                        accessibilityState={{ selected: isSelected }}
-                        radius={radii.md} padding={0}
-                        style={[styles.accountOption, isSelected && { borderColor: colors.gold, borderWidth: 2 }]}
-                      >
-                        <View
-                          style={[
-                            styles.accIconWrap,
-                            {
-                              backgroundColor: acc.color ? `${acc.color}20` : colors.surfaceSubtle,
-                              borderRadius: radii.sm,
-                            },
-                          ]}
+              {/* 1. Payment Amount */}
+              <View style={{ marginTop: 14 }}>
+                <AmountInput
+                  label="Amount to Pay"
+                  value={paymentAmount}
+                  onChangeAmount={(amt) => {
+                    setPaymentAmount(amt);
+                    if (amt > unpaidBillAmount) {
+                      setError(`Payment cannot exceed unpaid bill of ${formatRupee(unpaidBillAmount)}`);
+                    } else if (error) {
+                      setError(null);
+                    }
+                  }}
+                  placeholder="0.00"
+                />
+              </View>
+
+              {/* 2. When (Payment Date) - Opens Calendar Date Picker */}
+              <View style={{ marginTop: 14 }}>
+                <DatePickerField
+                  label="Payment Date *"
+                  value={paymentDate}
+                  onChange={setPaymentDate}
+                />
+              </View>
+
+              {/* 3. By using which account he paid the bill (Strictly NO Cash accounts!) */}
+              <View style={{ marginTop: 16 }}>
+                <Text
+                  style={[
+                    styles.fieldLabel,
+                    { color: colors.textSecondary, fontFamily: typography.fontFamilies.semibold },
+                  ]}
+                >
+                  Paid Using Account *
+                </Text>
+                <Text
+                  style={[
+                    styles.fieldHelper,
+                    { color: colors.textMuted, fontFamily: typography.fontFamilies.regular },
+                  ]}
+                >
+                  Balance will be cut from this account (cash accounts excluded)
+                </Text>
+
+                {eligibleAccounts.length === 0 ? (
+                  <View
+                    style={[
+                      styles.noBankWarning,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.negative + '40',
+                        borderRadius: radii.md,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.warningText, { color: colors.negative }]}>
+                      No bank accounts available. Please add a bank account first to pay credit card bills.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.accountsList}>
+                    {eligibleAccounts.map((acc) => {
+                      const isSelected = selectedAccountId === acc.id;
+                      const bal = accountBalances.get(acc.id) ?? acc.openingBalance;
+                      const Icon = getAccountIcon(acc.type);
+
+                      return (
+                        <LiquidGlassCard
+                          key={acc.id}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                            setSelectedAccountId(acc.id);
+                            if (error) setError(null);
+                          }}
+                          accessibilityLabel={`Pay using ${acc.name}`}
+                          accessibilityState={{ selected: isSelected }}
+                          radius={radii.md} padding={0}
+                          style={[styles.accountOption, isSelected && { borderColor: colors.gold, borderWidth: 2 }]}
                         >
-                          <Icon size={18} color={acc.color || colors.textPrimary} />
-                        </View>
-
-                        <View style={{ flex: 1, marginHorizontal: 10 }}>
-                          <Text
-                            style={[
-                              styles.accName,
-                              {
-                                color: colors.textPrimary,
-                                fontFamily: typography.fontFamilies.semibold,
-                              },
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {acc.name}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.accBalance,
-                              {
-                                color: bal < 0 ? colors.negative : colors.textMuted,
-                                fontFamily: typography.fontFamilies.medium,
-                              },
-                            ]}
-                          >
-                            Available: {formatRupee(bal)}
-                          </Text>
-                        </View>
-
-                        {isSelected && (
                           <View
                             style={[
-                              styles.checkCircle,
-                              { backgroundColor: colors.gold, borderRadius: radii.full },
+                              styles.accIconWrap,
+                              {
+                                backgroundColor: acc.color ? `${acc.color}20` : colors.surfaceSubtle,
+                                borderRadius: radii.sm,
+                              },
                             ]}
                           >
-                            <Check size={12} color="#000" strokeWidth={3} />
+                            <Icon size={18} color={acc.color || colors.textPrimary} />
                           </View>
-                        )}
-                      </LiquidGlassCard>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
 
-            {error ? (
-              <Text style={[styles.errorText, { color: colors.negative }]}>{error}</Text>
-            ) : null}
-          </ScrollView>
+                          <View style={{ flex: 1, marginHorizontal: 10 }}>
+                            <Text
+                              style={[
+                                styles.accName,
+                                {
+                                  color: colors.textPrimary,
+                                  fontFamily: typography.fontFamilies.semibold,
+                                },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {acc.name}
+                            </Text>
+                            <Text
+                              style={[
+                                styles.accBalance,
+                                {
+                                  color: bal < 0 ? colors.negative : colors.textMuted,
+                                  fontFamily: typography.fontFamilies.medium,
+                                },
+                              ]}
+                            >
+                              Available: {formatRupee(bal)}
+                            </Text>
+                          </View>
 
-          {/* Confirm Button */}
-          <PrimaryButton
-            title="Confirm & Deduct Bill"
-            onPress={handleConfirm}
-            loading={isSubmitting}
-            disabled={
-              !eligibleAccounts.some((account) => account.id === selectedAccountId) ||
-              paymentAmount <= 0 ||
-              paymentAmount > unpaidBillAmount ||
-              isSubmitting
-            }
-            style={{ marginTop: 12 }}
-          />
-        </LiquidGlassCard>
+                          {isSelected && (
+                            <View
+                              style={[
+                                styles.checkCircle,
+                                { backgroundColor: colors.gold, borderRadius: radii.full },
+                              ]}
+                            >
+                              <Check size={12} color="#000" strokeWidth={3} />
+                            </View>
+                          )}
+                        </LiquidGlassCard>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {error ? (
+                <Text style={[styles.errorText, { color: colors.negative }]}>{error}</Text>
+              ) : null}
+            </KeyboardAwareScrollView>
+
+            {/* Confirm Button */}
+            <PrimaryButton
+              title="Confirm & Deduct Bill"
+              onPress={handleConfirm}
+              loading={isSubmitting}
+              disabled={
+                !eligibleAccounts.some((account) => account.id === selectedAccountId) ||
+                paymentAmount <= 0 ||
+                paymentAmount > unpaidBillAmount ||
+                isSubmitting
+              }
+              style={{ marginTop: 12 }}
+            />
+          </LiquidGlassCard>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>

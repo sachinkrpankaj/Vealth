@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  ScrollView,
   StyleProp,
   ViewStyle,
   StatusBar,
@@ -12,6 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 import { AppBackground } from './AppBackground';
+import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 
 interface ScreenContainerProps {
   children: React.ReactNode;
@@ -21,6 +21,7 @@ interface ScreenContainerProps {
   withTopInset?: boolean;
   withBottomInset?: boolean;
   hasTabBar?: boolean;
+  extraScrollHeight?: number;
 }
 
 export const ScreenContainer: React.FC<ScreenContainerProps> = ({
@@ -31,6 +32,7 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   withTopInset = true,
   withBottomInset = true,
   hasTabBar = false,
+  extraScrollHeight = 100,
 }) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -68,7 +70,7 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
         style={styles.keyboardView}
       >
         {scrollable ? (
-          <ScrollView
+          <KeyboardAwareScrollView
             style={[styles.scroll, style]}
             contentContainerStyle={[
               styles.content,
@@ -77,9 +79,10 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            extraScrollHeight={extraScrollHeight}
           >
             {children}
-          </ScrollView>
+          </KeyboardAwareScrollView>
         ) : (
           <View
             style={[

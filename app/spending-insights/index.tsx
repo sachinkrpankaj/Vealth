@@ -9,7 +9,10 @@ import {
   Modal,
   TextInput,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { KeyboardAwareScrollView } from '../../src/components/ui/KeyboardAwareScrollView';
 import { router, useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
@@ -901,7 +904,10 @@ export default function SpendingInsightsScreen() {
 
       {/* Category Manager Modal */}
       <Modal visible={managerVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          style={styles.modalOverlay}
+        >
           <Pressable style={styles.modalBackdrop} onPress={() => setManagerVisible(false)} />
           <View
             style={[
@@ -983,7 +989,7 @@ export default function SpendingInsightsScreen() {
             </View>
 
             {/* Category List */}
-            <ScrollView style={{ marginTop: 14 }} showsVerticalScrollIndicator={false}>
+            <KeyboardAwareScrollView style={{ marginTop: 14 }} showsVerticalScrollIndicator={false} extraScrollHeight={100}>
               <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
                 CUSTOM & GENERAL CATEGORIES
               </Text>
@@ -1049,9 +1055,9 @@ export default function SpendingInsightsScreen() {
                   </View>
                 );
               })}
-            </ScrollView>
+            </KeyboardAwareScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenContainer>
   );

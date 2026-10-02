@@ -29,7 +29,7 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
       tone={variant === 'primary' ? 'emphasized' : variant}
       radius={radii.md}
       padding={0}
-      style={style}
+      style={[{ minHeight: 48 }, style]}
       contentStyle={[styles.button, { paddingVertical: spacing.md - 2, paddingHorizontal: spacing.lg }]}
     >
       {loading ? <ActivityIndicator size="small" color={textColor} /> : (
