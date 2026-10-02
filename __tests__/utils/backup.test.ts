@@ -223,5 +223,95 @@ describe('Backup & Restore Integrity Engine', () => {
       };
       expect(validateBackupData(danglingListBackup).isValid).toBe(false);
     });
+
+    it('strictly rejects unsupported account type enums like SAVINGS, WALLET, LOAN, MORTGAGE', () => {
+      const unsupportedAccountBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          accounts: [
+            {
+              id: 'acc-unsupported',
+              name: 'My Savings',
+              type: 'SAVINGS' as any,
+              openingBalance: 100000,
+              currency: 'INR',
+              isArchived: false,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            },
+          ],
+        },
+      };
+      const res = validateBackupData(unsupportedAccountBackup);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe('Backup contains invalid financial records or unsupported enum types.');
+
+      const unsupportedWalletBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          accounts: [
+            {
+              id: 'acc-unsupported-2',
+              name: 'My Wallet',
+              type: 'WALLET' as any,
+              openingBalance: 100000,
+              currency: 'INR',
+              isArchived: false,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            },
+          ],
+        },
+      };
+      expect(validateBackupData(unsupportedWalletBackup).isValid).toBe(false);
+    });
+
+    it('strictly rejects unsupported liability type enums like MORTGAGE and LOAN', () => {
+      const unsupportedLiabilityBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          liabilities: [
+            {
+              id: 'lib-unsupported',
+              name: 'Home Loan',
+              amount: 500000000,
+              type: 'MORTGAGE' as any,
+              isArchived: false,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-01-01',
+            },
+          ],
+        },
+      };
+      const res = validateBackupData(unsupportedLiabilityBackup);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe('Backup contains invalid financial records or unsupported enum types.');
+    });
+
+    it('strictly rejects non-existent calendar dates like 2026-02-31', () => {
+      const invalidDateBackup = {
+        ...validSampleBackup,
+        data: {
+          ...validSampleBackup.data,
+          transactions: [
+            {
+              id: 'tx-bad-date',
+              type: 'EXPENSE',
+              amount: 100000,
+              date: '2026-02-31', // February 31 does not exist!
+              accountId: 'acc-1',
+              createdAt: '2026-02-01',
+              updatedAt: '2026-02-01',
+            },
+          ],
+        },
+      };
+      const res = validateBackupData(invalidDateBackup);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toBe('Backup contains invalid financial records or unsupported enum types.');
+    });
   });
 });

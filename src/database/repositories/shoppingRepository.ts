@@ -2,6 +2,8 @@ import { getDatabase } from '../db';
 import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus } from '../../domain/finance/types';
 import { formatDateIso } from '../../utils/dateUtils';
 import { formatRupee } from '../../domain/finance/currency';
+import { generateEntityId } from '../../utils/idGenerator';
+import { deleteTransaction } from './transactionRepository';
 
 interface ShoppingListRow {
   id: string;
@@ -29,13 +31,7 @@ interface ShoppingItemRow {
 }
 
 function generateUniqueId(prefix: string): string {
-  try {
-    const Crypto = require('expo-crypto');
-    if (Crypto?.randomUUID) {
-      return `${prefix}-${Crypto.randomUUID()}`;
-    }
-  } catch {}
-  return `${prefix}-${Date.now()}-${Math.floor(100000 + Math.random() * 900000)}`;
+  return generateEntityId(prefix);
 }
 
 export function normalizeProductUrl(url?: string | null): string | null {
@@ -421,10 +417,31 @@ export async function restoreShoppingItem(id: string): Promise<void> {
   }
 
   const now = new Date().toISOString();
-  await db.runAsync(
-    `UPDATE shopping_items SET status = 'PENDING', updatedAt = ? WHERE id = ?;`,
-    [now, id]
-  );
+
+  if (current.status === 'PURCHASED') {
+    // Transactional reversal: soft-delete the linked financial transaction so financial state stays in sync
+    if (current.transactionId) {
+      await deleteTransaction(current.transactionId);
+    }
+    await db.runAsync(
+      `UPDATE shopping_items
+       SET status = 'PENDING',
+           purchasedAt = NULL,
+           purchasePrice = NULL,
+           purchaseAccountId = NULL,
+           transactionId = NULL,
+           categoryId = NULL,
+           updatedAt = ?
+       WHERE id = ?;`,
+      [now, id]
+    );
+  } else {
+    // Normal restore from DISCARDED
+    await db.runAsync(
+      `UPDATE shopping_items SET status = 'PENDING', updatedAt = ? WHERE id = ?;`,
+      [now, id]
+    );
+  }
 }
 
 export async function deleteShoppingItem(id: string): Promise<void> {

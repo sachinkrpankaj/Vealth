@@ -24,6 +24,12 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     await db.execAsync('ALTER TABLE categories ADD COLUMN monthYear TEXT;');
   } catch {}
   try {
+    await db.execAsync(`
+      UPDATE categories SET monthYear = substr(id, 13)
+      WHERE id LIKE 'cat-general-%' AND (monthYear IS NULL OR monthYear = '');
+    `);
+  } catch {}
+  try {
     await db.execAsync('ALTER TABLE categories ADD COLUMN color TEXT;');
   } catch {}
   try {
@@ -127,7 +133,7 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
           id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, metadata, createdAt, updatedAt, deletedAt
         )
         SELECT
-          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, NULL, createdAt, updatedAt, deletedAt
+          id, type, amount, date, accountId, destinationAccountId, personId, categoryId, assetId, liabilityId, note, dueDate, metadata, createdAt, updatedAt, deletedAt
         FROM transactions;
 
         DROP TABLE transactions;

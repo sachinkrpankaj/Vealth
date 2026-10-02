@@ -23,6 +23,7 @@ export interface DatePickerFieldProps {
   minDate?: string;
   maxDate?: string;
   includeFutureShortcuts?: boolean;
+  allowFutureDates?: boolean;
   style?: StyleProp<ViewStyle>;
   error?: string;
 }
@@ -37,6 +38,7 @@ export function DatePickerField({
   minDate,
   maxDate,
   includeFutureShortcuts = true,
+  allowFutureDates = true,
   style,
   error,
 }: DatePickerFieldProps) {
@@ -163,6 +165,7 @@ export function DatePickerField({
         allowClear={isClearable}
         onClear={() => onChange('')}
         includeFutureShortcuts={includeFutureShortcuts}
+        allowFutureDates={allowFutureDates}
       />
     </View>
   );

@@ -11,6 +11,7 @@ import { useTheme } from '../../src/theme';
 import { createAsset } from '../../src/database/repositories/assetRepository';
 import { AssetCategory } from '../../src/domain/finance/types';
 import { formatDateIso } from '../../src/utils/dateUtils';
+import { generateEntityId } from '../../src/utils/idGenerator';
 
 const ASSET_CATEGORIES: { cat: AssetCategory; label: string }[] = [
   { cat: 'GOLD', label: 'Gold & Jewelry' },
@@ -51,7 +52,7 @@ export default function AddAssetScreen() {
       setError(null);
 
       await createAsset({
-        id: `asset-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('asset'),
         name: name.trim(),
         category,
         currentValue,
@@ -153,6 +154,7 @@ export default function AddAssetScreen() {
         onChange={setPurchaseDate}
         placeholder="YYYY-MM-DD"
         includeFutureShortcuts={false}
+        allowFutureDates={false}
         style={{ marginTop: 12, marginBottom: 16 }}
       />
 

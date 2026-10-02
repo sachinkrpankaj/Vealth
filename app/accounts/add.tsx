@@ -10,6 +10,7 @@ import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../../src/theme';
 import { createAccount } from '../../src/database/repositories/accountRepository';
 import { AccountType } from '../../src/domain/finance/types';
+import { generateEntityId } from '../../src/utils/idGenerator';
 
 const ACCOUNT_TYPES: { type: AccountType; label: string }[] = [
   { type: 'BANK', label: 'Bank Account' },
@@ -68,7 +69,7 @@ export default function AddAccountScreen() {
       setError(null);
 
       await createAccount({
-        id: `acc-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('acc'),
         name: name.trim(),
         type,
         openingBalance: type === 'CREDIT_CARD' ? 0 : openingBalance,

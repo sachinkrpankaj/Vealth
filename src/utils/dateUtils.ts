@@ -59,6 +59,29 @@ export function getCurrentLocalYear(date: Date = new Date()): number {
 }
 
 /**
+ * Checks whether a YYYY-MM-DD dateStr violates minDate, maxDate, or allowFutureDates.
+ */
+export function isDateDisabled(
+  dateStr: string,
+  minDate?: string,
+  maxDate?: string,
+  allowFutureDates: boolean = true,
+  todayStr: string = getTodayLocalDateString()
+): boolean {
+  let effectiveMax = maxDate;
+  if (allowFutureDates === false) {
+    if (maxDate) {
+      effectiveMax = maxDate < todayStr ? maxDate : todayStr;
+    } else {
+      effectiveMax = todayStr;
+    }
+  }
+  if (minDate && dateStr < minDate) return true;
+  if (effectiveMax && dateStr > effectiveMax) return true;
+  return false;
+}
+
+/**
  * Safely parse a YYYY-MM-DD string into a local Date object.
  * Returns null if the string is empty or improperly formatted.
  */

@@ -10,6 +10,7 @@ import { DatePickerField } from '../../src/components/ui/DatePickerField';
 import { useTheme } from '../../src/theme';
 import { createLiability } from '../../src/database/repositories/liabilityRepository';
 import { LiabilityType } from '../../src/domain/finance/types';
+import { generateEntityId } from '../../src/utils/idGenerator';
 
 const LIABILITY_TYPES: { type: LiabilityType; label: string }[] = [
   { type: 'PERSONAL_LOAN', label: 'Personal Loan' },
@@ -45,7 +46,7 @@ export default function AddLiabilityScreen() {
       setError(null);
 
       await createLiability({
-        id: `liability-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('liability'),
         name: name.trim(),
         type,
         amount,

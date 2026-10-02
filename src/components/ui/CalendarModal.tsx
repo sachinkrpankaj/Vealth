@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,7 +31,10 @@ import {
   formatDisplayDate,
   parseDateIso,
   getQuickDateShortcuts,
+  isDateDisabled,
 } from '../../utils/dateUtils';
+
+export { isDateDisabled };
 
 export interface CalendarModalProps {
   visible: boolean;
@@ -44,6 +47,7 @@ export interface CalendarModalProps {
   allowClear?: boolean;
   onClear?: () => void;
   includeFutureShortcuts?: boolean;
+  allowFutureDates?: boolean;
 }
 
 export function CalendarModal({
@@ -57,12 +61,36 @@ export function CalendarModal({
   allowClear = false,
   onClear,
   includeFutureShortcuts = true,
+  allowFutureDates = true,
 }: CalendarModalProps) {
   const { colors, typography, radii, spacing, isDark } = useTheme();
 
+  const todayStr = useMemo(() => formatDateIso(new Date()), []);
+  const effectiveMaxDate = useMemo(() => {
+    if (allowFutureDates === false) {
+      if (maxDate) {
+        return maxDate < todayStr ? maxDate : todayStr;
+      }
+      return todayStr;
+    }
+    return maxDate;
+  }, [allowFutureDates, maxDate, todayStr]);
+
+  const effectiveMinDate = minDate;
+
+  const checkDateDisabled = useCallback(
+    (dateStr: string): boolean => {
+      return isDateDisabled(dateStr, effectiveMinDate, effectiveMaxDate, allowFutureDates, todayStr);
+    },
+    [effectiveMinDate, effectiveMaxDate, allowFutureDates, todayStr]
+  );
+
   // Selected date inside modal before confirmation
   const [tempSelectedDate, setTempSelectedDate] = useState<string>(() => {
-    return selectedDate || formatDateIso(new Date());
+    const initial = selectedDate || todayStr;
+    if (effectiveMaxDate && initial > effectiveMaxDate) return effectiveMaxDate;
+    if (effectiveMinDate && initial < effectiveMinDate) return effectiveMinDate;
+    return initial;
   });
 
   // Calendar month/year navigation state
@@ -82,7 +110,13 @@ export function CalendarModal({
   // Sync state when modal opens or selectedDate prop changes
   useEffect(() => {
     if (visible) {
-      const initial = selectedDate || formatDateIso(new Date());
+      let initial = selectedDate || todayStr;
+      if (effectiveMaxDate && initial > effectiveMaxDate) {
+        initial = effectiveMaxDate;
+      }
+      if (effectiveMinDate && initial < effectiveMinDate) {
+        initial = effectiveMinDate;
+      }
       setTempSelectedDate(initial);
       const parsed = parseDateIso(initial);
       if (parsed) {
@@ -91,7 +125,7 @@ export function CalendarModal({
       }
       setShowFastPicker(false);
     }
-  }, [visible, selectedDate]);
+  }, [visible, selectedDate, effectiveMinDate, effectiveMaxDate, todayStr]);
 
   // Generate calendar days matrix
   const daysMatrix = useMemo(() => {
@@ -100,8 +134,9 @@ export function CalendarModal({
 
   // Quick preset shortcuts
   const shortcuts = useMemo(() => {
-    return getQuickDateShortcuts(includeFutureShortcuts);
-  }, [includeFutureShortcuts]);
+    const raw = getQuickDateShortcuts(includeFutureShortcuts && allowFutureDates !== false);
+    return raw.filter((sc) => !isDateDisabled(sc.dateStr));
+  }, [includeFutureShortcuts, allowFutureDates, effectiveMinDate, effectiveMaxDate]);
 
   // Navigate to previous month
   const handlePrevMonth = () => {
@@ -127,6 +162,7 @@ export function CalendarModal({
 
   // Select a day cell
   const handleDayPress = (day: CalendarDay) => {
+    if (checkDateDisabled(day.dateStr)) return;
     Haptics.selectionAsync().catch(() => {});
     setTempSelectedDate(day.dateStr);
 
@@ -139,6 +175,7 @@ export function CalendarModal({
 
   // Apply a quick shortcut
   const handleShortcutPress = (dateStr: string) => {
+    if (checkDateDisabled(dateStr)) return;
     Haptics.selectionAsync().catch(() => {});
     setTempSelectedDate(dateStr);
     const parsed = parseDateIso(dateStr);
@@ -203,8 +240,11 @@ export function CalendarModal({
     });
   };
 
+  const isConfirmDisabled = !tempSelectedDate || checkDateDisabled(tempSelectedDate);
+
   // Confirm selection
   const handleConfirm = () => {
+    if (isConfirmDisabled) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     handleSmoothClose(() => {
       onSelectDate(tempSelectedDate);
@@ -448,24 +488,28 @@ export function CalendarModal({
               <View style={styles.daysGrid}>
                 {daysMatrix.map((day) => {
                   const isSelected = day.dateStr === tempSelectedDate;
+                  const isDisabled = checkDateDisabled(day.dateStr);
                   return (
                     <View key={day.dateStr} style={styles.dayCol}>
                       <Pressable
                         onPress={() => handleDayPress(day)}
+                        disabled={isDisabled}
+                        accessibilityState={{ disabled: isDisabled }}
                         style={({ pressed }) => [
                           styles.dayCell,
                           {
                             borderRadius: radii.md,
                             backgroundColor: isSelected
                               ? colors.accent
-                              : day.isToday
+                              : day.isToday && !isDisabled
                               ? colors.surfaceSubtle
                               : 'transparent',
-                            borderColor: day.isToday && !isSelected
+                            borderColor: day.isToday && !isSelected && !isDisabled
                               ? colors.accent
                               : 'transparent',
-                            borderWidth: day.isToday && !isSelected ? 1 : 0,
-                            transform: [{ scale: pressed ? 0.9 : isSelected ? 1.05 : 1 }],
+                            borderWidth: day.isToday && !isSelected && !isDisabled ? 1 : 0,
+                            opacity: isDisabled ? 0.25 : 1,
+                            transform: [{ scale: pressed && !isDisabled ? 0.9 : isSelected ? 1.05 : 1 }],
                           },
                         ]}
                       >
@@ -475,11 +519,13 @@ export function CalendarModal({
                             {
                               color: isSelected
                                 ? '#FFFFFF'
+                                : isDisabled
+                                ? colors.textMuted
                                 : day.isCurrentMonth
                                 ? colors.textPrimary
                                 : colors.textMuted,
-                              opacity: day.isCurrentMonth || isSelected ? 1 : 0.35,
-                              fontFamily: isSelected || day.isToday
+                              opacity: isDisabled ? 0.4 : day.isCurrentMonth || isSelected ? 1 : 0.35,
+                              fontFamily: isSelected || (day.isToday && !isDisabled)
                                 ? typography.fontFamilies.bold
                                 : typography.fontFamilies.medium,
                             },
@@ -487,7 +533,7 @@ export function CalendarModal({
                         >
                           {day.dayNumber}
                         </Text>
-                        {day.isToday && !isSelected && (
+                        {day.isToday && !isSelected && !isDisabled && (
                           <View
                             style={[
                               styles.todayDot,
@@ -583,7 +629,14 @@ export function CalendarModal({
                 </Text>
               </LiquidGlassCard>
 
-              <LiquidGlassCard onPress={handleConfirm} radius={radii.md} padding={0} tone="emphasized" style={styles.confirmBtn}>
+              <LiquidGlassCard
+                onPress={handleConfirm}
+                disabled={isConfirmDisabled}
+                radius={radii.md}
+                padding={0}
+                tone="emphasized"
+                style={[styles.confirmBtn, isConfirmDisabled && { opacity: 0.4 }]}
+              >
                 <Check size={16} color="#FFFFFF" strokeWidth={2.8} />
                 <Text
                   style={[

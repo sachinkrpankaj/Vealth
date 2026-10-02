@@ -15,7 +15,7 @@ import { getSettingsMap } from '../database/repositories/settingsRepository';
 import { getAllSnapshots, NetWorthSnapshotRecord } from '../database/repositories/snapshotRepository';
 import { getAllShoppingLists, getAllShoppingItems } from '../database/repositories/shoppingRepository';
 import { Account, Person, Category, Transaction, Asset, Liability, ShoppingList, ShoppingItem } from '../domain/finance/types';
-import { formatDateIso } from './dateUtils';
+import { formatDateIso, parseLocalDate } from './dateUtils';
 
 export interface VaelthBackupData {
   appName: 'Vaelth';
@@ -123,7 +123,7 @@ export async function exportBackupToFile(): Promise<string> {
   return fileUri;
 }
 
-const VALID_ACCOUNT_TYPES = new Set(['CASH', 'BANK', 'INVESTMENT', 'CREDIT_CARD', 'SAVINGS', 'WALLET', 'OTHER']);
+const VALID_ACCOUNT_TYPES = new Set(['CASH', 'BANK', 'CREDIT_CARD', 'INVESTMENT', 'OTHER']);
 const VALID_TRANSACTION_TYPES = new Set([
   'INCOME',
   'EXPENSE',
@@ -134,11 +134,18 @@ const VALID_TRANSACTION_TYPES = new Set([
   'REPAYMENT_MADE',
   'ASSET_PURCHASE',
   'ASSET_SALE',
-  'OTHER',
 ]);
-const VALID_LIABILITY_TYPES = new Set(['LOAN', 'CREDIT_CARD', 'MORTGAGE', 'OTHER']);
+const VALID_LIABILITY_TYPES = new Set(['PERSONAL_LOAN', 'CREDIT_CARD', 'BORROWED_MONEY', 'OTHER']);
 const VALID_CATEGORY_TYPES = new Set(['EXPENSE', 'INCOME']);
-const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidCalendarDate(dateStr: any): boolean {
+  if (typeof dateStr !== 'string') return false;
+  const clean = dateStr.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return false;
+  const parsed = parseLocalDate(clean);
+  if (!parsed) return false;
+  return formatDateIso(parsed) === clean;
+}
 
 export function validateBackupData(parsed: any): { isValid: boolean; error?: string } {
   if (!parsed || typeof parsed !== 'object') {
@@ -165,7 +172,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   }
 
   const validId = (value: any) => typeof value === 'string' && value.length > 0;
-  const validMoney = (value: any) => Number.isSafeInteger(value);
+  const validMoney = (value: any) => typeof value === 'number' && Number.isSafeInteger(value) && !isNaN(value);
   const validRecord = (record: any) =>
     record &&
     typeof record === 'object' &&
@@ -180,7 +187,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
       (a: any) =>
         validRecord(a) &&
         validMoney(a.openingBalance) &&
-        (a.creditLimit == null || validMoney(a.creditLimit)) &&
+        (a.creditLimit == null || (validMoney(a.creditLimit) && a.creditLimit >= 0)) &&
         validId(a.name) &&
         VALID_ACCOUNT_TYPES.has(a.type)
     ) ||
@@ -203,9 +210,10 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
         validId(a.name) &&
         validId(a.category) &&
         validMoney(a.currentValue) &&
+        a.currentValue >= 0 &&
         validMoney(a.purchaseValue) &&
-        typeof a.purchaseDate === 'string' &&
-        DATE_REGEX.test(a.purchaseDate.slice(0, 10))
+        a.purchaseValue >= 0 &&
+        isValidCalendarDate(a.purchaseDate)
     ) ||
     !data.liabilities.every(
       (l: any) =>
@@ -213,16 +221,18 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
         validId(l.name) &&
         VALID_LIABILITY_TYPES.has(l.type) &&
         validMoney(l.amount) &&
-        (!l.dueDate || DATE_REGEX.test(l.dueDate.slice(0, 10)))
+        l.amount >= 0 &&
+        (!l.dueDate || isValidCalendarDate(l.dueDate))
     ) ||
     !data.transactions.every(
       (t: any) =>
         validRecord(t) &&
         VALID_TRANSACTION_TYPES.has(t.type) &&
         validId(t.date) &&
-        DATE_REGEX.test(t.date) &&
+        isValidCalendarDate(t.date) &&
         validMoney(t.amount) &&
-        t.amount > 0
+        t.amount > 0 &&
+        (!t.dueDate || isValidCalendarDate(t.dueDate))
     ) ||
     ![data.accounts, data.people, data.categories, data.assets, data.liabilities, data.transactions].every(
       hasUniqueIds
@@ -241,11 +251,12 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
           s &&
           typeof s === 'object' &&
           validId(s.id) &&
-          DATE_REGEX.test(s.date) &&
+          isValidCalendarDate(s.date) &&
           validMoney(s.netWorth) &&
           validMoney(s.totalAssets) &&
           validMoney(s.totalLiabilities)
-      )
+      ) ||
+      !hasUniqueIds(data.snapshots)
     ) {
       return { isValid: false, error: 'Backup contains corrupted net-worth snapshot records.' };
     }
@@ -283,7 +294,9 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   const categoryIds = ids(data.categories);
   const assetIds = ids(data.assets);
   const liabilityIds = ids(data.liabilities);
+  const transactionIds = ids(data.transactions);
   const exists = (id: any, known: Set<string>) => id == null || known.has(id);
+
   if (
     !data.liabilities.every((l: any) => exists(l.personId, personIds)) ||
     !data.transactions.every(
@@ -298,6 +311,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   ) {
     return { isValid: false, error: 'Backup contains missing financial references.' };
   }
+
   const VALID_SHOPPING_STATUSES = new Set(['PENDING', 'PURCHASED', 'DISCARDED']);
   if (data.shoppingLists) {
     if (
@@ -324,13 +338,20 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
           validId(i.listId) &&
           validId(i.name) &&
           VALID_SHOPPING_STATUSES.has(i.status) &&
-          (i.estimatedPrice == null || validMoney(i.estimatedPrice)) &&
-          (i.purchasePrice == null || validMoney(i.purchasePrice)) &&
-          (!data.shoppingLists || listIds.has(i.listId))
+          (i.estimatedPrice == null || (validMoney(i.estimatedPrice) && i.estimatedPrice > 0)) &&
+          (!data.shoppingLists || listIds.has(i.listId)) &&
+          (i.status !== 'PURCHASED' ||
+            (validMoney(i.purchasePrice) &&
+              i.purchasePrice > 0 &&
+              isValidCalendarDate(i.purchasedAt) &&
+              validId(i.transactionId) &&
+              transactionIds.has(i.transactionId) &&
+              exists(i.purchaseAccountId, accountIds) &&
+              exists(i.categoryId, categoryIds)))
       ) ||
       !hasUniqueIds(data.shoppingItems)
     ) {
-      return { isValid: false, error: 'Backup contains invalid shopping item records.' };
+      return { isValid: false, error: 'Backup contains invalid shopping item records or broken references.' };
     }
   }
 

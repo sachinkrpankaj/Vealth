@@ -114,11 +114,7 @@ export default function ProfileScreen() {
   const avatarLetter = (userName || 'V').charAt(0).toUpperCase();
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1 }}
-    >
-      <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 140 }}>
+    <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 140 }}>
         {/* 1. Header Row */}
         <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
           <LiquidGlassCard
@@ -713,7 +709,6 @@ export default function ProfileScreen() {
           </View>
         </LiquidGlassCard>
       </ScreenContainer>
-    </KeyboardAvoidingView>
   );
 }
 

@@ -159,7 +159,20 @@ export function calculateFinancialEffect(
       // Cash increases by sale amount.
       // Asset decreases by book value (or sale amount if book value not provided).
       // Net worth delta is capital gain/loss (sale amount - book value).
-      const bookValue = context?.assetBookValue !== undefined ? context.assetBookValue : amount;
+      let bookValue = amount;
+      if (tx.metadata) {
+        try {
+          const meta = typeof tx.metadata === 'string' ? JSON.parse(tx.metadata) : tx.metadata;
+          if (typeof meta.bookValueSold === 'number') {
+            bookValue = meta.bookValueSold;
+          } else if (typeof meta.assetValueDeducted === 'number') {
+            bookValue = meta.assetValueDeducted;
+          }
+        } catch {}
+      } else if (context?.assetBookValue !== undefined) {
+        bookValue = context.assetBookValue;
+      }
+
       const gainOrLoss = amount - bookValue;
       return {
         sourceAccountDelta: amount,

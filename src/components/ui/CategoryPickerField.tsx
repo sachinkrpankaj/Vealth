@@ -275,7 +275,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       {/* Main Selection Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdrop} onPress={() => setModalVisible(false)} />
@@ -479,7 +479,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       {/* Create / Edit Category Modal */}
       <Modal visible={isManaging} animationType="fade" transparent>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.createModalOverlay}
         >
           <View

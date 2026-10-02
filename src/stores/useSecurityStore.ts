@@ -266,43 +266,68 @@ export async function hashPin(pin: string, explicitSaltHex?: string): Promise<st
   return `pbkdf2:v1:${salt}:${iterations}:${derived}`;
 }
 
-async function getSecureItem(key: string): Promise<string | null> {
+function isTestEnvironment(): boolean {
+  return typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
+}
+
+async function isSecureStoreAvailable(): Promise<boolean> {
+  if (!SecureStore) return false;
   try {
-    if (SecureStore) {
-      const isAvail = await SecureStore.isAvailableAsync();
-      if (isAvail) {
-        return await SecureStore.getItemAsync(key);
-      }
+    return await SecureStore.isAvailableAsync();
+  } catch {
+    return false;
+  }
+}
+
+async function getSecureItem(key: string): Promise<string | null> {
+  const available = await isSecureStoreAvailable();
+  if (available && SecureStore) {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (e) {
+      if (!isTestEnvironment()) throw e;
     }
-  } catch {}
-  return fallbackSecureMemory.get(key) ?? null;
+  }
+  if (isTestEnvironment()) {
+    return fallbackSecureMemory.get(key) ?? null;
+  }
+  return null;
 }
 
 async function setSecureItem(key: string, value: string): Promise<void> {
-  try {
-    if (SecureStore) {
-      const isAvail = await SecureStore.isAvailableAsync();
-      if (isAvail) {
-        await SecureStore.setItemAsync(key, value, {
-          keychainAccessible: SecureStore.WHEN_UNLOCKED,
-        });
-        return;
+  const available = await isSecureStoreAvailable();
+  if (available && SecureStore) {
+    try {
+      await SecureStore.setItemAsync(key, value, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED,
+      });
+      return;
+    } catch (e) {
+      if (!isTestEnvironment()) {
+        throw new Error('Failed to persist security credentials to hardware-backed keystore.');
       }
     }
-  } catch {}
-  fallbackSecureMemory.set(key, value);
+  }
+  if (isTestEnvironment()) {
+    fallbackSecureMemory.set(key, value);
+    return;
+  }
+  throw new Error('Hardware-backed SecureStore is unavailable on this device. PIN could not be saved.');
 }
 
 async function deleteSecureItem(key: string): Promise<void> {
-  try {
-    if (SecureStore) {
-      const isAvail = await SecureStore.isAvailableAsync();
-      if (isAvail) {
-        await SecureStore.deleteItemAsync(key);
-      }
+  const available = await isSecureStoreAvailable();
+  if (available && SecureStore) {
+    try {
+      await SecureStore.deleteItemAsync(key);
+      return;
+    } catch (e) {
+      if (!isTestEnvironment()) throw e;
     }
-  } catch {}
-  fallbackSecureMemory.delete(key);
+  }
+  if (isTestEnvironment()) {
+    fallbackSecureMemory.delete(key);
+  }
 }
 
 interface SecurityState {

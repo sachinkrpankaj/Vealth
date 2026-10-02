@@ -20,6 +20,7 @@ import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { createTransaction } from '../../database/repositories/transactionRepository';
 import { formatRupee } from '../../domain/finance/currency';
 import { formatDateIso } from '../../utils/dateUtils';
+import { generateEntityId } from '../../utils/idGenerator';
 import * as Haptics from 'expo-haptics';
 
 interface PayCreditCardBillModalProps {
@@ -176,7 +177,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
 
       // Record TRANSFER from Bank to Credit Card
       await createTransaction({
-        id: `tx-bill-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('tx-bill'),
         type: 'TRANSFER',
         amount: Math.round(paymentAmount),
         date: paymentDate,
@@ -205,7 +206,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       onRequestClose={() => handleSmoothClose()}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
         <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>

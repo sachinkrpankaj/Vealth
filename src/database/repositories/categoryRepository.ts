@@ -78,18 +78,22 @@ export async function getCategoryById(id: string): Promise<Category | null> {
   return row ? mapRowToCategory(row) : null;
 }
 
+import { generateEntityId } from '../../utils/idGenerator';
+
 /**
  * Ensures the monthly fallback General category exists for the given date/month.
+ * Identified strictly by structured id and monthYear, never by display name matching.
  * Name pattern: "<Month> '<YY> · General" (e.g. "November '26 · General")
  */
 export async function ensureMonthlyGeneralCategory(date: Date = new Date()): Promise<Category> {
   const db = await getDatabase();
   const monthYear = getMonthYearKey(date);
   const generalName = formatMonthlyGeneralCategoryName(date);
+  const id = `cat-general-${monthYear}`;
 
   const existing = await db.getFirstAsync<CategoryRow>(
-    'SELECT * FROM categories WHERE type = ? AND (monthYear = ? OR name = ?);',
-    ['EXPENSE', monthYear, generalName]
+    'SELECT * FROM categories WHERE type = ? AND (id = ? OR monthYear = ?);',
+    ['EXPENSE', id, monthYear]
   );
 
   if (existing) {
@@ -101,7 +105,6 @@ export async function ensureMonthlyGeneralCategory(date: Date = new Date()): Pro
     return mapRowToCategory(existing);
   }
 
-  const id = `cat-general-${monthYear}`;
   const now = new Date().toISOString();
   await db.runAsync(
     `INSERT INTO categories (id, name, type, icon, color, isDefault, isArchived, monthYear, createdAt)
@@ -203,7 +206,7 @@ export async function createCategory(data: {
   monthYear?: string | null;
 }): Promise<Category> {
   const db = await getDatabase();
-  const id = data.id || `cat-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = data.id || generateEntityId('cat');
   const now = new Date().toISOString();
   const type = data.type || 'EXPENSE';
   const icon = data.icon || 'Folder';

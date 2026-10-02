@@ -56,11 +56,11 @@ export function useFinancialData(): FinancialDataState {
     try {
       setError(null);
       const [accs, ppl, txs, asts, libs, cats, storedName] = await Promise.all([
-        getAllAccounts(),
-        getAllPeople(),
+        getAllAccounts(true),
+        getAllPeople(true),
         getAllTransactions(),
-        getAllAssets(),
-        getAllLiabilities(),
+        getAllAssets(true),
+        getAllLiabilities(true),
         getAllCategories(true),
         getSetting('user_name'),
       ]);

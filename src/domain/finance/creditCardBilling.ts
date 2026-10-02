@@ -5,9 +5,9 @@ function getActiveTx(transactions: Transaction[]): Transaction[] {
   return transactions.filter((tx) => !tx.deletedAt);
 }
 
-function getCardBalance(account: Account, transactions: Transaction[]): number {
+function getCardBalance(account: Account, transactions: Transaction[], asOfDateStr?: string): number {
   let balance = Math.round(account.openingBalance ?? 0);
-  const activeTx = getActiveTx(transactions);
+  const activeTx = getActiveTx(transactions).filter((tx) => !asOfDateStr || tx.date <= asOfDateStr);
 
   for (const tx of activeTx) {
     const amount = Math.abs(Math.round(tx.amount));
@@ -94,15 +94,15 @@ export function getCreditCardBillingInfo(
   const billingDay = Math.min(31, Math.max(1, account.billingDay ?? 1));
   const dueDay = Math.min(31, Math.max(1, account.dueDay ?? 20));
 
-  // Current balance of card (starts at 0; expenses make it negative, payments positive)
-  const currentBalance = getCardBalance(account, transactions);
-  const usedAmount = Math.max(0, -currentBalance);
-  const remainingLimit = Math.max(0, creditLimit - usedAmount);
-
   const refYear = referenceDate.getFullYear();
   const refMonth = referenceDate.getMonth();
   const refDay = referenceDate.getDate();
   const refDateStr = toLocalIsoDate(refYear, refMonth, refDay);
+
+  // Current balance of card (starts at 0; expenses make it negative, payments positive)
+  const currentBalance = getCardBalance(account, transactions, refDateStr);
+  const usedAmount = Math.max(0, -currentBalance);
+  const remainingLimit = Math.max(0, creditLimit - usedAmount);
 
   // Billing days beyond the length of a month occur on its final day.
   let lastBillingYear = refYear;
@@ -166,8 +166,8 @@ export function getCreditCardBillingInfo(
     };
   }
 
-  // Active transactions
-  const activeTx = getActiveTx(transactions);
+  // Active transactions up to reference date
+  const activeTx = getActiveTx(transactions).filter((tx) => tx.date <= refDateStr);
 
   // Net debt incurred on or before lastBillingDate
   let billedBalance = Math.round(account.openingBalance ?? 0);

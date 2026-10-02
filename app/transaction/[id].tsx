@@ -192,7 +192,7 @@ export default function TransactionDetailScreen() {
     }
   };
 
-  if (isLoading || !transaction) {
+  if (isLoading) {
     return (
       <ScreenContainer>
         <View style={styles.center}>
@@ -202,12 +202,32 @@ export default function TransactionDetailScreen() {
     );
   }
 
+  if (!transaction) {
+    return (
+      <ScreenContainer>
+        <View style={styles.center}>
+          <Text style={{ color: colors.textMuted, marginBottom: 12 }}>Transaction not found or has been deleted.</Text>
+          <PrimaryButton title="Go Back" onPress={() => router.back()} />
+        </View>
+      </ScreenContainer>
+    );
+  }
+
+  let recordedBookValue: number | undefined;
+  if (transaction.metadata) {
+    try {
+      const meta = JSON.parse(transaction.metadata);
+      if (typeof meta.bookValueSold === 'number') recordedBookValue = meta.bookValueSold;
+      else if (typeof meta.assetValueDeducted === 'number') recordedBookValue = meta.assetValueDeducted;
+    } catch {}
+  }
+
   const effect = calculateFinancialEffect(transaction, {
     accountName: account?.name,
     destAccountName: destAccount?.name,
     personName: person?.name,
     assetName: asset?.name,
-    assetBookValue: asset?.currentValue,
+    assetBookValue: recordedBookValue ?? asset?.currentValue,
   });
 
   return (
@@ -264,6 +284,8 @@ export default function TransactionDetailScreen() {
               value={editDate}
               onChange={setEditDate}
               placeholder="YYYY-MM-DD"
+              includeFutureShortcuts={false}
+              allowFutureDates={false}
               style={{ marginBottom: 0 }}
             />
 

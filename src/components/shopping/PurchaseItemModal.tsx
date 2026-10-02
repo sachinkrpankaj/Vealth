@@ -133,7 +133,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
         <Pressable style={styles.modalBackdrop} onPress={onClose} />

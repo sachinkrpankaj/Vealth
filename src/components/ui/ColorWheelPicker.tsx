@@ -220,7 +220,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
         onRequestClose={() => setModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
           <LiquidGlassCard

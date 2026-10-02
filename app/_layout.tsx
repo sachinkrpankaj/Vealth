@@ -3,16 +3,16 @@ import { LogBox, AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
-// Silence LogBox warnings in runtime
-LogBox.ignoreAllLogs(true);
+// Ignore known benign third-party warnings without blinding critical issues
+LogBox.ignoreLogs([
+  'Non-serializable values were found in the navigation state',
+]);
 
-// Ensure sensitive data is not logged in production release builds
+// Strip debug verbose logs in production while preserving error observability
 if (!__DEV__) {
   console.log = () => {};
   console.info = () => {};
   console.debug = () => {};
-  console.warn = () => {};
-  console.error = () => {};
 }
 
 import { SafeAreaProvider } from 'react-native-safe-area-context';

@@ -9,6 +9,7 @@ import { Avatar } from '../../src/components/ui/Avatar';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../../src/theme';
 import { createPerson } from '../../src/database/repositories/personRepository';
+import { generateEntityId } from '../../src/utils/idGenerator';
 
 const COLOR_OPTIONS = [
   '#6366F1', // Indigo
@@ -73,7 +74,7 @@ export default function AddPersonScreen() {
       const trimmedName = name.trim();
 
       await createPerson({
-        id: `person-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('person'),
         name: trimmedName,
         phone: trimmedPhone || undefined,
         email: email.trim() || undefined,

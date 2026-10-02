@@ -35,6 +35,7 @@ import { formatDateIso } from '../../src/utils/dateUtils';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
+import { generateEntityId } from '../../src/utils/idGenerator';
 
 
 interface TypeOption {
@@ -224,7 +225,7 @@ export default function AddTransactionScreen() {
     try {
       setIsSaving(true);
       await createTransaction({
-        id: `tx-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: generateEntityId('tx'),
         type: selectedType,
         amount,
         date,
@@ -600,6 +601,7 @@ export default function AddTransactionScreen() {
             onChange={setDate}
             placeholder="YYYY-MM-DD"
             includeFutureShortcuts={false}
+            allowFutureDates={false}
             style={{ marginBottom: 0 }}
           />
         </View>

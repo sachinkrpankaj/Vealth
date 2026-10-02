@@ -100,12 +100,22 @@ export async function seedDemoData(): Promise<void> {
 export async function resetAllData(): Promise<void> {
   await executeInTransaction(async (db) => {
     await db.execAsync(`
+      DELETE FROM shopping_items;
+      DELETE FROM shopping_lists;
       DELETE FROM transactions;
       DELETE FROM liabilities;
       DELETE FROM assets;
       DELETE FROM people;
       DELETE FROM accounts;
       DELETE FROM net_worth_snapshots;
+      DELETE FROM categories WHERE isDefault = 0;
+      DELETE FROM app_settings
+      WHERE key NOT LIKE 'security_%'
+        AND key NOT LIKE '%pin%'
+        AND key NOT LIKE '%biometric%'
+        AND key NOT LIKE '%password%'
+        AND key NOT LIKE '%secret%'
+        AND key NOT LIKE '%token%';
     `);
   });
 }

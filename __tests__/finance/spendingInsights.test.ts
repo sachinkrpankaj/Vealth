@@ -176,6 +176,13 @@ describe('Spending Insights & Expense Category Regression Test Suite', () => {
             const cat = mockCategories.find((c) => c.id === params[0]);
             return cat ? { ...cat } : null;
           }
+          if (sql.includes('WHERE type = ? AND (id = ? OR monthYear = ?)')) {
+            const [type, id, monthYear] = params;
+            const cat = mockCategories.find(
+              (c) => c.type === type && (c.id === id || c.monthYear === monthYear)
+            );
+            return cat ? { ...cat } : null;
+          }
           if (sql.includes('FROM categories WHERE type = ? AND (monthYear = ? OR name = ?)')) {
             const [type, monthYear, name] = params;
             const cat = mockCategories.find(

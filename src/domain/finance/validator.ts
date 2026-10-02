@@ -6,8 +6,10 @@ export interface ValidationResult {
   error?: string;
 }
 
+import { parseLocalDate } from '../../utils/dateUtils';
+
 export function validateAmount(amountPaise: number): ValidationResult {
-  if (!Number.isFinite(amountPaise) || isNaN(amountPaise)) {
+  if (!Number.isFinite(amountPaise) || !Number.isSafeInteger(amountPaise) || isNaN(amountPaise)) {
     return { isValid: false, error: 'Enter a valid amount.' };
   }
   if (amountPaise <= 0) {
@@ -81,8 +83,8 @@ export function validateTransactionRequiredFields(params: {
   const amountValidation = validateAmount(params.amount);
   if (!amountValidation.isValid) return amountValidation;
 
-  if (!params.date) {
-    return { isValid: false, error: 'Date is required.' };
+  if (!params.date || !parseLocalDate(params.date)) {
+    return { isValid: false, error: 'Enter a valid calendar date in YYYY-MM-DD format.' };
   }
 
   switch (params.type) {
@@ -136,6 +138,12 @@ export function validateTransactionRequiredFields(params: {
     case 'ASSET_SALE':
       if (!params.accountId) {
         return { isValid: false, error: 'Select an account.' };
+      }
+      if (!params.assetId) {
+        return {
+          isValid: false,
+          error: `${params.type === 'ASSET_PURCHASE' ? 'Asset purchase' : 'Asset sale'} requires a valid asset.`,
+        };
       }
       break;
   }

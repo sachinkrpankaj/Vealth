@@ -78,7 +78,7 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalOverlay}
       >
         <Pressable style={styles.modalBackdrop} onPress={onClose} />
