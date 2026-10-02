@@ -32,3 +32,25 @@ describe('Android keyboard adjustment strategy', () => {
     }
   });
 });
+
+describe('Shopping Add Item modal layout', () => {
+  it('keeps the auto-sized form visible while retaining keyboard-aware scrolling and the pinned CTA', () => {
+    const source = fs.readFileSync('src/components/shopping/ItemFormModal.tsx', 'utf8');
+    const scrollArea = source.indexOf('<KeyboardAwareScrollView');
+    const closeScrollArea = source.indexOf('</KeyboardAwareScrollView>', scrollArea);
+    const pinnedCta = source.indexOf('{/* Bottom Pinned Action CTA */}');
+
+    expect(source).toContain('style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}');
+    expect(source).toContain('keyboardShouldPersistTaps="handled"');
+    expect(source).toContain('extraScrollHeight={100}');
+    expect(source).toContain("behavior={Platform.OS === 'ios' ? 'padding' : undefined}");
+    expect(source).toContain('Product Name *');
+    expect(source).toContain('Estimated Price (Optional)');
+    expect(source).toContain('Product Link (Optional)');
+    expect(source).toContain('Note / Specification (Optional)');
+    expect(scrollArea).toBeGreaterThanOrEqual(0);
+    expect(closeScrollArea).toBeGreaterThan(scrollArea);
+    expect(pinnedCta).toBeGreaterThan(closeScrollArea);
+    expect(source).toContain("title={initialItem ? 'Save Changes' : 'Add Item'}");
+  });
+});

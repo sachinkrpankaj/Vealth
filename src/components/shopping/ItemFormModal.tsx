@@ -157,7 +157,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
           {/* Form Scroll Area */}
           <KeyboardAwareScrollView
-            style={styles.scrollArea}
+            style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             extraScrollHeight={100}
