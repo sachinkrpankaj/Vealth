@@ -1,6 +1,8 @@
 import { getDatabase } from '../db';
+import { SQLiteDatabase } from 'expo-sqlite';
 import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus, Transaction } from '../../domain/finance/types';
-import { formatDateIso, parseLocalDate } from '../../utils/dateUtils';
+import { assertShoppingItemTransition } from '../../domain/finance/shoppingState';
+import { formatDateIso, getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { formatRupee } from '../../domain/finance/currency';
 import { generateEntityId } from '../../utils/idGenerator';
 import {
@@ -84,6 +86,37 @@ function mapRowToShoppingItem(row: ShoppingItemRow): ShoppingItem {
   };
 }
 
+async function assertActiveShoppingList(txn: SQLiteDatabase, listId: string): Promise<ShoppingListRow> {
+  const list = await txn.getFirstAsync<ShoppingListRow>(
+    'SELECT * FROM shopping_lists WHERE id = ?;',
+    [listId]
+  );
+  if (!list) throw new Error(`Shopping list "${listId}" not found.`);
+  if (list.isArchived === 1) {
+    throw new Error('Archived shopping lists are read-only. Unarchive the list to make changes.');
+  }
+  return list;
+}
+
+async function assertUniqueActiveListName(
+  txn: SQLiteDatabase,
+  name: string,
+  excludeId?: string
+): Promise<void> {
+  const duplicate = excludeId
+    ? await txn.getFirstAsync<{ id: string }>(
+        `SELECT id FROM shopping_lists
+         WHERE id <> ? AND isArchived = 0 AND lower(trim(name)) = lower(?);`,
+        [excludeId, name]
+      )
+    : await txn.getFirstAsync<{ id: string }>(
+        `SELECT id FROM shopping_lists
+         WHERE isArchived = 0 AND lower(trim(name)) = lower(?);`,
+        [name]
+      );
+  if (duplicate) throw new Error(`A shopping list named "${name}" already exists.`);
+}
+
 // ============================================================================
 // SHOPPING LIST OPERATIONS
 // ============================================================================
@@ -116,11 +149,14 @@ export async function createShoppingList(name: string): Promise<ShoppingList> {
   const id = generateUniqueId('list');
   const now = new Date().toISOString();
 
-  await db.runAsync(
-    `INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
-     VALUES (?, ?, 0, ?, ?);`,
-    [id, trimmed, now, now]
-  );
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    await assertUniqueActiveListName(txn, trimmed);
+    await txn.runAsync(
+      `INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
+       VALUES (?, ?, 0, ?, ?);`,
+      [id, trimmed, now, now]
+    );
+  });
 
   return {
     id,
@@ -136,33 +172,41 @@ export async function updateShoppingList(
   updates: { name?: string; isArchived?: boolean }
 ): Promise<ShoppingList> {
   const db = await getDatabase();
-  const current = await getShoppingListById(id);
-  if (!current) {
-    throw new Error(`Shopping list with id "${id}" not found.`);
-  }
-
-  const newName = updates.name !== undefined ? updates.name.trim() : current.name;
-  if (!newName) {
-    throw new Error('Shopping list name cannot be blank.');
-  }
-
-  const isArchived = updates.isArchived !== undefined ? updates.isArchived : current.isArchived;
   const now = new Date().toISOString();
+  let updatedList: ShoppingList | null = null;
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    const current = await txn.getFirstAsync<ShoppingListRow>(
+      'SELECT * FROM shopping_lists WHERE id = ?;',
+      [id]
+    );
+    if (!current) throw new Error(`Shopping list with id "${id}" not found.`);
 
-  await db.runAsync(
-    `UPDATE shopping_lists
-     SET name = ?, isArchived = ?, updatedAt = ?
-     WHERE id = ?;`,
-    [newName, isArchived ? 1 : 0, now, id]
-  );
+    const newName = updates.name !== undefined ? updates.name.trim() : current.name;
+    if (!newName) throw new Error('Shopping list name cannot be blank.');
+    const isArchived = updates.isArchived !== undefined ? updates.isArchived : current.isArchived === 1;
+    if (current.isArchived === 1 && newName !== current.name) {
+      throw new Error('Archived shopping lists are read-only. Unarchive the list before renaming it.');
+    }
+    if (current.isArchived === 1 && isArchived) {
+      updatedList = mapRowToShoppingList(current);
+      return;
+    }
+    if (!isArchived) await assertUniqueActiveListName(txn, newName, id);
 
-  return {
-    id,
-    name: newName,
-    isArchived,
-    createdAt: current.createdAt,
-    updatedAt: now,
-  };
+    await txn.runAsync(
+      `UPDATE shopping_lists SET name = ?, isArchived = ?, updatedAt = ? WHERE id = ?;`,
+      [newName, isArchived ? 1 : 0, now, id]
+    );
+    updatedList = {
+      id,
+      name: newName,
+      isArchived,
+      createdAt: current.createdAt,
+      updatedAt: now,
+    };
+  });
+  if (!updatedList) throw new Error('Failed to update shopping list.');
+  return updatedList;
 }
 
 export async function archiveShoppingList(id: string, isArchived = true): Promise<void> {
@@ -177,6 +221,9 @@ export async function deleteShoppingList(
   await db.withExclusiveTransactionAsync(async (txn) => {
     const list = await txn.getFirstAsync<ShoppingListRow>('SELECT * FROM shopping_lists WHERE id = ?;', [id]);
     if (!list) throw new Error(`Shopping list with id "${id}" not found.`);
+    if (list.isArchived === 1) {
+      throw new Error('Archived shopping lists are read-only. Unarchive the list before deleting it.');
+    }
     const purchasedRef = await txn.getFirstAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM shopping_items
        WHERE listId = ? AND (status = 'PURCHASED' OR transactionId IS NOT NULL);`,
@@ -306,10 +353,6 @@ export async function createShoppingItem(params: {
   }
 
   const db = await getDatabase();
-  const list = await getShoppingListById(params.listId);
-  if (!list) {
-    throw new Error(`Shopping list "${params.listId}" not found.`);
-  }
 
   const id = generateUniqueId('item');
   const now = new Date().toISOString();
@@ -320,13 +363,16 @@ export async function createShoppingItem(params: {
   const trimmedNote = params.note?.trim() || null;
   const trimmedUrl = normalizeProductUrl(params.productUrl);
 
-  await db.runAsync(
-    `INSERT INTO shopping_items (
-       id, listId, name, note, productUrl, estimatedPrice,
-       status, createdAt, updatedAt
-     ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?);`,
-    [id, params.listId, trimmedName, trimmedNote, trimmedUrl, estPrice, now, now]
-  );
+  await db.withExclusiveTransactionAsync(async (txn) => {
+    await assertActiveShoppingList(txn, params.listId);
+    await txn.runAsync(
+      `INSERT INTO shopping_items (
+         id, listId, name, note, productUrl, estimatedPrice,
+         status, createdAt, updatedAt
+       ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', ?, ?);`,
+      [id, params.listId, trimmedName, trimmedNote, trimmedUrl, estPrice, now, now]
+    );
+  });
 
   return {
     id,
@@ -357,6 +403,10 @@ export async function updateShoppingItem(
     const row = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
     if (!row) throw new Error(`Shopping item "${id}" not found.`);
     const current = mapRowToShoppingItem(row);
+    await assertActiveShoppingList(txn, current.listId);
+    if (current.status !== 'PENDING') {
+      throw new Error('Only pending shopping items can be edited. Restore the item first.');
+    }
     const newName = updates.name !== undefined ? updates.name.trim() : current.name;
     if (!newName) throw new Error('Product name cannot be blank.');
     const newNote = updates.note !== undefined ? updates.note?.trim() || null : (current.note ?? null);
@@ -388,11 +438,14 @@ export async function discardShoppingItem(id: string): Promise<void> {
   await db.withExclusiveTransactionAsync(async (txn) => {
     const current = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
     if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    await assertActiveShoppingList(txn, current.listId);
     if (current.status === 'PURCHASED' || current.transactionId) {
       throw new Error('Cannot discard an already purchased shopping item.');
     }
+    assertShoppingItemTransition(current.status as ShoppingItemStatus, 'DISCARDED');
+    if (current.status === 'DISCARDED') return;
     await txn.runAsync(
-      `UPDATE shopping_items SET status = 'DISCARDED', updatedAt = ? WHERE id = ? AND transactionId IS NULL AND status <> 'PURCHASED';`,
+      `UPDATE shopping_items SET status = 'DISCARDED', updatedAt = ? WHERE id = ? AND transactionId IS NULL AND status = 'PENDING';`,
       [now, id]
     );
   });
@@ -407,7 +460,9 @@ export async function restoreShoppingItem(id: string): Promise<void> {
       [id]
     );
     if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    await assertActiveShoppingList(txn, current.listId);
     if (current.status === 'PENDING') return;
+    assertShoppingItemTransition(current.status as ShoppingItemStatus, 'PENDING');
 
     if (current.status === 'PURCHASED' && !current.transactionId) {
       throw new Error('Cannot restore shopping item because its purchase transaction is missing.');
@@ -439,7 +494,11 @@ export async function restoreShoppingItem(id: string): Promise<void> {
       if (!linked.deletedAt) {
         let metadata: any = null;
         try { metadata = linked.metadata ? JSON.parse(linked.metadata) : null; } catch {}
-        if (metadata?.shoppingItemId !== id) {
+        if (
+          metadata?.shoppingItemId !== id ||
+          (metadata.shoppingListId !== undefined && metadata.shoppingListId !== current.listId) ||
+          (metadata.productName !== undefined && metadata.productName !== current.name)
+        ) {
           throw new Error('Cannot restore shopping item because its linked transaction is inconsistent.');
         }
         await deleteTransactionInTransaction(txn, current.transactionId, now);
@@ -461,6 +520,7 @@ export async function deleteShoppingItem(id: string): Promise<void> {
   await db.withExclusiveTransactionAsync(async (txn) => {
     const current = await txn.getFirstAsync<ShoppingItemRow>('SELECT * FROM shopping_items WHERE id = ?;', [id]);
     if (!current) throw new Error(`Shopping item "${id}" not found.`);
+    await assertActiveShoppingList(txn, current.listId);
     if (current.status === 'PURCHASED' || current.transactionId) {
       throw new Error('Cannot delete a purchased shopping item with a linked financial transaction. Preserving history.');
     }
@@ -498,6 +558,9 @@ export async function purchaseShoppingItem(params: {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate) || !parseLocalDate(txDate)) {
     throw new Error('Purchase date must be a valid calendar date in YYYY-MM-DD format.');
   }
+  if (txDate > getTodayLocalDateString()) {
+    throw new Error('Purchase date cannot be in the future.');
+  }
   const txId = generateUniqueId('tx');
 
   let updatedItem: ShoppingItem | null = null;
@@ -511,9 +574,11 @@ export async function purchaseShoppingItem(params: {
     if (!itemRow) {
       throw new Error(`Shopping item "${itemId}" not found.`);
     }
+    await assertActiveShoppingList(txn, itemRow.listId);
     if (itemRow.status === 'PURCHASED') {
       throw new Error('This item has already been marked as purchased.');
     }
+    assertShoppingItemTransition(itemRow.status as ShoppingItemStatus, 'PURCHASED');
 
     // 2. Verify account and spendability
     const account = await txn.getFirstAsync<{ id: string; name: string; type: string; openingBalance: number; isArchived: number }>(

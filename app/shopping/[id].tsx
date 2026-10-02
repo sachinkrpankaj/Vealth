@@ -60,6 +60,7 @@ export default function ShoppingListDetailScreen() {
   const { accounts, categories, refresh: refreshFinance } = useFinancialData();
 
   const currentList = lists.find((l) => l.id === id);
+  const isReadOnly = !currentList || currentList.isArchived;
 
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
@@ -213,7 +214,7 @@ export default function ShoppingListDetailScreen() {
         </View>
 
         <View style={styles.headerRightActions}>
-          <LiquidGlassCard
+          {!isReadOnly ? <LiquidGlassCard
             onPress={() => setIsRenameModalOpen(true)}
             hitSlop={8}
             accessibilityRole="button"
@@ -223,7 +224,7 @@ export default function ShoppingListDetailScreen() {
             style={styles.iconBtn}
           >
             <Edit2 size={16} color={colors.textPrimary} />
-          </LiquidGlassCard>
+          </LiquidGlassCard> : null}
 
           <LiquidGlassCard
             onPress={handleToggleArchive}
@@ -241,7 +242,7 @@ export default function ShoppingListDetailScreen() {
           </LiquidGlassCard>
 
           {/* Harmonious delete button with red icon instead of stark solid background */}
-          <LiquidGlassCard
+          {!isReadOnly ? <LiquidGlassCard
             onPress={handleDeleteList}
             hitSlop={8}
             accessibilityRole="button"
@@ -251,7 +252,7 @@ export default function ShoppingListDetailScreen() {
             style={styles.iconBtn}
           >
             <Trash2 size={16} color={colors.negative} />
-          </LiquidGlassCard>
+          </LiquidGlassCard> : null}
         </View>
       </View>
 
@@ -357,7 +358,7 @@ export default function ShoppingListDetailScreen() {
         >
           TO BUY ({pendingItems.length})
         </Text>
-        <Pressable
+        {!isReadOnly ? <Pressable
           onPress={() => {
             Haptics.selectionAsync().catch(() => {});
             setIsAddItemModalOpen(true);
@@ -385,7 +386,7 @@ export default function ShoppingListDetailScreen() {
           >
             Add Item
           </Text>
-        </Pressable>
+        </Pressable> : null}
       </View>
 
       <View style={styles.itemsList}>
@@ -394,7 +395,20 @@ export default function ShoppingListDetailScreen() {
             <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
           </View>
         ) : pendingItems.length === 0 ? (
-          <Pressable
+          isReadOnly ? <View
+            style={[
+              styles.emptyBox,
+              {
+                borderColor: colors.borderSubtle,
+                borderRadius: radii.md,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
+              },
+            ]}
+          >
+            <ShoppingBag size={24} color={colors.textMuted} style={{ marginBottom: 6 }} />
+            <Text style={[styles.emptyTitle, { color: colors.textPrimary, fontFamily: typography.fontFamilies.bold }]}>No Pending Items</Text>
+            <Text style={[styles.emptySub, { color: colors.textSecondary, fontFamily: typography.fontFamilies.regular }]}>This archived list is read-only.</Text>
+          </View> : <Pressable
             onPress={() => setIsAddItemModalOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="No pending items, tap to add an item"
@@ -436,16 +450,17 @@ export default function ShoppingListDetailScreen() {
             <ShoppingItemCard
               key={item.id}
               item={item}
-              onPurchasePress={() => setPurchasingItem(item)}
-              onEditPress={() => setEditingItem(item)}
-              onDiscardPress={async () => {
+              readOnly={isReadOnly}
+              onPurchasePress={!isReadOnly ? () => setPurchasingItem(item) : undefined}
+              onEditPress={!isReadOnly ? () => setEditingItem(item) : undefined}
+              onDiscardPress={!isReadOnly ? async () => {
                 try {
                   await discardItem(item.id);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 } catch (e: any) {
                   Alert.alert('Error', e?.message || 'Failed to discard item.');
                 }
-              }}
+              } : undefined}
             />
           ))
         )}
@@ -519,15 +534,16 @@ export default function ShoppingListDetailScreen() {
                 <ShoppingItemCard
                   key={item.id}
                   item={item}
-                  onRestorePress={async () => {
+                  readOnly={isReadOnly}
+                  onRestorePress={!isReadOnly ? async () => {
                     try {
                       await restoreItem(item.id);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     } catch (e: any) {
                       Alert.alert('Error', e?.message || 'Failed to restore item.');
                     }
-                  }}
-                  onDeletePress={() => handleDeleteDiscardedItem(item)}
+                  } : undefined}
+                  onDeletePress={!isReadOnly ? () => handleDeleteDiscardedItem(item) : undefined}
                 />
               ))}
             </View>
@@ -536,7 +552,7 @@ export default function ShoppingListDetailScreen() {
       ) : null}
 
       {/* 6. Bottom Add Item CTA */}
-      <View style={styles.bottomCtaContainer}>
+      {!isReadOnly ? <View style={styles.bottomCtaContainer}>
         <PrimaryButton
           title="+ Add Item to List"
           onPress={() => {
@@ -544,12 +560,12 @@ export default function ShoppingListDetailScreen() {
             setIsAddItemModalOpen(true);
           }}
         />
-      </View>
+      </View> : null}
 
       {/* Modals */}
       {/* Add Item Modal */}
       <ItemFormModal
-        visible={isAddItemModalOpen}
+        visible={isAddItemModalOpen && !isReadOnly}
         onClose={() => setIsAddItemModalOpen(false)}
         onSubmit={async (data) => {
           if (!id) return;
@@ -565,7 +581,7 @@ export default function ShoppingListDetailScreen() {
 
       {/* Edit Item Modal */}
       <ItemFormModal
-        visible={editingItem !== null}
+        visible={editingItem !== null && !isReadOnly}
         initialItem={editingItem}
         onClose={() => setEditingItem(null)}
         onSubmit={async (data) => {
@@ -576,7 +592,7 @@ export default function ShoppingListDetailScreen() {
 
       {/* Purchase Item Modal */}
       <PurchaseItemModal
-        visible={purchasingItem !== null}
+        visible={purchasingItem !== null && !isReadOnly}
         item={purchasingItem}
         onClose={() => setPurchasingItem(null)}
         onConfirmPurchase={async (params) => {
@@ -587,7 +603,7 @@ export default function ShoppingListDetailScreen() {
 
       {/* Rename List Modal */}
       <ListFormModal
-        visible={isRenameModalOpen}
+        visible={isRenameModalOpen && !isReadOnly}
         initialList={currentList}
         existingLists={lists}
         onClose={() => setIsRenameModalOpen(false)}

@@ -1,8 +1,14 @@
 import { openDatabaseAsync } from 'expo-sqlite';
 import { createTransaction, updateTransaction } from '../../src/database/repositories/transactionRepository';
-import { getTodayLocalDateString } from '../../src/utils/dateUtils';
+import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtils';
 
 const open = openDatabaseAsync as jest.Mock;
+
+function tomorrowLocalDate(): string {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return formatDateIso(date);
+}
 
 describe('authoritative final transaction validation', () => {
   let accounts: any[];
@@ -64,6 +70,7 @@ describe('authoritative final transaction validation', () => {
     jest.clearAllMocks();
     accounts = [
       { id: 'bank', name: 'Bank', type: 'BANK', isArchived: 0 },
+      { id: 'card', name: 'Credit Card', type: 'CREDIT_CARD', isArchived: 0 },
       { id: 'archived-bank', name: 'Closed', type: 'BANK', isArchived: 1 },
     ];
     people = [{ id: 'person-1', name: 'Alex', isArchived: 0 }];
@@ -112,6 +119,32 @@ describe('authoritative final transaction validation', () => {
     await expect(updateTransaction('expense-tx', { categoryId: 'income' })).rejects.toThrow('requires a EXPENSE category');
     await expect(updateTransaction('sale-tx', { assetId: 'asset-archived' })).rejects.toThrow('archived');
     await expect(updateTransaction('expense-tx', { liabilityId: 'missing-liability' })).rejects.toThrow('does not exist');
+  });
+
+  it('rejects future credit-card bill payments on create and update but preserves historical dates', async () => {
+    await expect(createTransaction({
+      id: 'future-card-payment',
+      type: 'TRANSFER',
+      amount: 500,
+      date: tomorrowLocalDate(),
+      accountId: 'bank',
+      destinationAccountId: 'card',
+    })).rejects.toThrow('Credit-card bill payment date cannot be in the future.');
+
+    await createTransaction({
+      id: 'historical-card-payment',
+      type: 'TRANSFER',
+      amount: 500,
+      date: '2020-01-15',
+      accountId: 'bank',
+      destinationAccountId: 'card',
+    });
+    expect(transactions.find((tx) => tx.id === 'historical-card-payment')?.date).toBe('2020-01-15');
+
+    await expect(updateTransaction('historical-card-payment', { date: tomorrowLocalDate() })).rejects.toThrow(
+      'Credit-card bill payment date cannot be in the future.'
+    );
+    expect(transactions.find((tx) => tx.id === 'historical-card-payment')?.date).toBe('2020-01-15');
   });
 
   it('rejects invalid transaction types and accepts a valid final-state edit', async () => {

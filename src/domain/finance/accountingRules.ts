@@ -1,5 +1,6 @@
 import { Transaction, FinancialEffect } from './types';
 import { formatRupee } from './currency';
+import { getTodayLocalDateString } from '../../utils/dateUtils';
 
 export interface AccountingContext {
   accountName?: string;
@@ -7,16 +8,24 @@ export interface AccountingContext {
   personName?: string;
   assetName?: string;
   assetBookValue?: number;
+  referenceDate?: string;
+}
+
+export function isFutureDatedTransaction(
+  tx: Pick<Transaction, 'date'>,
+  referenceDate: string = getTodayLocalDateString()
+): boolean {
+  return tx.date > referenceDate;
 }
 
 /**
  * Calculates the exact, deterministic financial effect of any transaction.
  * Follows strict double-entry and balance sheet principles.
  */
-export function calculateFinancialEffect(
+function calculateBaseFinancialEffect(
   tx: Transaction,
   context?: AccountingContext
-): FinancialEffect {
+): Omit<FinancialEffect, 'isFuture'> {
   const amount = Math.abs(tx.amount);
   const accountLabel = context?.accountName ?? 'Account';
   const destAccountLabel = context?.destAccountName ?? 'Destination Account';
@@ -201,4 +210,23 @@ export function calculateFinancialEffect(
         descriptionLines: ['Informational only'],
       };
   }
+}
+
+/** Calculates transaction deltas and marks future-dated deltas as scheduled. */
+export function calculateFinancialEffect(
+  tx: Transaction,
+  context?: AccountingContext
+): FinancialEffect {
+  const effect = calculateBaseFinancialEffect(tx, context);
+  const isFuture = isFutureDatedTransaction(tx, context?.referenceDate);
+  return {
+    ...effect,
+    isFuture,
+    descriptionLines: isFuture
+      ? [
+          `Scheduled effect for ${tx.date}; not included in current balances or net worth yet.`,
+          ...effect.descriptionLines,
+        ]
+      : effect.descriptionLines,
+  };
 }

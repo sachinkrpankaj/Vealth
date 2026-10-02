@@ -55,7 +55,7 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
 
     // Check duplicate name
     const isDuplicate = existingLists.some(
-      (l) => l.name.toLowerCase() === trimmed.toLowerCase() && l.id !== initialList?.id
+      (l) => !l.isArchived && l.name.trim().toLowerCase() === trimmed.toLowerCase() && l.id !== initialList?.id
     );
     if (isDuplicate) {
       setErrorMessage(`A shopping list named "${trimmed}" already exists.`);

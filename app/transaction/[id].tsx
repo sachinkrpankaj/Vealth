@@ -405,9 +405,15 @@ export default function TransactionDetailScreen() {
         <View style={styles.effectHeader}>
           <Info size={18} color={colors.accent} style={{ marginRight: 8 }} />
           <Text style={[styles.effectTitle, { color: colors.textPrimary }]}>
-            Accounting & Net Worth Effect
+            {effect.isFuture ? 'Scheduled Financial Effect' : 'Accounting & Net Worth Effect'}
           </Text>
         </View>
+
+        {effect.isFuture ? (
+          <Text style={[styles.futureEffectNotice, { color: colors.warning }]}>
+            Dated {transaction.date}. These changes are scheduled and are not included in current balances or net worth yet.
+          </Text>
+        ) : null}
 
         <View style={styles.effectLines}>
           {effect.descriptionLines.map((line, idx) => (
@@ -514,6 +520,12 @@ const styles = StyleSheet.create({
   effectTitle: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  futureEffectNotice: {
+    marginTop: -4,
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 17,
   },
   effectLines: {
     gap: 8,

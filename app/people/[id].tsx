@@ -399,6 +399,7 @@ export default function PersonDetailScreen() {
             </View>
 
             <KeyboardAwareScrollView
+              style={{ flex: 0, flexShrink: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 24 }}

@@ -19,7 +19,7 @@ import { LiquidGlassCard } from './LiquidGlassCard';
 import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { createTransaction } from '../../database/repositories/transactionRepository';
 import { formatRupee } from '../../domain/finance/currency';
-import { formatDateIso } from '../../utils/dateUtils';
+import { formatDateIso, getTodayLocalDateString } from '../../utils/dateUtils';
 import { generateEntityId } from '../../utils/idGenerator';
 import * as Haptics from 'expo-haptics';
 
@@ -141,6 +141,11 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       return;
     }
 
+    if (paymentDate > getTodayLocalDateString()) {
+      setError('Payment date cannot be in the future.');
+      return;
+    }
+
     if (paymentAmount > unpaidBillAmount) {
       setError(`Payment amount cannot exceed the unpaid statement bill of ${formatRupee(unpaidBillAmount)}.`);
       return;
@@ -255,6 +260,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
             </View>
 
             <KeyboardAwareScrollView
+              style={{ flex: 0, flexShrink: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 16 }}
@@ -315,6 +321,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                   label="Payment Date *"
                   value={paymentDate}
                   onChange={setPaymentDate}
+                  allowFutureDates={false}
                 />
               </View>
 

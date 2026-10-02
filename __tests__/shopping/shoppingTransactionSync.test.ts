@@ -43,9 +43,12 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
       if (sql.includes('FROM categories WHERE id = ?')) {
         return { id: 'cat-household', type: 'EXPENSE', isArchived: 0 };
       }
+      if (sql.includes('FROM shopping_lists WHERE id = ?')) {
+        return { id: 'list-1', isArchived: 0 };
+      }
       if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
         return {
-          id: 'item-oil', status: 'PURCHASED', transactionId: 'tx-purchase-1',
+          id: 'item-oil', listId: 'list-1', name: 'Oil', status: 'PURCHASED', transactionId: 'tx-purchase-1',
           purchasePrice: 150000, purchasedAt: '2026-10-01',
           purchaseAccountId: 'acc-bank', categoryId: 'cat-groceries',
         };
@@ -94,11 +97,12 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
       }
       if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
         return {
-          id: 'item-milk', status: 'PURCHASED', transactionId: 'tx-purchase-delete',
+          id: 'item-milk', listId: 'list-1', name: 'Milk', status: 'PURCHASED', transactionId: 'tx-purchase-delete',
           purchasePrice: 250000, purchasedAt: '2026-10-01',
           purchaseAccountId: null, categoryId: null,
         };
       }
+      if (sql.includes('FROM shopping_lists WHERE id = ?')) return { id: 'list-1', isArchived: 0 };
       return null;
     });
 
@@ -113,6 +117,56 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
       expect.stringContaining('UPDATE transactions SET deletedAt = ?'),
       [expect.any(String), expect.any(String), 'tx-purchase-delete']
     );
+  });
+
+  it('keeps linked transaction updates and deletes read-only while the shopping list is archived', async () => {
+    const archivedItem = {
+      id: 'item-oil', listId: 'list-1', name: 'Oil', status: 'PURCHASED', transactionId: 'tx-archived',
+      purchasePrice: 150000, purchasedAt: '2026-10-01', purchaseAccountId: 'acc-bank', categoryId: 'cat-household',
+    };
+    const archivedTransaction = {
+      id: 'tx-archived', type: 'EXPENSE', amount: 150000, date: '2026-10-01', accountId: 'acc-bank',
+      categoryId: 'cat-household', metadata: JSON.stringify({ shoppingItemId: 'item-oil' }), deletedAt: null,
+    };
+    scoped.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM transactions WHERE id = ?')) return archivedTransaction;
+      if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return archivedItem;
+      if (sql.includes('FROM shopping_lists WHERE id = ?')) return { id: 'list-1', isArchived: 1 };
+      if (sql.includes('FROM accounts WHERE id = ?')) return { id: 'acc-bank', name: 'Bank', type: 'BANK', isArchived: 0 };
+      if (sql.includes('FROM categories WHERE id = ?')) return { id: 'cat-household', type: 'EXPENSE', isArchived: 0 };
+      return null;
+    });
+
+    await expect(updateTransaction('tx-archived', { amount: 160000 })).rejects.toThrow('archived shopping list are read-only');
+    await expect(deleteTransaction('tx-archived')).rejects.toThrow('archived shopping list are read-only');
+    expect(scoped.runAsync).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE transactions SET'), expect.anything());
+  });
+
+  it('prevents purchased item metadata from drifting away from its linked transaction', async () => {
+    scoped.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM transactions WHERE id = ?')) {
+        return {
+          id: 'tx-purchase-1', type: 'EXPENSE', amount: 150000, date: '2026-10-01', accountId: 'acc-bank',
+          categoryId: 'cat-household',
+          metadata: JSON.stringify({ shoppingItemId: 'item-oil', shoppingListId: 'list-1', productName: 'Oil' }),
+          deletedAt: null,
+        };
+      }
+      if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
+        return {
+          id: 'item-oil', listId: 'list-1', name: 'Oil', status: 'PURCHASED', transactionId: 'tx-purchase-1',
+          purchasePrice: 150000, purchasedAt: '2026-10-01', purchaseAccountId: 'acc-bank', categoryId: 'cat-household',
+        };
+      }
+      if (sql.includes('FROM shopping_lists WHERE id = ?')) return { id: 'list-1', isArchived: 0 };
+      if (sql.includes('FROM accounts WHERE id = ?')) return { id: 'acc-bank', name: 'Bank', type: 'BANK', isArchived: 0 };
+      if (sql.includes('FROM categories WHERE id = ?')) return { id: 'cat-household', type: 'EXPENSE', isArchived: 0 };
+      return null;
+    });
+
+    await expect(updateTransaction('tx-purchase-1', {
+      metadata: JSON.stringify({ shoppingItemId: 'item-oil', shoppingListId: 'list-1', productName: 'Different product' }),
+    })).rejects.toThrow('Shopping purchase metadata cannot be changed independently of the linked item.');
   });
 
   it('restoreShoppingItem safely soft-deletes linked transaction and clears purchase fields when restoring a PURCHASED item', async () => {
@@ -136,6 +190,7 @@ describe('6, 7, 8. Shopping ↔ Transaction Synchronization & Safe Reversal — 
     scoped.getFirstAsync.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM shopping_items WHERE id = ?')) return purchasedItem;
       if (sql.includes('FROM shopping_items WHERE transactionId = ?')) return purchasedItem;
+      if (sql.includes('FROM shopping_lists WHERE id = ?')) return { id: 'list-1', isArchived: 0 };
       if (sql.includes('FROM transactions WHERE id = ?')) {
         return {
           id: 'tx-coffee',

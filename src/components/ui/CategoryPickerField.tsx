@@ -273,7 +273,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       </Pressable>
 
       {/* Main Selection Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
@@ -477,7 +477,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       </Modal>
 
       {/* Create / Edit Category Modal */}
-      <Modal visible={isManaging} animationType="fade" transparent>
+      <Modal visible={isManaging} animationType="fade" transparent onRequestClose={() => setIsManaging(false)}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.createModalOverlay}
@@ -501,7 +501,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               </Pressable>
             </View>
 
-            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" extraScrollHeight={100}>
+            <KeyboardAwareScrollView style={{ flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" extraScrollHeight={100}>
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>NAME</Text>
               <TextInput
                 value={newCatName}
@@ -754,6 +754,7 @@ const styles = StyleSheet.create({
   },
   createModalCard: {
     width: '100%',
+    maxHeight: '90%',
     padding: 20,
     borderWidth: 1,
   },

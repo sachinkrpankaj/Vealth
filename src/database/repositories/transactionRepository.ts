@@ -9,6 +9,8 @@ import {
 } from '../../domain/finance/types';
 import { getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { validateTransactionRequiredFields } from '../../domain/finance/validator';
+import { ShoppingItemStatus } from '../../domain/finance/types';
+import { assertShoppingItemTransition } from '../../domain/finance/shoppingState';
 import { reconcileAssetState } from './assetStateRepository';
 
 interface TransactionRow {
@@ -32,6 +34,8 @@ interface TransactionRow {
 
 interface LinkedShoppingItemRow {
   id: string;
+  listId: string;
+  name: string;
   status: string;
   transactionId: string | null;
   purchasePrice: number | null;
@@ -306,6 +310,13 @@ async function validateFinalTransaction(
   ) {
     throw new Error('Credit-card bill payments must use a bank or other non-cash funding account.');
   }
+  if (
+    tx.type === 'TRANSFER' &&
+    accounts.get(tx.destinationAccountId!)?.type === 'CREDIT_CARD' &&
+    tx.date > getTodayLocalDateString()
+  ) {
+    throw new Error('Credit-card bill payment date cannot be in the future.');
+  }
 
   if (tx.personId) {
     const person = await txn.getFirstAsync<{ id: string; name: string; isArchived: number }>(
@@ -386,9 +397,21 @@ async function validateShoppingLinkForCreate(
     [itemId]
   );
   if (!item) throw new Error(`Shopping item "${itemId}" does not exist.`);
+  const list = await txn.getFirstAsync<{ id: string; isArchived: number }>(
+    'SELECT id, isArchived FROM shopping_lists WHERE id = ?;',
+    [item.listId]
+  );
+  if (!list) throw new Error(`Shopping list "${item.listId}" does not exist.`);
+  if (list.isArchived === 1) {
+    throw new Error('Archived shopping lists are read-only. Unarchive the list before purchasing items.');
+  }
+  if (tx.date > getTodayLocalDateString()) {
+    throw new Error('Shopping purchase date cannot be in the future.');
+  }
   if (item.status !== 'PENDING' || item.transactionId) {
     throw new Error('Shopping item is already linked to a purchase.');
   }
+  assertShoppingItemTransition(item.status as ShoppingItemStatus, 'PURCHASED');
   const existingRows = await txn.getAllAsync<{ id: string; metadata: string | null }>(
     'SELECT id, metadata FROM transactions WHERE deletedAt IS NULL AND metadata IS NOT NULL;'
   );
@@ -437,8 +460,30 @@ async function validateShoppingLinkForUpdate(
   if (itemByTransaction?.status !== 'PURCHASED' || itemByTransaction.transactionId !== txId) {
     throw new Error('Linked shopping item is not in a purchased state.');
   }
+  const list = await txn.getFirstAsync<{ id: string; isArchived: number }>(
+    'SELECT id, isArchived FROM shopping_lists WHERE id = ?;',
+    [itemByTransaction.listId]
+  );
+  if (!list) throw new Error(`Shopping list "${itemByTransaction.listId}" does not exist.`);
+  if (list.isArchived === 1) {
+    throw new Error('Transactions linked to an archived shopping list are read-only. Unarchive the list first.');
+  }
   if (!shoppingPurchaseMatchesTransaction(itemByTransaction, current)) {
     throw new Error('Shopping purchase values do not match the linked transaction.');
+  }
+  const currentMetadata = metadataObject(current.metadata) || {};
+  const updatedMetadata = metadataObject(updated.metadata) || {};
+  for (const [key, canonicalValue] of [
+    ['shoppingItemId', linkedItemId],
+    ['shoppingListId', itemByTransaction.listId],
+    ['productName', itemByTransaction.name],
+  ] as const) {
+    if (currentMetadata[key] !== undefined && currentMetadata[key] !== canonicalValue) {
+      throw new Error('Shopping purchase metadata does not match the linked item.');
+    }
+    if (updatedMetadata[key] !== currentMetadata[key]) {
+      throw new Error('Shopping purchase metadata cannot be changed independently of the linked item.');
+    }
   }
   return linkedItemId;
 }
@@ -576,6 +621,21 @@ export async function createTransaction(
       today
     );
     const shoppingItemId = await validateTransactionForInsertInTransaction(txn, newTransaction);
+    if (shoppingItemId) {
+      const linkedItem = await txn.getFirstAsync<{ id: string; listId: string; name: string }>(
+        'SELECT id, listId, name FROM shopping_items WHERE id = ?;',
+        [shoppingItemId]
+      );
+      if (!linkedItem) throw new Error(`Shopping item "${shoppingItemId}" does not exist.`);
+      const canonicalMetadata = {
+        ...(metadataObject(metadata) || {}),
+        shoppingItemId,
+        shoppingListId: linkedItem.listId,
+        productName: linkedItem.name,
+      };
+      metadata = JSON.stringify(canonicalMetadata);
+      newTransaction.metadata = metadata;
+    }
     // Assets with dated valuation history are materialized from source events after
     // insertion. Only pre-history databases use the legacy incremental fallback.
     if (ASSET_TRANSACTION_TYPES.has(newTransaction.type) && !reconciledAssets.has(newTransaction.assetId!)) {
@@ -763,7 +823,7 @@ export async function deleteTransactionInTransaction(
 
     // 2. Keep both sides of any shopping purchase relationship consistent.
     const linkedShoppingItem = await txn.getFirstAsync<LinkedShoppingItemRow>(
-      'SELECT id, status, transactionId, purchasePrice, purchasedAt, purchaseAccountId, categoryId FROM shopping_items WHERE transactionId = ?;',
+      'SELECT id, listId, name, status, transactionId, purchasePrice, purchasedAt, purchaseAccountId, categoryId FROM shopping_items WHERE transactionId = ?;',
       [id]
     );
     const metadataShoppingItemId = getShoppingItemId(tx.metadata);
@@ -776,6 +836,15 @@ export async function deleteTransactionInTransaction(
       }
       if (!shoppingPurchaseMatchesTransaction(linkedShoppingItem, mapRowToTransaction(tx))) {
         throw new Error('Shopping purchase values do not match the linked transaction.');
+      }
+      assertShoppingItemTransition(linkedShoppingItem.status as ShoppingItemStatus, 'PENDING');
+      const list = await txn.getFirstAsync<{ id: string; isArchived: number }>(
+        'SELECT id, isArchived FROM shopping_lists WHERE id = ?;',
+        [linkedShoppingItem.listId]
+      );
+      if (!list) throw new Error(`Shopping list "${linkedShoppingItem.listId}" does not exist.`);
+      if (list.isArchived === 1) {
+        throw new Error('Transactions linked to an archived shopping list are read-only. Unarchive the list first.');
       }
       const linkResult = await txn.runAsync(
         `UPDATE shopping_items

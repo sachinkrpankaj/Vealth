@@ -180,6 +180,7 @@ export interface FinancialEffect {
   assetDelta: number;
   netWorthDelta: number;
   descriptionLines: string[];
+  isFuture: boolean;
 }
 
 export const SHOPPING_ITEM_STATUSES = ['PENDING', 'PURCHASED', 'DISCARDED'] as const;

@@ -18,7 +18,7 @@ import { CategoryPickerField } from '../ui/CategoryPickerField';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { formatRupee } from '../../domain/finance/currency';
-import { formatDateIso } from '../../utils/dateUtils';
+import { formatDateIso, getTodayLocalDateString } from '../../utils/dateUtils';
 import { useTheme } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFinancialData } from '../../hooks/useFinancialData';
@@ -110,6 +110,11 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
       return;
     }
 
+    if (purchaseDate > getTodayLocalDateString()) {
+      setErrorMessage('Purchase date cannot be in the future.');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setErrorMessage(null);
@@ -189,7 +194,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
 
           {/* Form Content */}
           <KeyboardAwareScrollView
-            style={styles.scrollArea}
+            style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             extraScrollHeight={100}
@@ -374,6 +379,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               value={purchaseDate}
               onChange={setPurchaseDate}
               placeholder="YYYY-MM-DD"
+              allowFutureDates={false}
               style={{ marginTop: 12 }}
             />
 

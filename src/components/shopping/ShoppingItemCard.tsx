@@ -26,6 +26,7 @@ interface ShoppingItemCardProps {
   onRestorePress?: () => void;
   onDeletePress?: () => void;
   onViewTransaction?: () => void;
+  readOnly?: boolean;
 }
 
 export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
@@ -38,6 +39,7 @@ export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
   onRestorePress,
   onDeletePress,
   onViewTransaction,
+  readOnly = false,
 }) => {
   const { colors, radii, spacing, typography, isDark } = useTheme();
 
@@ -310,7 +312,13 @@ export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
       <View style={styles.pendingHeaderRow}>
         <View style={styles.leftRow}>
           {/* Interactive Checkbox Circle: tapping marks as purchased! */}
-          <Pressable
+          {readOnly ? <View style={[styles.statusIconBox, {
+            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+            borderColor: colors.borderSubtle,
+            borderWidth: 1,
+          }]}>
+            <Circle size={16} color={colors.textSecondary} />
+          </View> : <Pressable
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               if (onPurchasePress) onPurchasePress();
@@ -335,11 +343,11 @@ export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
             ]}
           >
             <Circle size={16} color={colors.textSecondary} />
-          </Pressable>
+          </Pressable>}
 
           {/* Item details: tapping name/body opens edit modal, link opens browser without conflict */}
           <View style={styles.itemInfo}>
-            <Pressable
+            {onEditPress ? <Pressable
               onPress={() => {
                 if (onEditPress) {
                   Haptics.selectionAsync().catch(() => {});
@@ -390,7 +398,20 @@ export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
                   {item.note}
                 </Text>
               ) : null}
-            </Pressable>
+            </Pressable> : <View>
+              <Text
+                style={[styles.pendingName, { color: colors.textPrimary, fontFamily: typography.fontFamilies.semibold }]}
+                numberOfLines={2}
+              >
+                {item.name}
+              </Text>
+              {item.estimatedPrice ? <Text style={[styles.estimatedPriceText, { color: isDark ? '#818CF8' : '#6366F1', fontFamily: typography.fontFamilies.bold }]}>
+                Est. {formatRupee(item.estimatedPrice)}
+              </Text> : null}
+              {item.note ? <Text style={[styles.noteText, { color: colors.textSecondary, fontFamily: typography.fontFamilies.regular }]} numberOfLines={2}>
+                {item.note}
+              </Text> : null}
+            </View>}
 
             {item.productUrl ? (
               <Pressable

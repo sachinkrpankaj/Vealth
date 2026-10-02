@@ -14,6 +14,9 @@ describe('restoreShoppingItem transaction boundary', () => {
     scoped = {
       getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('FROM shopping_items WHERE id = ?')) return item?.id === params[0] ? item : null;
+        if (sql.includes('FROM shopping_lists WHERE id = ?')) {
+          return params[0] === item?.listId ? { id: item.listId, isArchived: 0 } : null;
+        }
         if (sql.includes('FROM shopping_items WHERE transactionId = ?')) {
           return item?.transactionId === params[0] ? item : null;
         }
@@ -81,7 +84,7 @@ describe('restoreShoppingItem transaction boundary', () => {
     jest.clearAllMocks();
     failure = null;
     item = {
-      id: 'item-1', status: 'PURCHASED', transactionId: 'tx-1',
+      id: 'item-1', listId: 'list-1', status: 'PURCHASED', transactionId: 'tx-1',
       purchasedAt: '2026-10-01T12:00:00.000Z', purchasePrice: 50000,
       purchaseAccountId: 'bank', categoryId: null,
     };

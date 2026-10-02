@@ -233,7 +233,7 @@ export default function LiabilitiesListScreen() {
             </View>
 
             <KeyboardAwareScrollView
-              style={{ maxHeight: 420 }}
+              style={{ maxHeight: 420, flex: 0, flexShrink: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               extraScrollHeight={100}

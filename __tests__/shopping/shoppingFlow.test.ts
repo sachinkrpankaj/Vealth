@@ -17,8 +17,16 @@ import {
   purchaseShoppingItem,
   normalizeProductUrl,
 } from '../../src/database/repositories/shoppingRepository';
+import { createTransaction } from '../../src/database/repositories/transactionRepository';
+import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtils';
 
 const openMock = openDatabaseAsync as jest.Mock;
+
+function shiftLocalDate(offsetDays: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  return formatDateIso(date);
+}
 
 describe('Shopping Feature Flow & Financial Integration', () => {
   let mockDb: any;
@@ -30,8 +38,10 @@ describe('Shopping Feature Flow & Financial Integration', () => {
   let accountsTable: any[] = [];
   let categoriesTable: any[] = [];
   let transactionsTable: any[] = [];
+  let exclusiveTail: Promise<void> = Promise.resolve();
 
   beforeEach(() => {
+    exclusiveTail = Promise.resolve();
     shoppingListsTable = [];
     shoppingItemsTable = [];
     accountsTable = [
@@ -81,6 +91,13 @@ describe('Shopping Feature Flow & Financial Integration', () => {
 
     mockTxn = {
       getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
+        const normalized = sql.replace(/\s+/g, ' ').trim();
+        if (normalized.includes('FROM shopping_lists') && normalized.includes('lower(trim(name)) = lower(?)')) {
+          const [excludeId, name] = normalized.includes('id <> ?') ? params : [undefined, params[0]];
+          return shoppingListsTable.find((list) =>
+            list.id !== excludeId && list.isArchived === 0 && list.name.trim().toLowerCase() === String(name).toLowerCase()
+          ) || null;
+        }
         if (sql.includes('FROM shopping_items WHERE id = ?')) {
           return shoppingItemsTable.find((i) => i.id === params[0]) || null;
         }
@@ -140,6 +157,34 @@ describe('Shopping Feature Flow & Financial Integration', () => {
         return [];
       }),
       runAsync: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('INSERT INTO shopping_lists')) {
+          shoppingListsTable.push({
+            id: params[0], name: params[1], isArchived: 0,
+            createdAt: params[2], updatedAt: params[3],
+          });
+          return { changes: 1 };
+        }
+        if (sql.includes('UPDATE shopping_lists SET name = ?')) {
+          const list = shoppingListsTable.find((row) => row.id === params[3]);
+          if (list) Object.assign(list, { name: params[0], isArchived: params[1], updatedAt: params[2] });
+          return { changes: 1 };
+        }
+        if (sql.includes('INSERT INTO shopping_items')) {
+          shoppingItemsTable.push({
+            id: params[0], listId: params[1], name: params[2], note: params[3],
+            productUrl: params[4], estimatedPrice: params[5], status: 'PENDING',
+            createdAt: params[6], updatedAt: params[7], purchasedAt: null,
+            purchasePrice: null, purchaseAccountId: null, transactionId: null, categoryId: null,
+          });
+          return { changes: 1 };
+        }
+        if (sql.includes('UPDATE shopping_items SET name = ?, note = ?, productUrl = ?, estimatedPrice = ?, updatedAt = ? WHERE id = ?')) {
+          const item = shoppingItemsTable.find((row) => row.id === params[5]);
+          if (item) Object.assign(item, {
+            name: params[0], note: params[1], productUrl: params[2], estimatedPrice: params[3], updatedAt: params[4],
+          });
+          return { changes: 1 };
+        }
         if (sql.includes('INSERT INTO transactions')) {
           transactionsTable.push({
             id: params[0],
@@ -203,6 +248,10 @@ describe('Shopping Feature Flow & Financial Integration', () => {
           shoppingItemsTable = shoppingItemsTable.filter((i) => i.listId !== params[0]);
           return { changes: 1 };
         }
+        if (sql.includes('DELETE FROM shopping_items WHERE id = ?')) {
+          shoppingItemsTable = shoppingItemsTable.filter((item) => item.id !== params[0]);
+          return { changes: 1 };
+        }
         if (sql.includes('DELETE FROM shopping_lists WHERE id = ?')) {
           shoppingListsTable = shoppingListsTable.filter((l) => l.id !== params[0]);
           return { changes: 1 };
@@ -214,6 +263,12 @@ describe('Shopping Feature Flow & Financial Integration', () => {
     mockDb = {
       getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
         const norm = sql.replace(/\s+/g, ' ').trim();
+        if (norm.includes('FROM shopping_lists') && norm.includes('lower(trim(name)) = lower(?)')) {
+          const [excludeId, name] = norm.includes('id <> ?') ? params : [undefined, params[0]];
+          return shoppingListsTable.find((list) =>
+            list.id !== excludeId && list.isArchived === 0 && list.name.trim().toLowerCase() === String(name).toLowerCase()
+          ) || null;
+        }
         if (norm.includes('FROM shopping_lists WHERE id = ?')) {
           return shoppingListsTable.find((l) => l.id === params[0]) || null;
         }
@@ -322,7 +377,15 @@ describe('Shopping Feature Flow & Financial Integration', () => {
         return { changes: 1 };
       }),
       withExclusiveTransactionAsync: jest.fn(async (cb: (txn: any) => Promise<any>) => {
-        return cb(mockTxn);
+        const previous = exclusiveTail;
+        let release!: () => void;
+        exclusiveTail = new Promise<void>((resolve) => { release = resolve; });
+        await previous;
+        try {
+          return await cb(mockTxn);
+        } finally {
+          release();
+        }
       }),
       execAsync: jest.fn(),
     };
@@ -343,6 +406,28 @@ describe('Shopping Feature Flow & Financial Integration', () => {
     it('rejects blank or whitespace shopping list names', async () => {
       await expect(createShoppingList('')).rejects.toThrow('Shopping list name cannot be blank.');
       await expect(createShoppingList('   ')).rejects.toThrow('Shopping list name cannot be blank.');
+    });
+
+    it('enforces case-insensitive uniqueness among active lists and serializes concurrent creates', async () => {
+      const results = await Promise.allSettled([
+        createShoppingList('Travel'),
+        createShoppingList(' travel '),
+      ]);
+
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+      expect(shoppingListsTable.filter((list) => list.isArchived === 0)).toHaveLength(1);
+    });
+
+    it('allows an archived name to be reused but blocks renaming or reactivating into a duplicate', async () => {
+      const first = await createShoppingList('Seasonal');
+      await archiveShoppingList(first.id, true);
+      const replacement = await createShoppingList(' seasonal ');
+
+      await expect(updateShoppingList(first.id, { name: 'Renamed While Archived' })).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(archiveShoppingList(first.id, false)).rejects.toThrow('already exists');
+      expect(replacement.isArchived).toBe(false);
+      expect(shoppingListsTable.find((list) => list.id === first.id)?.isArchived).toBe(1);
     });
 
     it('renames a shopping list and updates updatedAt', async () => {
@@ -445,6 +530,36 @@ describe('Shopping Feature Flow & Financial Integration', () => {
       expect(item.status).toBe('PENDING');
     });
 
+    it('rejects all normal item mutations when the parent list is archived', async () => {
+      const list = await createShoppingList('Read Only');
+      const item = await createShoppingItem({ listId: list.id, name: 'Historical Item' });
+      await archiveShoppingList(list.id, true);
+
+      await expect(createShoppingItem({ listId: list.id, name: 'New Item' })).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(updateShoppingItem(item.id, { name: 'Changed Item' })).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(discardShoppingItem(item.id)).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(restoreShoppingItem(item.id)).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(deleteShoppingItem(item.id)).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(purchaseShoppingItem({
+        itemId: item.id,
+        purchasePrice: 100,
+        purchaseAccountId: 'acc-bank-1',
+        purchaseDate: getTodayLocalDateString(),
+      })).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(createTransaction({
+        id: 'generic-archived-shopping',
+        type: 'EXPENSE',
+        amount: 100,
+        date: getTodayLocalDateString(),
+        accountId: 'acc-bank-1',
+        categoryId: 'cat-electronics',
+        metadata: JSON.stringify({ shoppingItemId: item.id }),
+      })).rejects.toThrow('Archived shopping lists are read-only');
+      await expect(updateShoppingList(list.id, { name: 'Changed List' })).rejects.toThrow('Archived shopping lists are read-only');
+      expect(shoppingItemsTable[0].status).toBe('PENDING');
+      expect(transactionsTable).toHaveLength(0);
+    });
+
     it('rejects blank item name or non-existent list', async () => {
       await expect(
         createShoppingItem({ listId: testListId, name: '   ' })
@@ -487,6 +602,20 @@ describe('Shopping Feature Flow & Financial Integration', () => {
       // Restore
       await restoreShoppingItem(item.id);
       expect(shoppingItemsTable[0].status).toBe('PENDING');
+    });
+
+    it('does not permit a discarded item to be purchased', async () => {
+      const item = await createShoppingItem({ listId: testListId, name: 'Discarded item' });
+      await discardShoppingItem(item.id);
+
+      await expect(purchaseShoppingItem({
+        itemId: item.id,
+        purchasePrice: 100,
+        purchaseAccountId: 'acc-bank-1',
+        purchaseDate: getTodayLocalDateString(),
+      })).rejects.toThrow('Invalid shopping item status transition: DISCARDED -> PURCHASED.');
+      expect(shoppingItemsTable[0].status).toBe('DISCARDED');
+      expect(transactionsTable).toHaveLength(0);
     });
 
     it('cannot discard an already purchased item', async () => {
@@ -555,6 +684,31 @@ describe('Shopping Feature Flow & Financial Integration', () => {
           categoryId: 'cat-electronics',
         })
       ).rejects.toThrow('Please enter a valid purchase price greater than zero.');
+    });
+
+    it('rejects future purchase dates before recording any purchase state', async () => {
+      await expect(purchaseShoppingItem({
+        itemId: testItemId,
+        purchasePrice: 100,
+        purchaseAccountId: 'acc-bank-1',
+        purchaseDate: shiftLocalDate(1),
+      })).rejects.toThrow('Purchase date cannot be in the future.');
+      expect(shoppingItemsTable[0].status).toBe('PENDING');
+      expect(transactionsTable).toHaveLength(0);
+    });
+
+    it('rejects future-dated shopping purchases created through the generic transaction repository', async () => {
+      await expect(createTransaction({
+        id: 'generic-future-shopping',
+        type: 'EXPENSE',
+        amount: 100,
+        date: shiftLocalDate(1),
+        accountId: 'acc-bank-1',
+        categoryId: 'cat-electronics',
+        metadata: JSON.stringify({ shoppingItemId: testItemId }),
+      })).rejects.toThrow('Shopping purchase date cannot be in the future.');
+      expect(shoppingItemsTable[0].status).toBe('PENDING');
+      expect(transactionsTable).toHaveLength(0);
     });
 
     it('rejects archived account as funding source', async () => {
@@ -647,6 +801,11 @@ describe('Shopping Feature Flow & Financial Integration', () => {
         shoppingListId: testListId,
         productName: 'Webcam 1080p',
       });
+      await expect(updateShoppingItem(testItemId, { name: 'Renamed after purchase' })).rejects.toThrow(
+        'Only pending shopping items can be edited.'
+      );
+      expect(JSON.parse(transactionsTable[0].metadata).productName).toBe('Webcam 1080p');
+      expect(transactionsTable).toHaveLength(1);
     });
 
     it('rejects duplicate purchase attempt for already purchased item', async () => {

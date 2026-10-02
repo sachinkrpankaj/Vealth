@@ -96,8 +96,8 @@ export const ListActionModal: React.FC<ListActionModalProps> = ({
 
           {/* Action List */}
           <View style={styles.actionList}>
-            {/* Rename */}
-            <Pressable
+            {/* Archived lists stay read-only until explicitly unarchived. */}
+            {!list.isArchived ? <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 onClose();
@@ -139,7 +139,7 @@ export const ListActionModal: React.FC<ListActionModalProps> = ({
               >
                 Rename List
               </Text>
-            </Pressable>
+            </Pressable> : null}
 
             {/* Archive / Unarchive */}
             <Pressable
@@ -191,7 +191,7 @@ export const ListActionModal: React.FC<ListActionModalProps> = ({
             </Pressable>
 
             {/* Delete */}
-            <Pressable
+            {!list.isArchived ? <Pressable
               onPress={() => {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
                 onClose();
@@ -229,7 +229,7 @@ export const ListActionModal: React.FC<ListActionModalProps> = ({
               >
                 Delete List
               </Text>
-            </Pressable>
+            </Pressable> : null}
           </View>
         </View>
       </View>
