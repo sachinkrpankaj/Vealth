@@ -55,15 +55,13 @@ export function useFinancialData(): FinancialDataState {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const [accs, ppl, txs, asts, libs, cats, storedName] = await Promise.all([
-        getAllAccounts(true),
-        getAllPeople(true),
-        getAllTransactions(),
-        getAllAssets(true),
-        getAllLiabilities(true),
-        getAllCategories(true),
-        getSetting('user_name'),
-      ]);
+      const accs = await getAllAccounts(true);
+      const ppl = await getAllPeople(true);
+      const txs = await getAllTransactions();
+      const asts = await getAllAssets(true);
+      const libs = await getAllLiabilities(true);
+      const cats = await getAllCategories(true);
+      const storedName = await getSetting('user_name');
 
       setAccounts(accs);
       setPeople(ppl);
@@ -75,7 +73,7 @@ export function useFinancialData(): FinancialDataState {
       setPhysicalAssets(asts);
       setStandaloneLiabilities(libs);
 
-      // Record daily net-worth snapshot silently in background using local date
+      // Record daily net-worth snapshot using local date
       const today = formatDateIso(new Date());
       const nw = calculateNetWorth({
         accounts: accs,
@@ -85,17 +83,19 @@ export function useFinancialData(): FinancialDataState {
         transactions: txs,
       });
 
-      recordSnapshot({
-        date: today,
-        netWorth: nw.netWorth,
-        totalAssets: nw.totalAssets,
-        totalLiabilities: nw.totalLiabilities,
-        totalReceivables: nw.totalReceivables,
-        totalPayables: nw.totalPayables,
-      }).catch((e) => {
-        // Snapshot errors should not break UI
+      try {
+        await recordSnapshot({
+          date: today,
+          netWorth: nw.netWorth,
+          totalAssets: nw.totalAssets,
+          totalLiabilities: nw.totalLiabilities,
+          totalReceivables: nw.totalReceivables,
+          totalPayables: nw.totalPayables,
+        });
+      } catch (e) {
+        // Snapshot recording warning should not break UI
         console.warn('Snapshot recording warning:', e);
-      });
+      }
     } catch (err: any) {
       console.error('Error loading financial data:', err);
       setError(err?.message ?? 'Failed to load financial data');

@@ -31,10 +31,8 @@ export function useShoppingData(activeListId?: string) {
     try {
       setIsLoading(true);
       setError(null);
-      const [allLists, allSummaries] = await Promise.all([
-        getAllShoppingLists(true),
-        getShoppingListSummaries(true),
-      ]);
+      const allLists = await getAllShoppingLists(true);
+      const allSummaries = await getShoppingListSummaries(true);
       setLists(allLists);
       setSummaries(allSummaries);
 

@@ -86,11 +86,9 @@ export default function PersonDetailScreen() {
     if (!id) return;
     try {
       setIsLoading(true);
-      const [p, txs, accs] = await Promise.all([
-        getPersonById(id),
-        getAllTransactions({ personId: id }),
-        getAllAccounts(),
-      ]);
+      const p = await getPersonById(id);
+      const txs = await getAllTransactions({ personId: id });
+      const accs = await getAllAccounts();
 
       if (p) {
         setPerson(p);

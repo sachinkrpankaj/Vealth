@@ -72,27 +72,25 @@ async function hydrateLiabilities(rows: LiabilityRow[]): Promise<Liability[]> {
   const db = await getDatabase();
   const placeholders = liabilities.map(() => '?').join(', ');
   const ids = liabilities.map((liability) => liability.id);
-  const [amountRows, archiveRows] = await Promise.all([
-    db.getAllAsync<{
-      liabilityId: string;
-      effectiveDate: string;
-      amount: number;
-      source: LiabilityValuation['source'];
-      createdAt: string;
-    }>(
-      `SELECT liabilityId, effectiveDate, amount, source, createdAt FROM liability_valuations WHERE liabilityId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
-      ids
-    ),
-    db.getAllAsync<{
-      liabilityId: string;
-      effectiveDate: string;
-      isArchived: number;
-      createdAt: string;
-    }>(
-      `SELECT liabilityId, effectiveDate, isArchived, createdAt FROM liability_archive_history WHERE liabilityId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
-      ids
-    ),
-  ]);
+  const amountRows = await db.getAllAsync<{
+    liabilityId: string;
+    effectiveDate: string;
+    amount: number;
+    source: LiabilityValuation['source'];
+    createdAt: string;
+  }>(
+    `SELECT liabilityId, effectiveDate, amount, source, createdAt FROM liability_valuations WHERE liabilityId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
+    ids
+  );
+  const archiveRows = await db.getAllAsync<{
+    liabilityId: string;
+    effectiveDate: string;
+    isArchived: number;
+    createdAt: string;
+  }>(
+    `SELECT liabilityId, effectiveDate, isArchived, createdAt FROM liability_archive_history WHERE liabilityId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
+    ids
+  );
   const amounts = new Map<string, LiabilityValuation[]>();
   for (const row of amountRows) {
     const history = amounts.get(row.liabilityId) || [];

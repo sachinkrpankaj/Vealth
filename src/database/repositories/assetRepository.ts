@@ -67,22 +67,20 @@ async function hydrateAssets(rows: AssetRow[]): Promise<Asset[]> {
   const db = await getDatabase();
   const placeholders = assets.map(() => '?').join(', ');
   const ids = assets.map((asset) => asset.id);
-  const [valuationRows, archiveRows, transactionRows] = await Promise.all([
-    db.getAllAsync<AssetValuationRow>(
-      `SELECT assetId, effectiveDate, value, source, createdAt FROM asset_valuations WHERE assetId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
-      ids
-    ),
-    db.getAllAsync<AssetArchiveRow>(
-      `SELECT assetId, effectiveDate, isArchived, createdAt FROM asset_archive_history WHERE assetId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
-      ids
-    ),
-    db.getAllAsync<AssetTransactionRow>(
-      `SELECT id, type, amount, date, assetId, metadata, createdAt, updatedAt, deletedAt
-       FROM transactions WHERE assetId IN (${placeholders}) AND deletedAt IS NULL
-         AND type IN ('ASSET_PURCHASE', 'ASSET_SALE') ORDER BY date, createdAt;`,
-      ids
-    ),
-  ]);
+  const valuationRows = await db.getAllAsync<AssetValuationRow>(
+    `SELECT assetId, effectiveDate, value, source, createdAt FROM asset_valuations WHERE assetId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
+    ids
+  );
+  const archiveRows = await db.getAllAsync<AssetArchiveRow>(
+    `SELECT assetId, effectiveDate, isArchived, createdAt FROM asset_archive_history WHERE assetId IN (${placeholders}) ORDER BY effectiveDate, createdAt;`,
+    ids
+  );
+  const transactionRows = await db.getAllAsync<AssetTransactionRow>(
+    `SELECT id, type, amount, date, assetId, metadata, createdAt, updatedAt, deletedAt
+     FROM transactions WHERE assetId IN (${placeholders}) AND deletedAt IS NULL
+       AND type IN ('ASSET_PURCHASE', 'ASSET_SALE') ORDER BY date, createdAt;`,
+    ids
+  );
 
   const valuationsByAsset = new Map<string, AssetValuation[]>();
   for (const row of valuationRows) {

@@ -1,6 +1,9 @@
 import * as SQLite from 'expo-sqlite';
 import { CREATE_TABLES_SQL } from './schema';
 import { DEFAULT_INCOME_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES } from './defaultData';
+import { serializeDatabase } from './serializedDatabase';
+
+export { serializeDatabase } from './serializedDatabase';
 
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -192,7 +195,8 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   }
 
   initPromise = (async () => {
-    const db = await SQLite.openDatabaseAsync('vaelth.db');
+    const rawDb = await SQLite.openDatabaseAsync('vaelth.db');
+    const db = serializeDatabase(rawDb);
 
     // Enable foreign keys and WAL mode
     await db.execAsync('PRAGMA foreign_keys = ON;');

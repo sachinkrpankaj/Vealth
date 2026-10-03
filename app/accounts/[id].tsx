@@ -38,13 +38,11 @@ export default function AccountDetailScreen() {
     if (!id) return;
     try {
       setIsLoading(true);
-      const [acc, allTx, ppl, accs, rawAllTx] = await Promise.all([
-        getAccountById(id),
-        getAllTransactions({ accountId: id }),
-        getAllPeople(),
-        getAllAccounts(),
-        getAllTransactions(),
-      ]);
+      const acc = await getAccountById(id);
+      const allTx = await getAllTransactions({ accountId: id });
+      const ppl = await getAllPeople();
+      const accs = await getAllAccounts();
+      const rawAllTx = await getAllTransactions();
 
       if (acc) {
         setAccount(acc);

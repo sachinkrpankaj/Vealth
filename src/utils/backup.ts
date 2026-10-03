@@ -66,29 +66,16 @@ export function isSecurityKey(key: string): boolean {
 }
 
 export async function createBackupData(): Promise<VaelthBackupData> {
-  const [
-    accounts,
-    people,
-    categories,
-    transactions,
-    assets,
-    liabilities,
-    snapshots,
-    allSettings,
-    shoppingLists,
-    shoppingItems,
-  ] = await Promise.all([
-    getAllAccounts(true),
-    getAllPeople(true),
-    getAllCategories(true),
-    getAllTransactions({ includeDeleted: true }),
-    getAllAssets(true),
-    getAllLiabilities(true),
-    getAllSnapshots(),
-    getSettingsMap(),
-    getAllShoppingLists(true),
-    getAllShoppingItems(),
-  ]);
+  const accounts = await getAllAccounts(true);
+  const people = await getAllPeople(true);
+  const categories = await getAllCategories(true);
+  const transactions = await getAllTransactions({ includeDeleted: true });
+  const assets = await getAllAssets(true);
+  const liabilities = await getAllLiabilities(true);
+  const snapshots = await getAllSnapshots();
+  const allSettings = await getSettingsMap();
+  const shoppingLists = await getAllShoppingLists(true);
+  const shoppingItems = await getAllShoppingItems();
 
   // Strip all sensitive security / PIN / auth keys from exported settings
   const sanitizedSettings: Record<string, string> = {};

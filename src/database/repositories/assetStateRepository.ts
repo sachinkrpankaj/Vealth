@@ -107,18 +107,16 @@ export async function reconcileAssetState(
     );
     if (!row) continue;
 
-    const [archiveRows, eventRows] = await Promise.all([
-      txn.getAllAsync<AssetArchiveRow>(
-        'SELECT effectiveDate, isArchived, createdAt FROM asset_archive_history WHERE assetId = ? ORDER BY effectiveDate, createdAt;',
-        [assetId]
-      ),
-      txn.getAllAsync<AssetEventRow>(
-        `SELECT id, type, amount, date, assetId, metadata, createdAt, updatedAt, deletedAt
-         FROM transactions WHERE assetId = ? AND deletedAt IS NULL
-           AND type IN ('ASSET_PURCHASE', 'ASSET_SALE');`,
-        [assetId]
-      ),
-    ]);
+    const archiveRows = await txn.getAllAsync<AssetArchiveRow>(
+      'SELECT effectiveDate, isArchived, createdAt FROM asset_archive_history WHERE assetId = ? ORDER BY effectiveDate, createdAt;',
+      [assetId]
+    );
+    const eventRows = await txn.getAllAsync<AssetEventRow>(
+      `SELECT id, type, amount, date, assetId, metadata, createdAt, updatedAt, deletedAt
+       FROM transactions WHERE assetId = ? AND deletedAt IS NULL
+         AND type IN ('ASSET_PURCHASE', 'ASSET_SALE');`,
+      [assetId]
+    );
 
     const asset: Asset = {
       id: row.id,
