@@ -58,6 +58,7 @@ export default function TransactionDetailScreen() {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorState, setErrorState] = useState<'NOT_FOUND' | 'DELETED' | 'DB_ERROR' | null>(null);
 
   // Edit Mode state
   const [isEditing, setIsEditing] = useState(false);
@@ -72,40 +73,54 @@ export default function TransactionDetailScreen() {
     if (!id) return;
     try {
       setIsLoading(true);
-      const tx = await getTransactionById(id);
-      if (tx) {
-        setTransaction(tx);
-        setEditAmount(tx.amount);
-        setEditNote(tx.note || '');
-        setEditDate(tx.date);
-        setEditCategory(tx.categoryId || null);
-
-        if (tx.categoryId) {
-          const cat = await getCategoryById(tx.categoryId);
-          setCategory(cat);
+      setErrorState(null);
+      const tx = await getTransactionById(id, false);
+      if (!tx) {
+        const deletedTx = await getTransactionById(id, true);
+        if (deletedTx) {
+          setErrorState('DELETED');
         } else {
-          setCategory(null);
+          setErrorState('NOT_FOUND');
         }
-
-        if (tx.accountId) {
-          const acc = await getAccountById(tx.accountId);
-          setAccount(acc);
-        }
-        if (tx.destinationAccountId) {
-          const dest = await getAccountById(tx.destinationAccountId);
-          setDestAccount(dest);
-        }
-        if (tx.personId) {
-          const p = await getPersonById(tx.personId);
-          setPerson(p);
-        }
-        if (tx.assetId) {
-          const ast = await getAssetById(tx.assetId);
-          setAsset(ast);
-        }
+        setTransaction(null);
+        return;
       }
-    } catch {
-      // Handled silently
+
+      setTransaction(tx);
+      setEditAmount(tx.amount);
+      setEditNote(tx.note || '');
+      setEditDate(tx.date);
+      setEditCategory(tx.categoryId || null);
+
+      if (tx.categoryId) {
+        const cat = await getCategoryById(tx.categoryId);
+        setCategory(cat);
+      } else {
+        setCategory(null);
+      }
+
+      if (tx.accountId) {
+        const acc = await getAccountById(tx.accountId);
+        setAccount(acc);
+      }
+      if (tx.destinationAccountId) {
+        const dest = await getAccountById(tx.destinationAccountId);
+        setDestAccount(dest);
+      }
+      if (tx.personId) {
+        const p = await getPersonById(tx.personId);
+        setPerson(p);
+      }
+      if (tx.assetId) {
+        const ast = await getAssetById(tx.assetId);
+        setAsset(ast);
+      }
+    } catch (e: any) {
+      if (__DEV__) {
+        console.error(`[TransactionDetail] Query error for id=${id}:`, e?.message || e);
+      }
+      setErrorState('DB_ERROR');
+      setTransaction(null);
     } finally {
       setIsLoading(false);
     }
@@ -164,18 +179,6 @@ export default function TransactionDetailScreen() {
       }
     }
 
-    // Enforce asset valuation bounds check on edit
-    if (transaction.type === 'ASSET_SALE' && asset) {
-      const maxPossible = asset.currentValue + transaction.amount;
-      if (editAmount > maxPossible) {
-        setIsSaving(false);
-        showThemedAlert(
-          'Valuation Limit',
-          `Sale amount (${formatRupee(editAmount)}) cannot exceed available asset valuation (${formatRupee(maxPossible)}).`
-        );
-        return;
-      }
-    }
     try {
       await updateTransaction(transaction.id, {
         amount: editAmount,
@@ -203,11 +206,40 @@ export default function TransactionDetailScreen() {
   }
 
   if (!transaction) {
+    let errorTitle = 'Transaction Not Found';
+    let errorDesc = 'This transaction does not exist.';
+    if (errorState === 'DELETED') {
+      errorTitle = 'Transaction Deleted';
+      errorDesc = 'This transaction has been deleted and reversed from your accounts.';
+    } else if (errorState === 'DB_ERROR') {
+      errorTitle = 'Loading Error';
+      errorDesc = 'Unable to load transaction details from the database. Please try again.';
+    }
+
     return (
       <ScreenContainer>
         <View style={styles.center}>
-          <Text style={{ color: colors.textMuted, marginBottom: 12 }}>Transaction not found or has been deleted.</Text>
-          <PrimaryButton title="Go Back" onPress={() => router.back()} />
+          <Text style={[styles.errorTitle, { color: colors.textPrimary, marginBottom: 8 }]}>
+            {errorTitle}
+          </Text>
+          <Text style={{ color: colors.textMuted, marginBottom: 16, textAlign: 'center', maxWidth: 300 }}>
+            {errorDesc}
+          </Text>
+          {errorState === 'DB_ERROR' ? (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <PrimaryButton title="Retry" onPress={() => loadData()} style={{ minWidth: 120 }} />
+              <LiquidGlassCard
+                onPress={() => router.back()}
+                radius={radii.md}
+                padding={12}
+                style={{ alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Go Back</Text>
+              </LiquidGlassCard>
+            </View>
+          ) : (
+            <PrimaryButton title="Go Back" onPress={() => router.back()} />
+          )}
         </View>
       </ScreenContainer>
     );
@@ -440,6 +472,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
   headerRow: {
     flexDirection: 'row',

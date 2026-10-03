@@ -187,6 +187,9 @@ export async function getAssetById(id: string): Promise<Asset | null> {
 }
 
 export async function createAsset(asset: Omit<Asset, 'createdAt' | 'updatedAt'>): Promise<Asset> {
+  if (!asset.name || !asset.name.trim()) {
+    throw new Error('Asset name cannot be blank.');
+  }
   if (!ASSET_CATEGORIES.includes(asset.category)) throw new Error(`Invalid asset category: ${asset.category}`);
   if (!Number.isSafeInteger(asset.currentValue) || asset.currentValue < 0) {
     throw new Error('Asset value must be a non-negative integer in paise.');
@@ -204,7 +207,7 @@ export async function createAsset(asset: Omit<Asset, 'createdAt' | 'updatedAt'>)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         asset.id,
-        asset.name,
+        asset.name.trim(),
         asset.category,
         Math.round(asset.currentValue),
         Math.round(asset.purchaseValue),
@@ -221,11 +224,14 @@ export async function createAsset(asset: Omit<Asset, 'createdAt' | 'updatedAt'>)
     }
     await recordArchiveState(txn, asset.id, today, asset.isArchived, now);
   });
-  return { ...asset, createdAt: now, updatedAt: now };
+  return { ...asset, name: asset.name.trim(), createdAt: now, updatedAt: now };
 }
 
 export async function updateAsset(id: string, updates: Partial<Asset>): Promise<void> {
   const db = await getDatabase();
+  if (updates.name !== undefined && !updates.name.trim()) {
+    throw new Error('Asset name cannot be blank.');
+  }
   if (updates.category && !ASSET_CATEGORIES.includes(updates.category)) {
     throw new Error(`Invalid asset category: ${updates.category}`);
   }
@@ -244,7 +250,7 @@ export async function updateAsset(id: string, updates: Partial<Asset>): Promise<
     const currentRow = await txn.getFirstAsync<AssetRow>('SELECT * FROM assets WHERE id = ?;', [id]);
     if (!currentRow) throw new Error(`Asset ${id} not found`);
     const current = mapRowToAsset(currentRow);
-    const updated: Asset = { ...current, ...updates, updatedAt: now };
+    const updated: Asset = { ...current, ...updates, name: updates.name !== undefined ? updates.name.trim() : current.name, updatedAt: now };
     await txn.runAsync(
       `UPDATE assets SET name = ?, category = ?, currentValue = ?, purchaseValue = ?, purchaseDate = ?, note = ?, isArchived = ?, updatedAt = ?
        WHERE id = ?;`,

@@ -1,12 +1,7 @@
 import React, { useEffect } from 'react';
-import { LogBox, AppState, ActivityIndicator, View } from 'react-native';
+import { AppState, ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
-// Ignore known benign third-party warnings without blinding critical issues
-LogBox.ignoreLogs([
-  'Non-serializable values were found in the navigation state',
-]);
 
 // Strip debug verbose logs in production while preserving error observability
 if (!__DEV__) {

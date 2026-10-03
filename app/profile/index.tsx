@@ -42,6 +42,10 @@ import { useThemeStore } from '../../src/stores/useThemeStore';
 import { setSetting } from '../../src/database/repositories/settingsRepository';
 import { formatRupee } from '../../src/domain/finance/currency';
 import { getCreditCardBillingInfo } from '../../src/domain/finance/creditCardBilling';
+import {
+  calculateTotalPhysicalAssets,
+  calculateTotalStandaloneLiabilities,
+} from '../../src/domain/finance/financialEngine';
 
 export default function ProfileScreen() {
   const { colors, isDark, typography, radii, spacing } = useTheme();
@@ -106,9 +110,9 @@ export default function ProfileScreen() {
     }
   };
 
-  // Asset & liability aggregate figures
-  const totalAssetValuation = physicalAssets.reduce((sum, a) => sum + a.currentValue, 0);
-  const totalLiabilityValuation = standaloneLiabilities.reduce((sum, l) => sum + l.amount, 0);
+  // Asset & liability aggregate figures (excluding archived items to match Net Worth)
+  const totalAssetValuation = calculateTotalPhysicalAssets(physicalAssets, undefined, transactions);
+  const totalLiabilityValuation = calculateTotalStandaloneLiabilities(standaloneLiabilities, accounts);
 
   // Initial letter for avatar
   const avatarLetter = (userName || 'V').charAt(0).toUpperCase();

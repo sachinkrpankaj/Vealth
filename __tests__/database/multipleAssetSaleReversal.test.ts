@@ -177,7 +177,10 @@ describe('3. Multiple Asset-Sale Reversal & Integrity — Comprehensive Regressi
 
     scoped.getFirstAsync.mockResolvedValueOnce(existingSale);
 
-    await updateTransaction('tx-sale-edit', { amount: 3500000 });
+    await updateTransaction('tx-sale-edit', {
+      amount: 3500000,
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 3500000 }),
+    });
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
       'UPDATE assets SET currentValue = ?, isArchived = ?, updatedAt = ? WHERE id = ?;',

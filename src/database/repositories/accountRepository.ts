@@ -62,6 +62,9 @@ export async function getAccountById(id: string): Promise<Account | null> {
 export async function createAccount(
   account: Omit<Account, 'createdAt' | 'updatedAt'>
 ): Promise<Account> {
+  if (!account.name || !account.name.trim()) {
+    throw new Error('Account name cannot be blank.');
+  }
   if (!ACCOUNT_TYPES.includes(account.type)) throw new Error(`Invalid account type: ${account.type}`);
   const db = await getDatabase();
   const now = new Date().toISOString();
@@ -70,7 +73,7 @@ export async function createAccount(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       account.id,
-      account.name,
+      account.name.trim(),
       account.type,
       Math.round(account.openingBalance ?? 0),
       account.creditLimit ? Math.round(account.creditLimit) : 0,
@@ -84,7 +87,7 @@ export async function createAccount(
       now,
     ]
   );
-  return { ...account, createdAt: now, updatedAt: now };
+  return { ...account, name: account.name.trim(), createdAt: now, updatedAt: now };
 }
 
 export async function updateAccount(id: string, updates: Partial<Account>): Promise<void> {
@@ -92,6 +95,9 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
   const now = new Date().toISOString();
   const current = await getAccountById(id);
   if (!current) throw new Error(`Account ${id} not found`);
+  if (updates.name !== undefined && !updates.name.trim()) {
+    throw new Error('Account name cannot be blank.');
+  }
   if (updates.type && !ACCOUNT_TYPES.includes(updates.type)) {
     throw new Error(`Invalid account type: ${updates.type}`);
   }

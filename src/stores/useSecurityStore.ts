@@ -432,7 +432,16 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
 
       // 3. Biometric preference from app_settings
       const bio = await getSetting('security_biometric');
-      const isBiometricEnabled = bio === 'true' && isPinEnabled;
+      let isBiometricEnabled = false;
+      if (bio === 'true' && isPinEnabled) {
+        try {
+          const hasHardware = await LocalAuthentication.hasHardwareAsync();
+          const isEnrolled = hasHardware ? await LocalAuthentication.isEnrolledAsync() : false;
+          isBiometricEnabled = Boolean(hasHardware && isEnrolled);
+        } catch {
+          isBiometricEnabled = false;
+        }
+      }
 
       set({
         isPinEnabled,
@@ -450,24 +459,36 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     if (pin) {
       const hashed = await hashPin(pin);
       await setSecureItem(SECURE_PIN_HASH_KEY, hashed);
-      // Ensure no raw PIN ever exists in SQLite
+      // Ensure no raw PIN ever exists in SQLite — fail closed if cleanup fails
       try {
         await setSetting('security_pin', '');
-      } catch {}
+      } catch (err) {
+        // Rollback secure storage if cleanup fails to avoid inconsistent/insecure state
+        await deleteSecureItem(SECURE_PIN_HASH_KEY).catch(() => {});
+        throw new Error('Failed to clean up legacy security data. PIN setup was cancelled.');
+      }
       set({ isPinEnabled: true });
     } else {
       await deleteSecureItem(SECURE_PIN_HASH_KEY);
-      try {
-        await setSetting('security_pin', '');
-        await setSetting('security_biometric', 'false');
-      } catch {}
+      await setSetting('security_pin', '');
+      await setSetting('security_biometric', 'false');
       set({ isPinEnabled: false, isBiometricEnabled: false, isLocked: false });
     }
   },
 
   setBiometricEnabled: async (enabled: boolean) => {
-    if (enabled && !get().isPinEnabled) {
-      throw new Error('Set a PIN before enabling biometric unlock.');
+    if (enabled) {
+      if (!get().isPinEnabled) {
+        throw new Error('Set a PIN before enabling biometric unlock.');
+      }
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) {
+        throw new Error('Biometric hardware is not available on this device.');
+      }
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        throw new Error('No biometric credentials enrolled on this device. Please set up fingerprint or face unlock in system settings.');
+      }
     }
     await setSetting('security_biometric', enabled ? 'true' : 'false');
     set({ isBiometricEnabled: enabled });

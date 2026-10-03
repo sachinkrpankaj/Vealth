@@ -498,9 +498,11 @@ function mergeAssetMetadata(
 function clearAssetMetadata(metadata?: string | null): string | null {
   const value = metadataObject(metadata);
   if (!value) return metadata ?? null;
+  const isPartial = value.isPartialSale === true;
   for (const key of [
     'assetBookValueBefore', 'assetArchivedBefore', 'assetValueDeducted',
-    'bookValueSold', 'assetValueAdded', 'assetStateApplied',
+    'assetValueAdded', 'assetStateApplied',
+    ...(isPartial ? [] : ['bookValueSold']),
   ]) delete value[key];
   return Object.keys(value).length ? JSON.stringify(value) : null;
 }
@@ -570,14 +572,21 @@ async function applyAssetEffect(
 
   const effectiveNow = tx.date <= getTodayLocalDateString();
   if (!effectiveNow) {
+    const meta = metadataObject(tx.metadata);
     return mergeAssetMetadata(cleanMetadata, {
       assetStateApplied: false,
       ...(tx.type === 'ASSET_PURCHASE' ? { assetValueAdded: tx.amount, assetArchivedBefore: asset.isArchived === 1 } : {}),
+      ...(tx.type === 'ASSET_SALE' && meta?.bookValueSold !== undefined ? { bookValueSold: meta.bookValueSold } : {}),
+      ...(tx.type === 'ASSET_SALE' && meta?.isPartialSale !== undefined ? { isPartialSale: meta.isPartialSale } : {}),
     });
   }
 
   if (tx.type === 'ASSET_SALE') {
-    const valueDeducted = Math.min(asset.currentValue, tx.amount);
+    const meta = metadataObject(tx.metadata);
+    const isPartial = meta?.isPartialSale === true || (typeof meta?.bookValueSold === 'number' && meta.bookValueSold < asset.currentValue);
+    const valueDeducted = typeof meta?.bookValueSold === 'number'
+      ? Math.min(asset.currentValue, Math.max(0, Math.round(meta.bookValueSold)))
+      : asset.currentValue;
     const newAssetValue = Math.max(0, asset.currentValue - valueDeducted);
     const newArchived = newAssetValue === 0 ? 1 : asset.isArchived;
     await txn.runAsync(
@@ -590,6 +599,7 @@ async function applyAssetEffect(
       assetValueDeducted: valueDeducted,
       bookValueSold: valueDeducted,
       assetStateApplied: true,
+      ...(isPartial ? { isPartialSale: true } : {}),
     });
   }
 
@@ -716,6 +726,19 @@ export async function updateTransaction(id: string, updates: Partial<Transaction
       date: effectiveDate,
       updatedAt: now,
     };
+
+    if (
+      currentTransaction.type === 'ASSET_SALE' &&
+      updates.amount !== undefined &&
+      updates.metadata === undefined &&
+      currentTransaction.metadata
+    ) {
+      const meta = metadataObject(currentTransaction.metadata);
+      if (meta && typeof meta.bookValueSold === 'number' && meta.bookValueSold === currentTransaction.amount) {
+        meta.bookValueSold = updates.amount;
+        updated.metadata = JSON.stringify(meta);
+      }
+    }
 
     if (updated.type !== currentTransaction.type) {
       if (updated.type !== 'TRANSFER') updated.destinationAccountId = undefined;

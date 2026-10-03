@@ -149,11 +149,32 @@ export async function reconcileAssetState(
         assetFields.assetArchivedBefore = archivedBefore;
       } else if (applied) {
         const valueBefore = calculateAssetValueAsOf(asset, preceding, event.date);
-        const deducted = Math.min(valueBefore, Math.max(0, Math.round(event.amount)));
+        let existingMeta: any = null;
+        try {
+          existingMeta = event.metadata ? JSON.parse(event.metadata) : null;
+        } catch {}
+        const isPartial = existingMeta?.isPartialSale === true || (typeof existingMeta?.bookValueSold === 'number' && existingMeta.bookValueSold < valueBefore);
+        const deducted = typeof existingMeta?.bookValueSold === 'number' && isPartial
+          ? Math.min(valueBefore, Math.max(0, Math.round(existingMeta.bookValueSold)))
+          : valueBefore;
         assetFields.assetBookValueBefore = valueBefore;
         assetFields.assetArchivedBefore = archivedBefore;
         assetFields.assetValueDeducted = deducted;
         assetFields.bookValueSold = deducted;
+        if (isPartial) {
+          assetFields.isPartialSale = true;
+        }
+      } else {
+        let existingMeta: any = null;
+        try {
+          existingMeta = event.metadata ? JSON.parse(event.metadata) : null;
+        } catch {}
+        if (typeof existingMeta?.bookValueSold === 'number') {
+          assetFields.bookValueSold = existingMeta.bookValueSold;
+        }
+        if (existingMeta?.isPartialSale === true) {
+          assetFields.isPartialSale = true;
+        }
       }
 
       const metadata = JSON.stringify({ ...clearAssetMetadata(event.metadata ?? null), ...assetFields });

@@ -10,6 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { Asset, AssetCategory } from '../../src/domain/finance/types';
+import { calculateTotalPhysicalAssets } from '../../src/domain/finance/financialEngine';
 import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 
 function getAssetIcon(cat: AssetCategory) {
@@ -37,7 +38,7 @@ import { Trash2, Edit2, X, Archive } from 'lucide-react-native';
 
 export default function AssetsListScreen() {
   const { colors, radii, spacing, typography } = useTheme();
-  const { physicalAssets, refresh } = useFinancialData();
+  const { physicalAssets, transactions, refresh } = useFinancialData();
 
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -112,10 +113,9 @@ export default function AssetsListScreen() {
     );
   };
 
-  const totalValuation = physicalAssets.reduce(
-    (acc, curr) => acc + curr.currentValue,
-    0
-  );
+  const totalValuation = calculateTotalPhysicalAssets(physicalAssets, undefined, transactions);
+  const activeAssets = physicalAssets.filter((a) => !a.isArchived);
+  const archivedAssets = physicalAssets.filter((a) => a.isArchived);
 
   return (
     <ScreenContainer>
@@ -145,7 +145,9 @@ export default function AssetsListScreen() {
           style={{ marginVertical: 4 }}
         />
         <Text style={[styles.heroSub, { color: colors.textMuted }]}>
-          {physicalAssets.length} recorded items
+          {activeAssets.length === physicalAssets.length
+            ? `${activeAssets.length} recorded items`
+            : `${activeAssets.length} active • ${archivedAssets.length} archived`}
         </Text>
       </Card>
 
@@ -183,15 +185,31 @@ export default function AssetsListScreen() {
                   </View>
 
                   <View style={styles.assetDetails}>
-                    <Text
-                      style={[
-                        styles.assetName,
-                        { color: colors.textPrimary, fontSize: typography.fontSizes.body },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text
+                        style={[
+                          styles.assetName,
+                          { color: colors.textPrimary, fontSize: typography.fontSizes.body },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.isArchived && (
+                        <View
+                          style={{
+                            backgroundColor: colors.surfaceSubtle,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: radii.xs,
+                          }}
+                        >
+                          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>
+                            ARCHIVED
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[
                         styles.assetCategory,

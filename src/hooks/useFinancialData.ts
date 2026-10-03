@@ -24,6 +24,46 @@ import {
 } from '../domain/finance/financialEngine';
 import { formatDateIso } from '../utils/dateUtils';
 
+import { getDatabase } from '../database/db';
+
+export interface FinancialSnapshotData {
+  accounts: Account[];
+  people: Person[];
+  transactions: Transaction[];
+  physicalAssets: Asset[];
+  standaloneLiabilities: Liability[];
+  categories: Category[];
+  userName: string;
+}
+
+/**
+ * Reads a consistent point-in-time snapshot of all primary financial tables
+ * to guarantee no intermediate concurrent writes produce mixed-state data.
+ */
+export async function fetchFinancialSnapshot(): Promise<FinancialSnapshotData> {
+  const db = await getDatabase();
+  let snapshot!: FinancialSnapshotData;
+  await db.withTransactionAsync(async () => {
+    const accs = await getAllAccounts(true);
+    const ppl = await getAllPeople(true);
+    const txs = await getAllTransactions();
+    const asts = await getAllAssets(true);
+    const libs = await getAllLiabilities(true);
+    const cats = await getAllCategories(true);
+    const storedName = await getSetting('user_name');
+    snapshot = {
+      accounts: accs,
+      people: ppl,
+      transactions: txs,
+      physicalAssets: asts,
+      standaloneLiabilities: libs,
+      categories: cats,
+      userName: storedName || '',
+    };
+  });
+  return snapshot;
+}
+
 export interface FinancialDataState {
   isLoading: boolean;
   error: string | null;
@@ -55,32 +95,26 @@ export function useFinancialData(): FinancialDataState {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      const accs = await getAllAccounts(true);
-      const ppl = await getAllPeople(true);
-      const txs = await getAllTransactions();
-      const asts = await getAllAssets(true);
-      const libs = await getAllLiabilities(true);
-      const cats = await getAllCategories(true);
-      const storedName = await getSetting('user_name');
+      const snapshot = await fetchFinancialSnapshot();
 
-      setAccounts(accs);
-      setPeople(ppl);
-      setTransactions(txs);
-      setCategories(cats);
-      if (storedName) {
-        setUserName(storedName);
+      setAccounts(snapshot.accounts);
+      setPeople(snapshot.people);
+      setTransactions(snapshot.transactions);
+      setCategories(snapshot.categories);
+      if (snapshot.userName) {
+        setUserName(snapshot.userName);
       }
-      setPhysicalAssets(asts);
-      setStandaloneLiabilities(libs);
+      setPhysicalAssets(snapshot.physicalAssets);
+      setStandaloneLiabilities(snapshot.standaloneLiabilities);
 
       // Record daily net-worth snapshot using local date
       const today = formatDateIso(new Date());
       const nw = calculateNetWorth({
-        accounts: accs,
-        people: ppl,
-        physicalAssets: asts,
-        standaloneLiabilities: libs,
-        transactions: txs,
+        accounts: snapshot.accounts,
+        people: snapshot.people,
+        physicalAssets: snapshot.physicalAssets,
+        standaloneLiabilities: snapshot.standaloneLiabilities,
+        transactions: snapshot.transactions,
       });
 
       try {

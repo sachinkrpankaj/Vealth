@@ -5,7 +5,24 @@ import { formatDateIso } from './dateUtils';
 
 export function escapeCSVField(val: string | number | null | undefined): string {
   if (val == null) return '';
-  const str = String(val);
+  if (typeof val === 'number') {
+    return String(val);
+  }
+  let str = String(val);
+
+  // Prevent spreadsheet formula injection (=, +, -, @, tab, CR)
+  if (str.length > 0) {
+    const firstChar = str[0];
+    if (firstChar === '=' || firstChar === '@' || firstChar === '\t' || firstChar === '\r') {
+      str = `'${str}`;
+    } else if (firstChar === '+' || firstChar === '-') {
+      const isPureNumber = /^[+-]?\d+(\.\d+)?$/.test(str.trim());
+      if (!isPureNumber) {
+        str = `'${str}`;
+      }
+    }
+  }
+
   if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
   }

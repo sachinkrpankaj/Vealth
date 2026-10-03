@@ -11,7 +11,7 @@ import { CategoryBreakdownChart, CategoryBreakdownItem } from '../../src/compone
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { formatRupee } from '../../src/domain/finance/currency';
-import { getCurrentLocalMonthString } from '../../src/utils/dateUtils';
+import { getCurrentLocalMonthString, getTodayLocalDateString } from '../../src/utils/dateUtils';
 
 export default function AnalyticsScreen() {
   const { colors, typography, radii, spacing } = useTheme();
@@ -25,8 +25,9 @@ export default function AnalyticsScreen() {
 
   const currentMonth = getCurrentLocalMonthString(); // Local YYYY-MM
 
-  // Aggregate category spending this month
+  // Aggregate category spending this month (excluding future-dated transactions)
   const categoryStats = useMemo(() => {
+    const todayStr = getTodayLocalDateString();
     const expenseMap = new Map<string, number>();
     const incomeMap = new Map<string, number>();
 
@@ -36,6 +37,7 @@ export default function AnalyticsScreen() {
     for (const tx of transactions) {
       if (tx.deletedAt) continue;
       if (!tx.date.startsWith(currentMonth)) continue;
+      if (tx.date > todayStr) continue;
 
       const amt = Math.abs(tx.amount);
       const catKey = tx.categoryId || 'General';

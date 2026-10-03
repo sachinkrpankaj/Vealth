@@ -30,14 +30,30 @@ export const Card: React.FC<CardProps> = ({
   radius,
   padding,
 }) => {
-  const { radii, spacing } = useTheme();
+  const { colors, radii, spacing } = useTheme();
+
+  const variantStyle: ViewStyle = {};
+  let showPrism = border;
+
+  if (variant === 'solid') {
+    variantStyle.backgroundColor = elevated ? colors.surfaceElevated : colors.surface;
+    showPrism = false;
+  } else if (variant === 'subtle') {
+    variantStyle.backgroundColor = colors.surfaceSubtle;
+    showPrism = false;
+  } else {
+    // 'glass'
+    if (elevated) {
+      variantStyle.backgroundColor = colors.surfaceElevated;
+    }
+  }
 
   return (
     <LiquidGlassCard
-      style={style}
+      style={[variantStyle, style]}
       radius={radius ?? radii.lg}
       padding={padding ?? spacing.md}
-      showPrism={border}
+      showPrism={showPrism}
       onPress={onPress}
     >
       {children}

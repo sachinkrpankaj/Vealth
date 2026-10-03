@@ -49,7 +49,7 @@ describe('dated asset and liability values', () => {
       ],
     };
     const transactions: Transaction[] = [
-      { id: 'sale', type: 'ASSET_SALE', amount: 30000, date: '2026-10-03', assetId: baseAsset.id, createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z' },
+      { id: 'sale', type: 'ASSET_SALE', amount: 30000, date: '2026-10-03', assetId: baseAsset.id, metadata: JSON.stringify({ bookValueSold: 30000 }), createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z' },
       { id: 'purchase', type: 'ASSET_PURCHASE', amount: 10000, date: '2026-10-04', assetId: baseAsset.id, createdAt: '2026-10-01T11:00:00.000Z', updatedAt: '2026-10-01T11:00:00.000Z' },
     ];
     expect(netWorth('2026-10-02', [baseAsset], transactions).totalPhysicalAssets).toBe(100000);
@@ -71,6 +71,7 @@ describe('dated asset and liability values', () => {
     };
     const firstSale: Transaction = {
       id: 'sale-a', type: 'ASSET_SALE', amount: 30000, date: '2026-10-02', assetId: baseAsset.id,
+      metadata: JSON.stringify({ bookValueSold: 30000 }),
       createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-01T10:00:00.000Z',
     };
     const secondSale: Transaction = {
@@ -82,7 +83,7 @@ describe('dated asset and liability values', () => {
     expect(netWorth('2026-10-03', [baseAsset], [firstSale, secondSale]).totalPhysicalAssets).toBe(0);
     // The second sale now consumes 80,000 of the original 100,000 basis.
     expect(netWorth('2026-10-03', [baseAsset], [secondSale]).totalPhysicalAssets).toBe(20000);
-    const editedSecondSale = { ...secondSale, amount: 50000 };
+    const editedSecondSale = { ...secondSale, amount: 50000, metadata: JSON.stringify({ bookValueSold: 50000 }) };
     expect(netWorth('2026-10-03', [baseAsset], [firstSale, editedSecondSale]).totalPhysicalAssets).toBe(20000);
   });
 

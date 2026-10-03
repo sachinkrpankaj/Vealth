@@ -142,30 +142,6 @@ export default function AddAccountScreen() {
           onChangeText={(val) => {
             setName(val);
             if (error) setError(null);
-
-            const lower = val.toLowerCase();
-            const cardKeywords = [
-              'credit card',
-              'creditcard',
-              'millennia',
-              'regalia',
-              'simplyclick',
-              'simplysave',
-              'sapphiro',
-              'rubyx',
-              'coral',
-              'magnus',
-              'amex',
-              'flipkart card',
-              'amazon pay card',
-              'sbi card',
-              'hdfc card',
-              'icici card',
-              'axis card',
-            ];
-            if (cardKeywords.some((kw) => lower.includes(kw)) && (type === 'BANK' || type === 'INVESTMENT')) {
-              setType('CREDIT_CARD');
-            }
           }}
           placeholder="e.g. SBI Savings, HDFC Millennia Credit Card"
           placeholderTextColor={colors.textMuted}

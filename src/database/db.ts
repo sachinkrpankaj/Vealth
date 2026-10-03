@@ -8,42 +8,82 @@ export { serializeDatabase } from './serializedDatabase';
 let dbInstance: SQLite.SQLiteDatabase | null = null;
 let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
+export function isIgnorableMigrationError(error: any): boolean {
+  if (!error) return false;
+  const msg = (error.message || String(error)).toLowerCase();
+  return (
+    msg.includes('duplicate column name') ||
+    msg.includes('already exists')
+  );
+}
+
+export async function runSafeMigration(
+  db: SQLite.SQLiteDatabase,
+  sql: string,
+  contextDesc: string
+): Promise<void> {
+  try {
+    await db.execAsync(sql);
+  } catch (error: any) {
+    if (isIgnorableMigrationError(error)) {
+      return;
+    }
+    console.error(`[Migration Error] Failed in ${contextDesc}:`, error);
+    throw error;
+  }
+}
+
 export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   // 1. Column migrations for existing databases
-  try {
-    await db.execAsync('ALTER TABLE accounts ADD COLUMN creditLimit INTEGER DEFAULT 0;');
-  } catch {}
-  try {
-    await db.execAsync('ALTER TABLE accounts ADD COLUMN billingDay INTEGER;');
-  } catch {}
-  try {
-    await db.execAsync('ALTER TABLE accounts ADD COLUMN dueDay INTEGER;');
-  } catch {}
+  await runSafeMigration(
+    db,
+    'ALTER TABLE accounts ADD COLUMN creditLimit INTEGER DEFAULT 0;',
+    'add creditLimit to accounts'
+  );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE accounts ADD COLUMN billingDay INTEGER;',
+    'add billingDay to accounts'
+  );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE accounts ADD COLUMN dueDay INTEGER;',
+    'add dueDay to accounts'
+  );
 
-  try {
-    await db.execAsync('ALTER TABLE categories ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0;');
-  } catch {}
-  try {
-    await db.execAsync('ALTER TABLE categories ADD COLUMN monthYear TEXT;');
-  } catch {}
-  try {
-    await db.execAsync(`
-      UPDATE categories SET monthYear = substr(id, 13)
-      WHERE id LIKE 'cat-general-%' AND (monthYear IS NULL OR monthYear = '');
-    `);
-  } catch {}
-  try {
-    await db.execAsync('ALTER TABLE categories ADD COLUMN color TEXT;');
-  } catch {}
-  try {
-    await db.execAsync('ALTER TABLE transactions ADD COLUMN metadata TEXT;');
-  } catch {}
+  await runSafeMigration(
+    db,
+    'ALTER TABLE categories ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0;',
+    'add isArchived to categories'
+  );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE categories ADD COLUMN monthYear TEXT;',
+    'add monthYear to categories'
+  );
+  await runSafeMigration(
+    db,
+    `UPDATE categories SET monthYear = substr(id, 13)
+     WHERE id LIKE 'cat-general-%' AND (monthYear IS NULL OR monthYear = '');`,
+    'update monthYear on legacy general categories'
+  );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE categories ADD COLUMN color TEXT;',
+    'add color to categories'
+  );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE transactions ADD COLUMN metadata TEXT;',
+    'add metadata to transactions'
+  );
 
   // Preserve only values that can still be observed in a legacy database.
   // The purchase amount/date is a known starting point; the existing mutable
   // value is anchored at its last recorded update date, never projected backward.
-  try {
-    await db.execAsync(`
+  await runSafeMigration(
+    db,
+    `
       INSERT OR IGNORE INTO asset_valuations (id, assetId, effectiveDate, value, source, createdAt)
       SELECT 'legacy-purchase-' || id, id, purchaseDate, purchaseValue, 'PURCHASE', createdAt
       FROM assets;
@@ -63,12 +103,14 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
       INSERT OR IGNORE INTO liability_archive_history (id, liabilityId, effectiveDate, isArchived, createdAt)
       SELECT 'legacy-current-' || id, id, substr(updatedAt, 1, 10), isArchived, updatedAt
       FROM liabilities;
-    `);
-  } catch {}
+    `,
+    'seed legacy baseline valuations'
+  );
 
   // Shopping feature tables migration
-  try {
-    await db.execAsync(`
+  await runSafeMigration(
+    db,
+    `
       CREATE TABLE IF NOT EXISTS shopping_lists (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -101,15 +143,18 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
       CREATE INDEX IF NOT EXISTS idx_shopping_items_listId ON shopping_items(listId);
       CREATE INDEX IF NOT EXISTS idx_shopping_items_status ON shopping_items(status);
       CREATE INDEX IF NOT EXISTS idx_shopping_items_transactionId ON shopping_items(transactionId);
-    `);
-  } catch {}
-
+    `,
+    'create shopping tables'
+  );
 
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
   let fkRows: Array<{ table: string }> = [];
   try {
     fkRows = await db.getAllAsync<{ table: string }>('PRAGMA foreign_key_list(transactions);');
-  } catch {}
+  } catch (err: any) {
+    console.error('[Migration Error] Failed to read pragma foreign_key_list:', err);
+    throw err;
+  }
 
   const hasAssetFk = fkRows.some((r) => r.table?.toLowerCase() === 'assets');
   const hasLiabilityFk = fkRows.some((r) => r.table?.toLowerCase() === 'liabilities');

@@ -14,7 +14,6 @@ import { generateEntityId } from '../../src/utils/idGenerator';
 
 const LIABILITY_TYPES: { type: LiabilityType; label: string }[] = [
   { type: 'PERSONAL_LOAN', label: 'Personal Loan' },
-  { type: 'CREDIT_CARD', label: 'Credit Card Bill' },
   { type: 'BORROWED_MONEY', label: 'Borrowed Debt' },
   { type: 'OTHER', label: 'Other Debt' },
 ];

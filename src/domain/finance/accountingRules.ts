@@ -176,6 +176,8 @@ function calculateBaseFinancialEffect(
             bookValue = meta.bookValueSold;
           } else if (typeof meta.assetValueDeducted === 'number') {
             bookValue = meta.assetValueDeducted;
+          } else if (typeof meta.assetBookValueBefore === 'number') {
+            bookValue = meta.assetBookValueBefore;
           }
         } catch {}
       } else if (context?.assetBookValue !== undefined) {

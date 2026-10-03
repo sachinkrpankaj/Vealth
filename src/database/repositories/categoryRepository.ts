@@ -215,6 +215,9 @@ export async function createCategory(data: {
   const db = await getDatabase();
   const id = data.id || generateEntityId('cat');
   const now = new Date().toISOString();
+  if (!data.name || !data.name.trim()) {
+    throw new Error('Category name cannot be blank.');
+  }
   const type = data.type || 'EXPENSE';
   if (!CATEGORY_TYPES.includes(type)) throw new Error(`Invalid category type: ${type}`);
   const icon = data.icon || 'Folder';
@@ -257,6 +260,9 @@ export async function updateCategory(
     throw new Error(`Category not found: ${id}`);
   }
 
+  if (updates.name !== undefined && !updates.name.trim()) {
+    throw new Error('Category name cannot be blank.');
+  }
   const name = updates.name !== undefined ? updates.name.trim() : existing.name;
   const icon = updates.icon !== undefined ? updates.icon : existing.icon;
   const color = updates.color !== undefined ? updates.color : existing.color;

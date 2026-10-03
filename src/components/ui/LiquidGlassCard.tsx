@@ -334,8 +334,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     overflow: 'hidden',
     position: 'relative',
     ...surfaceStyles,
-    // Legacy screen-level opaque fills must not hide the glass gradient.
-    backgroundColor: isDark ? '#12131A' : '#EDF1FA',
+    backgroundColor: surfaceStyles.backgroundColor ?? (isDark ? '#12131A' : '#EDF1FA'),
   };
 
   const surfaceHeight = outerStyles.height;

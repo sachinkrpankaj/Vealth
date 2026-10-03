@@ -76,13 +76,17 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
         date: '2026-10-01',
         accountId: 'acc-1',
         assetId: 'ast-laptop',
+        metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 10000 }),
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
       });
 
     // User increases the sale amount from ₹100 to ₹150 (+₹50 delta)
     // The asset remaining value should decrease from ₹400 to ₹350
-    await updateTransaction('tx-sale-1', { amount: 15000 });
+    await updateTransaction('tx-sale-1', {
+      amount: 15000,
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 15000 }),
+    });
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE assets SET currentValue = ?'),
@@ -105,13 +109,17 @@ describe('Atomic Transaction Update & Asset Reversal', () => {
         date: '2026-10-01',
         accountId: 'acc-1',
         assetId: 'ast-laptop',
+        metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 20000 }),
         createdAt: '2026-10-01',
         updatedAt: '2026-10-01',
       });
 
     // User decreases the sale amount from ₹200 to ₹120 (-₹80 delta)
     // The asset remaining value should increase from ₹100 to ₹180
-    await updateTransaction('tx-sale-2', { amount: 12000 });
+    await updateTransaction('tx-sale-2', {
+      amount: 12000,
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 12000 }),
+    });
 
     expect(scoped.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE assets SET currentValue = ?'),

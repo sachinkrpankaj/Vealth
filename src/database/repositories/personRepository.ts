@@ -45,6 +45,9 @@ export async function getPersonById(id: string): Promise<Person | null> {
 export async function createPerson(
   person: Omit<Person, 'createdAt' | 'updatedAt'>
 ): Promise<Person> {
+  if (!person.name || !person.name.trim()) {
+    throw new Error('Person name cannot be blank.');
+  }
   const db = await getDatabase();
   const now = new Date().toISOString();
   await db.runAsync(
@@ -52,7 +55,7 @@ export async function createPerson(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       person.id,
-      person.name,
+      person.name.trim(),
       person.phone ?? null,
       person.email ?? null,
       person.note ?? null,
@@ -62,7 +65,7 @@ export async function createPerson(
       now,
     ]
   );
-  return { ...person, createdAt: now, updatedAt: now };
+  return { ...person, name: person.name.trim(), createdAt: now, updatedAt: now };
 }
 
 export async function updatePerson(id: string, updates: Partial<Person>): Promise<void> {
@@ -70,8 +73,11 @@ export async function updatePerson(id: string, updates: Partial<Person>): Promis
   const now = new Date().toISOString();
   const current = await getPersonById(id);
   if (!current) throw new Error(`Person ${id} not found`);
+  if (updates.name !== undefined && !updates.name.trim()) {
+    throw new Error('Person name cannot be blank.');
+  }
 
-  const updated: Person = { ...current, ...updates, updatedAt: now };
+  const updated: Person = { ...current, ...updates, name: updates.name !== undefined ? updates.name.trim() : current.name, updatedAt: now };
   await db.runAsync(
     `UPDATE people SET name = ?, phone = ?, email = ?, note = ?, avatarColor = ?, isArchived = ?, updatedAt = ?
      WHERE id = ?;`,

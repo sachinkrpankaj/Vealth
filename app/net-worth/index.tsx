@@ -30,7 +30,7 @@ export default function NetWorthScreen() {
   const [selectedRange, setSelectedRange] = useState<TimeRange>('30D');
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
-  const loadChartData = async () => {
+  const loadChartData = React.useCallback(async (liveNetWorth?: number) => {
     const rangeConfig = RANGES.find((r) => r.range === selectedRange);
     const days = rangeConfig ? rangeConfig.days : 30;
 
@@ -38,6 +38,7 @@ export default function NetWorthScreen() {
       days > 1000 ? await getAllSnapshots() : await getSnapshotsForRange(days);
 
     const todayStr = formatDateIso(new Date());
+    const currentVal = liveNetWorth !== undefined ? liveNetWorth : netWorth.netWorth;
 
     if (snapshots.length === 0) {
       // Just current net worth point
@@ -45,7 +46,7 @@ export default function NetWorthScreen() {
         {
           date: todayStr,
           label: 'Today',
-          value: netWorth.netWorth,
+          value: currentVal,
         },
       ]);
       return;
@@ -72,18 +73,27 @@ export default function NetWorthScreen() {
       points.push({
         date: todayStr,
         label: 'Today',
-        value: netWorth.netWorth,
+        value: currentVal,
       });
     }
 
     setChartData(points);
-  };
+  }, [selectedRange, netWorth.netWorth]);
 
   useFocusEffect(
     React.useCallback(() => {
-      refresh();
-      loadChartData();
-    }, [refresh, selectedRange])
+      let isMounted = true;
+      const updateData = async () => {
+        await refresh();
+        if (isMounted) {
+          await loadChartData();
+        }
+      };
+      updateData();
+      return () => {
+        isMounted = false;
+      };
+    }, [refresh, loadChartData])
   );
 
   return (

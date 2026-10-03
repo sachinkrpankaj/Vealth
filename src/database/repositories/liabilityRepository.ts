@@ -137,7 +137,13 @@ export async function getLiabilityById(id: string): Promise<Liability | null> {
 export async function createLiability(
   liability: Omit<Liability, 'createdAt' | 'updatedAt'>
 ): Promise<Liability> {
+  if (!liability.name || !liability.name.trim()) {
+    throw new Error('Liability name cannot be blank.');
+  }
   if (!LIABILITY_TYPES.includes(liability.type)) throw new Error(`Invalid liability type: ${liability.type}`);
+  if (liability.type === 'CREDIT_CARD') {
+    throw new Error('Credit card liabilities should be managed as Credit Card accounts.');
+  }
   if (!Number.isSafeInteger(liability.amount) || liability.amount < 0) {
     throw new Error('Liability amount must be a non-negative integer in paise.');
   }
@@ -153,7 +159,7 @@ export async function createLiability(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         liability.id,
-        liability.name,
+        liability.name.trim(),
         Math.round(liability.amount),
         liability.type,
         liability.personId ?? null,
@@ -167,11 +173,14 @@ export async function createLiability(
     await recordAmount(txn, liability.id, today, liability.amount, 'CREATED', now);
     await recordArchiveState(txn, liability.id, today, liability.isArchived, now);
   });
-  return { ...liability, createdAt: now, updatedAt: now };
+  return { ...liability, name: liability.name.trim(), createdAt: now, updatedAt: now };
 }
 
 export async function updateLiability(id: string, updates: Partial<Liability>): Promise<void> {
   const db = await getDatabase();
+  if (updates.name !== undefined && !updates.name.trim()) {
+    throw new Error('Liability name cannot be blank.');
+  }
   if (updates.type && !LIABILITY_TYPES.includes(updates.type)) {
     throw new Error(`Invalid liability type: ${updates.type}`);
   }

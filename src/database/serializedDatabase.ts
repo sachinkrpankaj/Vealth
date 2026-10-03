@@ -123,5 +123,18 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
     }
   );
 
+  // 3. Intercept withTransactionAsync to ensure child txn handle is serialized
+  wrapMethod(
+    db,
+    'withTransactionAsync',
+    queue,
+    async (originalMethod, task: (txn?: any) => Promise<any>) => {
+      return originalMethod(async (txn?: any) => {
+        const wrappedTxn = txn ? serializeDatabase(txn) : db;
+        return task(wrappedTxn);
+      });
+    }
+  );
+
   return db;
 }

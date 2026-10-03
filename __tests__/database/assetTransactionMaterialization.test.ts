@@ -184,9 +184,11 @@ describe('asset transaction event materialization', () => {
     type: 'ASSET_PURCHASE' | 'ASSET_SALE',
     amount: number,
     date: string,
-    assetId = 'asset-a'
+    assetId = 'asset-a',
+    metadata?: any
   ): Promise<void> {
-    await createTransaction({ id, type, amount, date, accountId: 'bank', assetId });
+    const meta = metadata ?? (type === 'ASSET_SALE' ? JSON.stringify({ isPartialSale: true, bookValueSold: amount }) : undefined);
+    await createTransaction({ id, type, amount, date, accountId: 'bank', assetId, metadata: meta });
   }
 
   function moveTodayTo(date: string): void {
@@ -248,6 +250,7 @@ describe('asset transaction event materialization', () => {
     await createTransaction({
       id: 'current-sale', type: 'ASSET_SALE', amount: 120000, date: getTodayLocalDateString(),
       accountId: 'bank', assetId: 'asset-a',
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 120000 }),
     });
 
     expect(assets['asset-a'].currentValue).toBe(10000);
@@ -264,7 +267,10 @@ describe('asset transaction event materialization', () => {
     moveTodayTo(futureDate);
     await createAssetTx('current-sale', 'ASSET_SALE', 10000, getTodayLocalDateString());
 
-    await updateTransaction('current-sale', { amount: 20000 });
+    await updateTransaction('current-sale', {
+      amount: 20000,
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 20000 }),
+    });
 
     expect(assets['asset-a'].currentValue).toBe(50000);
     expect(metadataOf(transactions.find((tx) => tx.id === 'current-sale')!)).toMatchObject({
@@ -389,7 +395,10 @@ describe('asset transaction event materialization', () => {
     await createAssetTx('sale-first', 'ASSET_SALE', 30000, today);
     await createAssetTx('sale-second', 'ASSET_SALE', 20000, today);
 
-    await updateTransaction('sale-first', { amount: 50000 });
+    await updateTransaction('sale-first', {
+      amount: 50000,
+      metadata: JSON.stringify({ isPartialSale: true, bookValueSold: 50000 }),
+    });
 
     expect(assets['asset-a'].currentValue).toBe(30000);
     expect(metadataOf(transactions.find((tx) => tx.id === 'sale-second')!)).toMatchObject({

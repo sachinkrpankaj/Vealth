@@ -10,6 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { Liability, LiabilityType } from '../../src/domain/finance/types';
+import { calculateTotalStandaloneLiabilities } from '../../src/domain/finance/financialEngine';
 
 function getLiabilityIcon(type: LiabilityType) {
   switch (type) {
@@ -33,7 +34,7 @@ import { Trash2, Edit2, X } from 'lucide-react-native';
 
 export default function LiabilitiesListScreen() {
   const { colors, radii, spacing, typography } = useTheme();
-  const { standaloneLiabilities, refresh } = useFinancialData();
+  const { standaloneLiabilities, accounts, refresh } = useFinancialData();
 
   const [selectedLiability, setSelectedLiability] = useState<Liability | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -108,10 +109,9 @@ export default function LiabilitiesListScreen() {
     );
   };
 
-  const totalObligations = standaloneLiabilities.reduce(
-    (acc, curr) => acc + curr.amount,
-    0
-  );
+  const totalObligations = calculateTotalStandaloneLiabilities(standaloneLiabilities, accounts);
+  const activeLiabilities = standaloneLiabilities.filter((l) => !l.isArchived);
+  const archivedLiabilities = standaloneLiabilities.filter((l) => l.isArchived);
 
   return (
     <ScreenContainer>
@@ -142,7 +142,9 @@ export default function LiabilitiesListScreen() {
           style={{ marginVertical: 4 }}
         />
         <Text style={[styles.heroSub, { color: colors.textMuted }]}>
-          {standaloneLiabilities.length} recorded obligations
+          {activeLiabilities.length === standaloneLiabilities.length
+            ? `${activeLiabilities.length} recorded obligations`
+            : `${activeLiabilities.length} active • ${archivedLiabilities.length} archived`}
         </Text>
       </Card>
 
@@ -180,15 +182,31 @@ export default function LiabilitiesListScreen() {
                   </View>
 
                   <View style={styles.details}>
-                    <Text
-                      style={[
-                        styles.name,
-                        { color: colors.textPrimary, fontSize: typography.fontSizes.body },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {item.name}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text
+                        style={[
+                          styles.name,
+                          { color: colors.textPrimary, fontSize: typography.fontSizes.body },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.isArchived && (
+                        <View
+                          style={{
+                            backgroundColor: colors.surfaceSubtle,
+                            paddingHorizontal: 6,
+                            paddingVertical: 2,
+                            borderRadius: radii.xs,
+                          }}
+                        >
+                          <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>
+                            ARCHIVED
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[
                         styles.type,

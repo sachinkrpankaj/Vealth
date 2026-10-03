@@ -386,9 +386,16 @@ export function calculateAssetValueAsOf(
     if (tx.type === 'ASSET_PURCHASE') {
       value += Math.round(tx.amount);
     } else {
-      // Rebuild the sale's book value from the active event sequence. Persisted
-      // reversal metadata can be stale after an earlier sale is edited or removed.
-      value = Math.max(0, value - Math.min(value, Math.round(tx.amount)));
+      let bookValueToDeduct = value;
+      if (tx.metadata) {
+        try {
+          const meta = typeof tx.metadata === 'string' ? JSON.parse(tx.metadata) : tx.metadata;
+          if (typeof meta?.bookValueSold === 'number') {
+            bookValueToDeduct = Math.min(value, Math.max(0, Math.round(meta.bookValueSold)));
+          }
+        } catch {}
+      }
+      value = Math.max(0, value - bookValueToDeduct);
     }
   }
   return value;
@@ -471,10 +478,16 @@ export function calculateTotalPhysicalAssets(
           if (tx.type === 'ASSET_PURCHASE') {
             historicalValue += Math.round(tx.amount);
           } else {
-            historicalValue = Math.max(
-              0,
-              historicalValue - Math.min(historicalValue, Math.round(tx.amount))
-            );
+            let bookValueToDeduct = historicalValue;
+            if (tx.metadata) {
+              try {
+                const meta = typeof tx.metadata === 'string' ? JSON.parse(tx.metadata) : tx.metadata;
+                if (typeof meta?.bookValueSold === 'number') {
+                  bookValueToDeduct = Math.min(historicalValue, Math.max(0, Math.round(meta.bookValueSold)));
+                }
+              } catch {}
+            }
+            historicalValue = Math.max(0, historicalValue - bookValueToDeduct);
           }
         }
       }
@@ -509,16 +522,21 @@ export function calculateTotalStandaloneLiabilities(
       return history.length ? !history[history.length - 1].isArchived : !liability.isArchived;
     })
     .filter((l) => {
-      if (
-        accounts &&
-        l.type === 'CREDIT_CARD' &&
-        accounts.some(
+      if (l.type === 'CREDIT_CARD') {
+        if (!accounts || accounts.length === 0) return true;
+        const hasExplicitLink = accounts.some(
           (a) =>
-            a.type === 'CREDIT_CARD' &&
-            (a.id === l.id || (a as any).liabilityId === l.id || (l as any).accountId === a.id)
-        )
-      ) {
-        return false;
+            a.id === (l as any).accountId ||
+            (a as any).liabilityId === l.id ||
+            a.id === l.id
+        );
+        if (hasExplicitLink) return false;
+        // Credit card debt is already modeled by credit card accounts.
+        // If the user has any credit card accounts, standalone credit card liabilities
+        // must not double-count in net worth.
+        const hasCreditCardAccount = accounts.some((a) => a.type === 'CREDIT_CARD');
+        if (hasCreditCardAccount) return false;
+        return true;
       }
       return true;
     })
