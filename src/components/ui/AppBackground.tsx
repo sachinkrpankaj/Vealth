@@ -18,52 +18,25 @@ export const AppBackground: React.FC = React.memo(() => {
         <Defs>
           {isDark ? (
             <>
-              {/* Base dark canvas */}
+              {/* Base dark obsidian canvas with subtle cool undertone */}
               <LinearGradient id="darkBase" x1="0%" y1="0%" x2="0%" y2="100%">
-                <Stop offset="0%" stopColor="#08090E" />
-                <Stop offset="50%" stopColor="#0A0B12" />
-                <Stop offset="100%" stopColor="#07080C" />
+                <Stop offset="0%" stopColor="#0B0C10" />
+                <Stop offset="50%" stopColor="#0A0B0E" />
+                <Stop offset="100%" stopColor="#08090C" />
               </LinearGradient>
 
-              {/* Top-left Royal Indigo ambient aura */}
+              {/* Gentle top ambient cool aura */}
               <RadialGradient
-                id="darkAuraIndigo"
-                cx="15%"
-                cy="10%"
-                r="65%"
-                fx="15%"
-                fy="10%"
+                id="darkAuraCool"
+                cx="50%"
+                cy="0%"
+                r="70%"
+                fx="50%"
+                fy="0%"
               >
-                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.12" />
-                <Stop offset="50%" stopColor="#635BFF" stopOpacity="0.06" />
-                <Stop offset="100%" stopColor="#08090E" stopOpacity="0" />
-              </RadialGradient>
-
-              {/* Center-right Subtle Indigo ambient aura */}
-              <RadialGradient
-                id="darkAuraGold"
-                cx="88%"
-                cy="42%"
-                r="55%"
-                fx="88%"
-                fy="42%"
-              >
-                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.08" />
-                <Stop offset="60%" stopColor="#4F46E5" stopOpacity="0.02" />
-                <Stop offset="100%" stopColor="#08090E" stopOpacity="0" />
-              </RadialGradient>
-
-              {/* Bottom-left subtle Emerald depth */}
-              <RadialGradient
-                id="darkAuraBottom"
-                cx="20%"
-                cy="85%"
-                r="50%"
-                fx="20%"
-                fy="85%"
-              >
-                <Stop offset="0%" stopColor="#10B981" stopOpacity="0.07" />
-                <Stop offset="100%" stopColor="#08090E" stopOpacity="0" />
+                <Stop offset="0%" stopColor="#6366F1" stopOpacity="0.04" />
+                <Stop offset="60%" stopColor="#4F46E5" stopOpacity="0.01" />
+                <Stop offset="100%" stopColor="#0A0B0E" stopOpacity="0" />
               </RadialGradient>
             </>
           ) : (
@@ -136,9 +109,7 @@ export const AppBackground: React.FC = React.memo(() => {
         {isDark ? (
           <>
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#darkBase)" />
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#darkAuraIndigo)" />
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#darkAuraGold)" />
-            <Rect x="0" y="0" width="100%" height="100%" fill="url(#darkAuraBottom)" />
+            <Rect x="0" y="0" width="100%" height="100%" fill="url(#darkAuraCool)" />
           </>
         ) : (
           <>

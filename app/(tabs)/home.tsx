@@ -108,8 +108,8 @@ export default function HomeScreen() {
         label: 'Optimal',
         color: colors.positive,
         gradient: ['#10B981', '#059669'] as [string, string],
-        bg: isDark ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.10)',
-        border: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(16, 185, 129, 0.18)',
+        bg: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.10)',
+        border: isDark ? 'rgba(16, 185, 129, 0.20)' : 'rgba(16, 185, 129, 0.18)',
       };
     }
     if (val >= 65) {
@@ -117,8 +117,8 @@ export default function HomeScreen() {
         label: 'Good',
         color: '#10B981',
         gradient: ['#34D399', '#059669'] as [string, string],
-        bg: isDark ? 'rgba(16, 185, 129, 0.14)' : 'rgba(16, 185, 129, 0.10)',
-        border: isDark ? 'rgba(16, 185, 129, 0.28)' : 'rgba(16, 185, 129, 0.18)',
+        bg: isDark ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.10)',
+        border: isDark ? 'rgba(16, 185, 129, 0.20)' : 'rgba(16, 185, 129, 0.18)',
       };
     }
     if (val >= 50) {
@@ -126,16 +126,16 @@ export default function HomeScreen() {
         label: 'Moderate',
         color: colors.warning,
         gradient: ['#F59E0B', '#D97706'] as [string, string],
-        bg: isDark ? 'rgba(245, 158, 11, 0.14)' : 'rgba(245, 158, 11, 0.10)',
-        border: isDark ? 'rgba(245, 158, 11, 0.28)' : 'rgba(245, 158, 11, 0.18)',
+        bg: isDark ? 'rgba(245, 158, 11, 0.12)' : 'rgba(245, 158, 11, 0.10)',
+        border: isDark ? 'rgba(245, 158, 11, 0.20)' : 'rgba(245, 158, 11, 0.18)',
       };
     }
     return {
       label: 'At Risk',
       color: colors.negative,
       gradient: ['#EF4444', '#DC2626'] as [string, string],
-      bg: isDark ? 'rgba(239, 68, 68, 0.14)' : 'rgba(239, 68, 68, 0.10)',
-      border: isDark ? 'rgba(239, 68, 68, 0.28)' : 'rgba(239, 68, 68, 0.18)',
+      bg: isDark ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.10)',
+      border: isDark ? 'rgba(239, 68, 68, 0.20)' : 'rgba(239, 68, 68, 0.18)',
     };
   }, [animatedSolvency.displayValue, colors, isDark]);
 
@@ -286,7 +286,7 @@ export default function HomeScreen() {
               color={solvencyStatus.color}
               gradientColors={solvencyStatus.gradient}
               trackColor={
-                isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)'
+                isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)'
               }
             />
           </View>
@@ -742,7 +742,7 @@ export default function HomeScreen() {
                         styles.ccProgressBarTrack,
                         {
                           backgroundColor: isDark
-                            ? 'rgba(255, 255, 255, 0.08)'
+                            ? 'rgba(255, 255, 255, 0.05)'
                             : 'rgba(0, 0, 0, 0.06)',
                         },
                       ]}
@@ -952,8 +952,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 styles.recordTile,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.65)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.65)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)',
                   transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
@@ -993,8 +993,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 styles.recordTile,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.65)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.65)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)',
                   transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
@@ -1037,8 +1037,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 styles.recordTile,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.65)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.65)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)',
                   transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
@@ -1047,13 +1047,13 @@ export default function HomeScreen() {
                 style={[
                   styles.recordTileIconWrap,
                   {
-                    backgroundColor: isDark ? 'rgba(99, 102, 241, 0.16)' : 'rgba(99, 102, 241, 0.10)',
+                    backgroundColor: colors.accentBg,
                   },
                 ]}
               >
                 <ArrowRightLeft
                   size={17}
-                  color={isDark ? '#A5B4FC' : '#4F46E5'}
+                  color={colors.accent}
                   strokeWidth={2.4}
                 />
               </View>
@@ -1089,8 +1089,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 styles.recordTile,
                 {
-                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.65)',
-                  borderColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.85)',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(255, 255, 255, 0.65)',
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.85)',
                   transform: [{ scale: pressed ? 0.96 : 1 }],
                 },
               ]}
@@ -1099,13 +1099,13 @@ export default function HomeScreen() {
                 style={[
                   styles.recordTileIconWrap,
                   {
-                    backgroundColor: isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.10)',
+                    backgroundColor: colors.warningBg,
                   },
                 ]}
               >
                 <HandCoins
                   size={17}
-                  color={isDark ? '#FCD34D' : '#D97706'}
+                  color={colors.warning}
                   strokeWidth={2.4}
                 />
               </View>
@@ -1180,7 +1180,7 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View style={[styles.flowDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+          <View style={[styles.flowDivider, { backgroundColor: colors.borderSubtle }]} />
 
           {/* Outflow */}
           <View style={styles.flowStatCol}>
@@ -1201,7 +1201,7 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View style={[styles.flowDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+          <View style={[styles.flowDivider, { backgroundColor: colors.borderSubtle }]} />
 
           {/* Net Flow */}
           <View style={styles.flowStatCol}>

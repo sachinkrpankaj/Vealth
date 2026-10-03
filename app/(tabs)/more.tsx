@@ -120,11 +120,7 @@ export default function MoreScreen() {
           {
             minHeight: 56,
             opacity: pressed ? 0.75 : 1,
-            backgroundColor: pressed
-              ? isDark
-                ? 'rgba(255, 255, 255, 0.04)'
-                : 'rgba(0, 0, 0, 0.02)'
-              : 'transparent',
+            backgroundColor: pressed ? colors.surfaceSubtle : 'transparent',
           },
         ]}
       >

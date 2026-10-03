@@ -113,18 +113,35 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
               accessibilityLabel={`${tabLabel} tab`}
               style={({ pressed }) => [
                 styles.squircleButton,
-                isFocused
+                isDark
+                  ? isFocused
+                    ? [
+                        styles.activeSquircle,
+                        {
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          borderColor: colors.border,
+                          shadowColor: '#000000',
+                        },
+                      ]
+                    : [
+                        styles.inactiveSquircle,
+                        {
+                          backgroundColor: 'transparent',
+                          borderColor: 'transparent',
+                        },
+                      ]
+                  : isFocused
                   ? [
                       styles.activeSquircle,
                       {
-                        backgroundColor: isDark ? '#171929' : '#EDF1FA',
-                        shadowColor: isDark ? '#FFFFFF' : '#000000',
+                        backgroundColor: '#EDF1FA',
+                        shadowColor: '#000000',
                       },
                     ]
                   : [
                       styles.inactiveSquircle,
                       {
-                        backgroundColor: isDark ? '#171929' : '#EDF1FA',
+                        backgroundColor: '#EDF1FA',
                       },
                     ],
                 {
@@ -133,11 +150,19 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              <LiquidGlassPrismOverlay borderRadius={15} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
+              {!isDark && (
+                <LiquidGlassPrismOverlay borderRadius={15} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
+              )}
               <IconComponent
                 size={21}
                 color={
-                  isFocused ? '#FFFFFF' : colors.textSecondary
+                  isFocused
+                    ? isDark
+                      ? colors.accent
+                      : '#FFFFFF'
+                    : isDark
+                    ? colors.textMuted
+                    : colors.textSecondary
                 }
                 strokeWidth={isFocused ? 2.5 : 2.0}
               />

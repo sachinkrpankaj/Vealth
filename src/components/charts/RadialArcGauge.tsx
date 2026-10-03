@@ -70,7 +70,7 @@ export function RadialArcGauge({
   const fallbackColor = color || gradStart;
 
   const safeTrackColor =
-    trackColor || (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)');
+    trackColor || (isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)');
 
   const arcHeight = Math.ceil(cy + r * 0.5 + strokeWidth / 2 + 2);
 
@@ -83,7 +83,7 @@ export function RadialArcGauge({
             <Stop offset="100%" stopColor={gradEnd} />
           </LinearGradient>
           <RadialGradient id="gaugeInnerGlow" cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0%" stopColor={gradStart} stopOpacity={isDark ? 0.18 : 0.10} />
+            <Stop offset="0%" stopColor={gradStart} stopOpacity={isDark ? 0.07 : 0.10} />
             <Stop offset="90%" stopColor={gradStart} stopOpacity="0" />
           </RadialGradient>
         </Defs>

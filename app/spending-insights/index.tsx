@@ -373,7 +373,7 @@ export default function SpendingInsightsScreen() {
                   selectedMonthKey === null && selectedCategoryId === null
                     ? colors.accent
                     : isDark
-                    ? 'rgba(255,255,255,0.05)'
+                    ? colors.surfaceSubtle
                     : 'rgba(0,0,0,0.04)',
                 borderColor:
                   selectedMonthKey === null && selectedCategoryId === null
@@ -413,7 +413,7 @@ export default function SpendingInsightsScreen() {
                       : m.isCurrentMonth
                       ? `${colors.accent}15`
                       : isDark
-                      ? 'rgba(255,255,255,0.04)'
+                      ? colors.surfaceSubtle
                       : 'rgba(0,0,0,0.03)',
                     borderColor: isSelected
                       ? colors.accent
@@ -938,7 +938,7 @@ export default function SpendingInsightsScreen() {
             </View>
 
             {/* Quick Add Form */}
-            <View style={[styles.quickAddCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
+            <View style={[styles.quickAddCard, { backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.02)' }]}>
               <Text style={[styles.quickAddTitle, { color: colors.textPrimary }]}>
                 {editingCategory ? 'Rename / Edit Category' : 'Create New Category'}
               </Text>

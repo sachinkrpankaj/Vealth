@@ -49,7 +49,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         NavigationBar.setStyle?.(isDark ? 'dark' : 'light');
         if (typeof (NavigationBar as any).setBackgroundColorAsync === 'function') {
-          (NavigationBar as any).setBackgroundColorAsync(isDark ? '#090A0E' : '#F4F6FB').catch(() => {});
+          (NavigationBar as any).setBackgroundColorAsync(isDark ? '#0A0B0E' : '#F4F6FB').catch(() => {});
         }
       } catch {}
     }

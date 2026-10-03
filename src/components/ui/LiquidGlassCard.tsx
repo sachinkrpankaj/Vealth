@@ -136,9 +136,47 @@ export const LiquidGlassPrismOverlay: React.FC<{
       <Defs>
         {/* Base frosted glass gradient */}
         <LinearGradient id="lgBaseFillDark" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor={tone === 'default' ? '#30334B' : tint} stopOpacity={tone === 'default' ? 0.82 : 0.94} />
-          <Stop offset="55%" stopColor={tone === 'default' ? '#1A1D30' : '#4338CA'} stopOpacity={tone === 'default' ? 0.84 : 0.90} />
-          <Stop offset="100%" stopColor={tone === 'default' ? '#111422' : '#312E81'} stopOpacity="0.96" />
+          <Stop
+            offset="0%"
+            stopColor={
+              tone === 'default'
+                ? '#161722'
+                : tone === 'emphasized'
+                ? '#1E2030'
+                : tint
+            }
+            stopOpacity={tone === 'default' ? 0.98 : 0.95}
+          />
+          <Stop
+            offset="55%"
+            stopColor={
+              tone === 'default'
+                ? '#13141D'
+                : tone === 'emphasized'
+                ? '#191A28'
+                : tone === 'positive'
+                ? '#065F46'
+                : tone === 'negative'
+                ? '#9F1239'
+                : '#312E81'
+            }
+            stopOpacity={tone === 'default' ? 0.98 : 0.94}
+          />
+          <Stop
+            offset="100%"
+            stopColor={
+              tone === 'default'
+                ? '#101117'
+                : tone === 'emphasized'
+                ? '#141520'
+                : tone === 'positive'
+                ? '#064E3B'
+                : tone === 'negative'
+                ? '#881337'
+                : '#1E1B4B'
+            }
+            stopOpacity="0.98"
+          />
         </LinearGradient>
         <LinearGradient id="lgBaseFillLight" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%" stopColor={tone === 'default' ? '#FFFFFF' : tint} stopOpacity={tone === 'default' ? 0.96 : 0.96} />
@@ -146,28 +184,28 @@ export const LiquidGlassPrismOverlay: React.FC<{
           <Stop offset="100%" stopColor={tone === 'default' ? '#E8EDFA' : '#4338CA'} stopOpacity={tone === 'default' ? 0.90 : 0.98} />
         </LinearGradient>
 
-        {/* Specular highlight streak across top edge — full card coverage with smooth gradient fade */}
+        {/* Specular highlight streak across top edge — calm subtle kiss of light in dark mode */}
         <LinearGradient id="lgTopSpec" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.18 : 0.55) : 0.10} />
-          <Stop offset="20%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.05 : 0.12) : 0.02} />
-          <Stop offset="45%" stopColor="#FFFFFF" stopOpacity="0" />
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.03 : 0.55) : (isDark ? 0.02 : 0.10)} />
+          <Stop offset="25%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.008 : 0.12) : 0.01} />
+          <Stop offset="50%" stopColor="#FFFFFF" stopOpacity="0" />
           <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
         </LinearGradient>
 
-        {/* Subtle chromatic prismatic shimmer on sides */}
+        {/* Chromatic prismatic shimmer on sides (disabled in dark mode for calm obsidian cohesion) */}
         <LinearGradient id="lgPrismSheen" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#818CF8" stopOpacity={isDark ? "0.07" : "0.07"} />
-          <Stop offset="35%" stopColor="#38BDF8" stopOpacity={isDark ? "0.05" : "0.05"} />
-          <Stop offset="70%" stopColor="#34D399" stopOpacity={isDark ? "0.04" : "0.04"} />
-          <Stop offset="100%" stopColor="#C084FC" stopOpacity={isDark ? "0.07" : "0.07"} />
+          <Stop offset="0%" stopColor="#818CF8" stopOpacity={isDark ? "0" : "0.07"} />
+          <Stop offset="35%" stopColor="#38BDF8" stopOpacity={isDark ? "0" : "0.05"} />
+          <Stop offset="70%" stopColor="#34D399" stopOpacity={isDark ? "0" : "0.04"} />
+          <Stop offset="100%" stopColor="#C084FC" stopOpacity={isDark ? "0" : "0.07"} />
         </LinearGradient>
 
-        {/* Crystalline beveled rim stroke gradient (top edge light catch) */}
+        {/* Crystalline beveled rim stroke gradient (refined, subtle edge catch) */}
         <LinearGradient id="lgRimStrokeDark" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28" />
-          <Stop offset="35%" stopColor="#FFFFFF" stopOpacity="0.10" />
-          <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.04" />
-          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.02" />
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.08" />
+          <Stop offset="35%" stopColor="#FFFFFF" stopOpacity="0.04" />
+          <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.02" />
+          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.01" />
         </LinearGradient>
         <LinearGradient id="lgRimStrokeLight" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
@@ -292,12 +330,12 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   const cardSurfaceStyle: ViewStyle = {
     borderRadius: radius,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.92)',
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.92)',
     overflow: 'hidden',
     position: 'relative',
     ...surfaceStyles,
     // Legacy screen-level opaque fills must not hide the glass gradient.
-    backgroundColor: isDark ? '#171929' : '#EDF1FA',
+    backgroundColor: isDark ? '#12131A' : '#EDF1FA',
   };
 
   const surfaceHeight = outerStyles.height;

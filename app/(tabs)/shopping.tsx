@@ -67,7 +67,7 @@ export default function ShoppingScreen() {
           <View style={styles.overviewTitleRow}>
             <ShoppingBag
               size={18}
-              color={isDark ? '#818CF8' : '#6366F1'}
+              color={colors.accent}
               style={{ marginRight: 8 }}
             />
             <Text
@@ -86,8 +86,8 @@ export default function ShoppingScreen() {
             style={[
               styles.overviewCountBadge,
               {
-                color: isDark ? '#818CF8' : '#6366F1',
-                backgroundColor: isDark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.12)',
+                color: colors.accent,
+                backgroundColor: colors.accentBg,
                 fontFamily: typography.fontFamilies.bold,
               },
             ]}
@@ -176,7 +176,7 @@ export default function ShoppingScreen() {
       <View style={styles.listsContainer}>
         {isLoading && summaries.length === 0 ? (
           <View style={{ paddingVertical: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
+            <ActivityIndicator size="small" color={colors.accent} />
           </View>
         ) : currentSummaries.length === 0 ? (
           <EmptyState

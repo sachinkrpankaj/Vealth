@@ -36,15 +36,15 @@ export interface ColorTokens {
 }
 
 export const darkColors: ColorTokens = {
-  background: '#090A0E',       // Deep midnight obsidian
-  surface: '#13131B',          // Dark slate surface
-  surfaceElevated: '#1C1B28',  // Elevated surface with royal indigo undertone
-  surfaceSubtle: '#262438',    // Subtle interactive fill
-  textPrimary: '#F8FAFC',      // Crisp clean white
-  textSecondary: '#B4B2C5',    // Subtle warm slate (high readability on dark obsidian)
-  textMuted: '#8E8D9E',        // Readable muted gray (WCAG AA compliant)
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderSubtle: 'rgba(255, 255, 255, 0.04)',
+  background: '#0A0B0E',       // Deep near-black obsidian canvas with subtle cool undertone
+  surface: '#12131A',          // Calm obsidian surface, noticeably elevated from canvas
+  surfaceElevated: '#171821',  // Slightly elevated surface for modals, dialogs, active states
+  surfaceSubtle: '#1E1F2A',    // Subtle interactive fill, inputs, and segmented controls
+  textPrimary: '#F1F5F9',      // Crisp clean off-white (Slate 100)
+  textSecondary: '#94A3B8',    // Muted cool slate (Slate 400)
+  textMuted: '#64748B',        // Darker muted cool gray (Slate 500, WCAG AA compliant)
+  border: 'rgba(255, 255, 255, 0.06)',       // Subtle, low-contrast border
+  borderSubtle: 'rgba(255, 255, 255, 0.03)', // Whisper separator border
   positive: '#10B981',         // Emerald green
   positiveBg: 'rgba(16, 185, 129, 0.12)',
   negative: '#F43F5E',         // Rose red
@@ -52,24 +52,24 @@ export const darkColors: ColorTokens = {
   warning: '#F59E0B',          // Amber
   warningBg: 'rgba(245, 158, 11, 0.12)',
   accent: '#818CF8',           // Modern Luminous Iris / Electric Indigo
-  accentBg: 'rgba(129, 140, 248, 0.14)',
+  accentBg: 'rgba(129, 140, 248, 0.12)',
   gold: '#818CF8',             // Unified with sleek modern accent
-  goldBg: 'rgba(129, 140, 248, 0.14)',
+  goldBg: 'rgba(129, 140, 248, 0.12)',
   indigo: '#818CF8',          // Vibrant Iris Indigo
-  indigoBg: 'rgba(129, 140, 248, 0.14)',
-  cardOverlay: 'rgba(255, 255, 255, 0.03)',
-  tabBar: 'rgba(18, 18, 25, 0.90)',
-  tabBarBorder: 'rgba(255, 255, 255, 0.08)',
-  squircleTab: 'rgba(255, 255, 255, 0.08)',
-  squircleTabActive: '#FFFFFF',
-  squircleIconActive: '#090A0E',
-  squircleIconInactive: '#8E8D9E',
-  glassBg: 'rgba(20, 16, 40, 0.45)',          // Dark liquid glass fill
-  glassBorder: 'rgba(255, 255, 255, 0.10)',     // SVG prism overlay handles real border
-  glassHighlight: 'rgba(255, 255, 255, 0.60)',  // Top specular streak
-  glassBottomBorder: 'rgba(129, 140, 248, 0.18)', // Indigo bottom edge
-  glassShadow: 'rgba(15, 23, 42, 0.70)',        // Modern obsidian glow shadow
-  indicator: '#E2E8F0',
+  indigoBg: 'rgba(129, 140, 248, 0.12)',
+  cardOverlay: 'rgba(255, 255, 255, 0.02)',
+  tabBar: 'rgba(18, 19, 26, 0.95)',          // Grounded, restrained dock surface
+  tabBarBorder: 'rgba(255, 255, 255, 0.06)',  // Subtle dock border
+  squircleTab: 'rgba(255, 255, 255, 0.04)',
+  squircleTabActive: '#1E1F2C',              // Restrained elevated dark pill
+  squircleIconActive: '#F1F5F9',              // Crisp off-white icon on active tab
+  squircleIconInactive: '#64748B',            // Slate 500 muted tab icon
+  glassBg: 'rgba(18, 19, 26, 0.85)',          // Calm obsidian glass fill
+  glassBorder: 'rgba(255, 255, 255, 0.06)',   // Subtle low-contrast rim
+  glassHighlight: 'rgba(255, 255, 255, 0.04)',// Subtle specular whisper (no plastic glare)
+  glassBottomBorder: 'rgba(255, 255, 255, 0.02)',
+  glassShadow: 'rgba(0, 0, 0, 0.35)',         // Restrained depth shadow
+  indicator: '#94A3B8',
 };
 
 export const lightColors: ColorTokens = {

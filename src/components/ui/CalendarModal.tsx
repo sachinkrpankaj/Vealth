@@ -475,7 +475,7 @@ export function CalendarModal({
                       style={[
                         styles.weekdayText,
                         {
-                          color: index === 0 || index === 6 ? (isDark ? '#F87171' : '#EF4444') : colors.textMuted,
+                          color: index === 0 || index === 6 ? colors.negative : colors.textMuted,
                           fontFamily: typography.fontFamilies.semibold,
                         },
                       ]}

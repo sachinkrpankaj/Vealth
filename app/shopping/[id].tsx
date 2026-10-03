@@ -237,7 +237,7 @@ export default function ShoppingListDetailScreen() {
           >
             <Archive
               size={16}
-              color={currentList?.isArchived ? (isDark ? '#818CF8' : '#6366F1') : colors.textPrimary}
+              color={currentList?.isArchived ? colors.accent : colors.textPrimary}
             />
           </LiquidGlassCard>
 
@@ -263,7 +263,7 @@ export default function ShoppingListDetailScreen() {
             <View style={styles.statHeader}>
               <Clock
                 size={13}
-                color={isDark ? '#818CF8' : '#6366F1'}
+                color={colors.accent}
                 style={{ marginRight: 5 }}
               />
               <Text
@@ -369,17 +369,17 @@ export default function ShoppingListDetailScreen() {
           style={({ pressed }) => [
             styles.quickAddPill,
             {
-              backgroundColor: isDark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.12)',
+              backgroundColor: colors.accentBg,
               opacity: pressed ? 0.7 : 1,
             },
           ]}
         >
-          <Plus size={13} color={isDark ? '#818CF8' : '#6366F1'} style={{ marginRight: 4 }} />
+          <Plus size={13} color={colors.accent} style={{ marginRight: 4 }} />
           <Text
             style={[
               styles.quickAddText,
               {
-                color: isDark ? '#818CF8' : '#6366F1',
+                color: colors.accent,
                 fontFamily: typography.fontFamilies.bold,
               },
             ]}
@@ -392,7 +392,7 @@ export default function ShoppingListDetailScreen() {
       <View style={styles.itemsList}>
         {isLoading && items.length === 0 ? (
           <View style={{ paddingVertical: 32, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="small" color={isDark ? '#818CF8' : '#6366F1'} />
+            <ActivityIndicator size="small" color={colors.accent} />
           </View>
         ) : pendingItems.length === 0 ? (
           isReadOnly ? <View

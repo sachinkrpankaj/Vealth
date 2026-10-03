@@ -159,7 +159,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               fill="none"
             />
           </Svg>
-          <Palette size={16} color={isDark ? '#E0E7FF' : '#4F46E5'} strokeWidth={2.2} />
+          <Palette size={16} color={colors.accent} strokeWidth={2.2} />
         </LiquidGlassCard>
 
         {/* Custom picked color badge if outside presets */}
@@ -170,7 +170,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               styles.swatchDot,
               {
                 backgroundColor: selectedColor,
-                borderColor: isDark ? '#FFFFFF' : '#1E1B4B',
+                borderColor: isDark ? colors.accent : '#1E1B4B',
                 borderWidth: 3,
               },
             ]}
@@ -193,7 +193,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                 styles.swatchDot,
                 {
                   backgroundColor: c,
-                  borderColor: isSelected ? (isDark ? '#FFFFFF' : '#1E1B4B') : 'rgba(0,0,0,0.06)',
+                  borderColor: isSelected ? (isDark ? colors.accent : '#1E1B4B') : 'rgba(0,0,0,0.06)',
                   borderWidth: isSelected ? 3 : 1,
                   transform: [{ scale: pressed ? 0.9 : 1 }],
                 },
@@ -254,8 +254,8 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               style={[
                 styles.previewContainer,
                 {
-                  backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.03)',
-                  borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                  backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.03)',
+                  borderColor: isDark ? colors.border : 'rgba(0,0,0,0.06)',
                 },
               ]}
             >
@@ -311,7 +311,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     {
                       color: colors.textPrimary,
                       borderColor: hexError ? colors.negative : colors.border,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FFFFFF',
+                      backgroundColor: isDark ? colors.surfaceSubtle : '#FFFFFF',
                     },
                   ]}
                 />

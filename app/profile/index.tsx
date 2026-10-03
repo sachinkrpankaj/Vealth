@@ -162,8 +162,8 @@ export default function ProfileScreen() {
               style={[
                 styles.avatarCircle,
                 {
-                  backgroundColor: isDark ? 'rgba(126, 105, 171, 0.22)' : 'rgba(99, 102, 241, 0.12)',
-                  borderColor: isDark ? 'rgba(126, 105, 171, 0.50)' : 'rgba(99, 102, 241, 0.40)',
+                  backgroundColor: isDark ? 'rgba(129, 140, 248, 0.12)' : 'rgba(99, 102, 241, 0.12)',
+                  borderColor: isDark ? 'rgba(129, 140, 248, 0.25)' : 'rgba(99, 102, 241, 0.40)',
                 },
               ]}
             >
@@ -171,7 +171,7 @@ export default function ProfileScreen() {
                 style={[
                   styles.avatarText,
                   {
-                    color: isDark ? '#C4B5FD' : '#6366F1',
+                    color: isDark ? colors.accent : '#6366F1',
                     fontFamily: typography.fontFamilies.bold,
                   },
                 ]}
@@ -195,8 +195,8 @@ export default function ProfileScreen() {
                       styles.nameTextInput,
                       {
                         color: colors.textPrimary,
-                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(255, 255, 255, 0.90)',
-                        borderColor: colors.accent,
+                        backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(255, 255, 255, 0.90)',
+                        borderColor: isDark ? colors.border : colors.accent,
                         fontFamily: typography.fontFamilies.bold,
                       },
                     ]}
@@ -275,14 +275,36 @@ export default function ProfileScreen() {
         <SectionHeader title="Appearance & Theme" />
         <LiquidGlassCard style={styles.themeCard} radius={radii.xl} padding={10}>
           <View style={styles.themeOptionsGrid}>
-            {/* Dark Mode Pill */}
-            <LiquidGlassCard onPress={() => handleThemeChange('dark')}
-              accessibilityLabel="Dark Obsidian theme" accessibilityState={{ selected: isDark }}
-              radius={radii.lg} padding={0}
-              style={[styles.themeOptionTile, isDark && { borderColor: colors.accent, borderWidth: 2 }]}>
-
-              <View style={[styles.themeIconWrap, { backgroundColor: '#1E1B4B' }]}>
-                <Moon size={18} color="#818CF8" strokeWidth={2.2} />
+            {/* Dark Mode Option */}
+            <Pressable
+              onPress={() => handleThemeChange('dark')}
+              accessibilityRole="button"
+              accessibilityLabel="Dark Obsidian theme"
+              accessibilityState={{ selected: isDark }}
+              style={({ pressed }) => [
+                styles.themeOptionTile,
+                {
+                  borderRadius: radii.lg,
+                  backgroundColor: isDark
+                    ? 'rgba(129, 140, 248, 0.08)'
+                    : 'rgba(0, 0, 0, 0.02)',
+                  borderColor: isDark ? colors.accent : colors.border,
+                  borderWidth: isDark ? 1.5 : 1,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.themeIconWrap,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(129, 140, 248, 0.16)'
+                      : 'rgba(0, 0, 0, 0.05)',
+                  },
+                ]}
+              >
+                <Moon size={18} color={isDark ? colors.accent : colors.textMuted} strokeWidth={2.2} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text
@@ -309,20 +331,42 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               {isDark && (
-                <View style={[styles.activeCheckCircle, { backgroundColor: '#818CF8' }]}>
+                <View style={[styles.activeCheckCircle, { backgroundColor: colors.accent }]}>
                   <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 </View>
               )}
-            </LiquidGlassCard>
+            </Pressable>
 
-            {/* Light Mode Pill */}
-            <LiquidGlassCard onPress={() => handleThemeChange('light')}
-              accessibilityLabel="Clean Light theme" accessibilityState={{ selected: !isDark }}
-              radius={radii.lg} padding={0}
-              style={[styles.themeOptionTile, !isDark && { borderColor: colors.accent, borderWidth: 2 }]}>
-
-              <View style={[styles.themeIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                <Sun size={18} color="#D97706" strokeWidth={2.2} />
+            {/* Light Mode Option */}
+            <Pressable
+              onPress={() => handleThemeChange('light')}
+              accessibilityRole="button"
+              accessibilityLabel="Clean Light theme"
+              accessibilityState={{ selected: !isDark }}
+              style={({ pressed }) => [
+                styles.themeOptionTile,
+                {
+                  borderRadius: radii.lg,
+                  backgroundColor: !isDark
+                    ? 'rgba(79, 70, 229, 0.08)'
+                    : 'rgba(255, 255, 255, 0.03)',
+                  borderColor: !isDark ? colors.accent : colors.border,
+                  borderWidth: !isDark ? 1.5 : 1,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.themeIconWrap,
+                  {
+                    backgroundColor: !isDark
+                      ? '#FEF3C7'
+                      : 'rgba(255, 255, 255, 0.05)',
+                  },
+                ]}
+              >
+                <Sun size={18} color={!isDark ? '#D97706' : colors.textMuted} strokeWidth={2.2} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text
@@ -349,11 +393,11 @@ export default function ProfileScreen() {
                 </Text>
               </View>
               {!isDark && (
-                <View style={[styles.activeCheckCircle, { backgroundColor: '#4F46E5' }]}>
+                <View style={[styles.activeCheckCircle, { backgroundColor: colors.accent }]}>
                   <Check size={12} color="#FFFFFF" strokeWidth={3} />
                 </View>
               )}
-            </LiquidGlassCard>
+            </Pressable>
           </View>
         </LiquidGlassCard>
 
@@ -462,9 +506,7 @@ export default function ProfileScreen() {
                     styles.accountItemRow,
                     !isLast && {
                       borderBottomWidth: 1,
-                      borderBottomColor: isDark
-                        ? 'rgba(255, 255, 255, 0.06)'
-                        : 'rgba(0, 0, 0, 0.04)',
+                      borderBottomColor: colors.borderSubtle,
                     },
                     { opacity: pressed ? 0.75 : 1 },
                   ]}

@@ -225,7 +225,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
         style={[
           styles.triggerBox,
           {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+            backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.03)',
             borderColor: selectedCategory ? colors.accent : colors.border,
             borderRadius: radii.md,
           },
@@ -512,7 +512,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
                   styles.textInput,
                   {
                     color: colors.textPrimary,
-                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
+                    backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.04)',
                     borderColor: colors.border,
                     borderRadius: radii.sm,
                   },

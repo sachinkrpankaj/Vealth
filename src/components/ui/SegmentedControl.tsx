@@ -29,8 +29,8 @@ export function SegmentedControl<T extends string = string>({
       style={[
         styles.track,
         {
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)',
-          borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.05)',
+          borderColor: isDark ? colors.border : 'rgba(0, 0, 0, 0.04)',
         },
         style,
       ]}
@@ -55,8 +55,8 @@ export function SegmentedControl<T extends string = string>({
                 ? [
                     styles.activeSegment,
                     {
-                      backgroundColor: isDark ? '#222436' : '#FFFFFF',
-                      borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.04)',
+                      backgroundColor: isDark ? colors.surfaceElevated : '#FFFFFF',
+                      borderColor: isDark ? colors.border : 'rgba(0, 0, 0, 0.04)',
                     },
                   ]
                 : {

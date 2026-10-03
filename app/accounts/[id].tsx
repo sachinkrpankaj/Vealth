@@ -192,9 +192,7 @@ export default function AccountDetailScreen() {
                   style={[
                     styles.ccUnpaidBanner,
                     {
-                      backgroundColor: isDark
-                        ? 'rgba(244, 63, 94, 0.12)'
-                        : 'rgba(244, 63, 94, 0.08)',
+                      backgroundColor: colors.negativeBg,
                       borderColor: colors.negative + '40',
                       borderRadius: radii.md,
                     },
