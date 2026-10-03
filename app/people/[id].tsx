@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -37,6 +36,7 @@ import { KeyboardAwareScrollView } from '../../src/components/ui/KeyboardAwareSc
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useTheme } from '../../src/theme';
 import {
   getPersonById,
@@ -157,7 +157,7 @@ export default function PersonDetailScreen() {
   };
 
   const handleArchive = () => {
-    Alert.alert(
+    showThemedAlert(
       'Archive Person',
       `Are you sure you want to archive ${person?.name}? Their history will remain recorded in financial accounts.`,
       [

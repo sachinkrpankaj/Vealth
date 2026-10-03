@@ -8,6 +8,7 @@ import {
   TextInput,
   KeyboardEvent,
   findNodeHandle,
+  View,
 } from 'react-native';
 
 export interface KeyboardAwareScrollViewProps extends ScrollViewProps {
@@ -33,6 +34,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
     ref
   ) => {
     const internalRef = useRef<ScrollView>(null);
+    const innerViewRef = useRef<View>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const isMountedRef = useRef(true);
     const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,20 +54,26 @@ export const KeyboardAwareScrollView = React.forwardRef<
 
     const fallbackScrollResponder = (currentlyFocusedInput: any) => {
       try {
-        if (!internalRef.current) return;
-        const reactTag = findNodeHandle(currentlyFocusedInput);
-        if (reactTag) {
-          const responder = (internalRef.current as any).getScrollResponder?.();
-          if (
-            responder &&
-            typeof responder.scrollResponderScrollNativeHandleToKeyboard === 'function'
-          ) {
-            responder.scrollResponderScrollNativeHandleToKeyboard(
-              reactTag,
-              extraScrollHeight,
-              true
-            );
-          }
+        if (!internalRef.current || !currentlyFocusedInput) return;
+        const responder = (internalRef.current as any).getScrollResponder?.();
+        if (
+          responder &&
+          typeof responder.scrollResponderScrollNativeHandleToKeyboard === 'function'
+        ) {
+          // In Fabric, scrollResponderScrollNativeHandleToKeyboard accepts the HostInstance ref directly.
+          // On legacy Paper, fallback to reactTag if needed.
+          const target =
+            typeof currentlyFocusedInput.measureLayout === 'function'
+              ? currentlyFocusedInput
+              : (typeof findNodeHandle === 'function'
+                  ? findNodeHandle(currentlyFocusedInput)
+                  : null) ?? currentlyFocusedInput;
+
+          responder.scrollResponderScrollNativeHandleToKeyboard(
+            target,
+            extraScrollHeight,
+            true
+          );
         }
       } catch {
         // Best effort
@@ -76,13 +84,21 @@ export const KeyboardAwareScrollView = React.forwardRef<
       if (!isMountedRef.current || !internalRef.current) return;
 
       try {
-        const currentlyFocusedInput = TextInput.State.currentlyFocusedInput
+        const currentlyFocusedInput = TextInput.State?.currentlyFocusedInput
           ? TextInput.State.currentlyFocusedInput()
           : null;
 
         if (!currentlyFocusedInput) return;
 
-        const containerNode = findNodeHandle(internalRef.current);
+        // Obtain valid native component reference supported by modern React Native (Fabric)
+        // 1. getInnerViewRef() returns the native content container View (ReactNativeElement)
+        // 2. innerViewRef ref object attached to ScrollView
+        // 3. getNativeScrollRef() returns the native ScrollView element
+        const containerNode =
+          (internalRef.current as any)?.getInnerViewRef?.() ??
+          innerViewRef.current ??
+          (internalRef.current as any)?.getNativeScrollRef?.();
+
         const targetNode = currentlyFocusedInput as any;
 
         if (
@@ -102,8 +118,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
               internalRef.current.scrollTo({ y: targetY, animated: true });
             },
             () => {
-              // Fallback to ScrollResponder native method
-              fallbackScrollResponder(currentlyFocusedInput);
+              // Measurement failed (e.g. focused input is inside a modal or another container)
             }
           );
         } else {
@@ -174,6 +189,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
     return (
       <ScrollView
         ref={setRef}
+        innerViewRef={innerViewRef as any}
         style={[styles.scroll, style]}
         contentContainerStyle={[
           contentContainerStyle,

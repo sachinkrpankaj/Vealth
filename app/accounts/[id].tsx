@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import { ArrowLeft, Trash2, Plus, CreditCard, AlertTriangle, Pencil } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
@@ -10,6 +10,7 @@ import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { PayCreditCardBillModal } from '../../src/components/ui/PayCreditCardBillModal';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useTheme } from '../../src/theme';
 import { getAccountById, getAllAccounts, archiveAccount } from '../../src/database/repositories/accountRepository';
 import { getAllTransactions } from '../../src/database/repositories/transactionRepository';
@@ -68,7 +69,7 @@ export default function AccountDetailScreen() {
 
   const handleArchive = () => {
     if (balance !== 0) {
-      Alert.alert(
+      showThemedAlert(
         'Non-zero Balance',
         `This account has an active balance of ${formatRupee(balance)}. Please transfer or settle the balance before archiving to keep your records accurate.`,
         [{ text: 'OK' }]
@@ -76,7 +77,7 @@ export default function AccountDetailScreen() {
       return;
     }
 
-    Alert.alert(
+    showThemedAlert(
       'Archive Account',
       `Are you sure you want to archive ${account?.name}? Transaction history will remain intact.`,
       [

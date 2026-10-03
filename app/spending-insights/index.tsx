@@ -8,7 +8,6 @@ import {
   FlatList,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -47,6 +46,7 @@ import {
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
@@ -211,7 +211,7 @@ export default function SpendingInsightsScreen() {
   const handleSaveCategoryInManager = async () => {
     if (isSavingCategory) return;
     if (!newCatName.trim()) {
-      Alert.alert('Required', 'Please enter a category name');
+      showThemedAlert('Required', 'Please enter a category name');
       return;
     }
     try {
@@ -236,7 +236,7 @@ export default function SpendingInsightsScreen() {
       await refresh();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to save category');
+      showThemedAlert('Error', err?.message || 'Failed to save category');
     } finally {
       setIsSavingCategory(false);
     }
@@ -250,7 +250,7 @@ export default function SpendingInsightsScreen() {
       await refresh();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to update category');
+      showThemedAlert('Error', err?.message || 'Failed to update category');
     }
   };
 
@@ -269,7 +269,7 @@ export default function SpendingInsightsScreen() {
       await refresh();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
-      Alert.alert('Assignment Error', e?.message || 'Failed to assign category');
+      showThemedAlert('Assignment Error', e?.message || 'Failed to assign category');
     }
   };
 

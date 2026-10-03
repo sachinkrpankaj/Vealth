@@ -18,6 +18,7 @@ if (!__DEV__) {
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, useTheme } from '../src/theme';
 import { SecurityLockScreen } from '../src/components/security/SecurityLockScreen';
+import { GlobalThemedDialog } from '../src/components/ui/ThemedDialog';
 import { useSecurityStore } from '../src/stores/useSecurityStore';
 import { useThemeStore, ThemeMode } from '../src/stores/useThemeStore';
 import { getDatabase } from '../src/database/db';
@@ -112,6 +113,7 @@ function RootStack() {
         <Stack.Screen name="settings/demo" />
       </Stack>
       <SecurityLockScreen />
+      <GlobalThemedDialog />
     </>
   );
 }

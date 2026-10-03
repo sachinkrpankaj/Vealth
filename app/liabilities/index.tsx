@@ -23,6 +23,7 @@ function getLiabilityIcon(type: LiabilityType) {
 }
 
 import { updateLiability, deleteLiability, archiveLiability } from '../../src/database/repositories/liabilityRepository';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
@@ -58,11 +59,11 @@ export default function LiabilitiesListScreen() {
   const handleSaveEdit = async () => {
     if (isSaving || !selectedLiability) return;
     if (!editName.trim()) {
-      Alert.alert('Required', 'Please enter a liability name');
+      showThemedAlert('Required', 'Please enter a liability name');
       return;
     }
     if (editAmount <= 0) {
-      Alert.alert('Required', 'Please enter an obligation amount greater than zero');
+      showThemedAlert('Required', 'Please enter an obligation amount greater than zero');
       return;
     }
     try {
@@ -76,7 +77,7 @@ export default function LiabilitiesListScreen() {
       setEditModalVisible(false);
       setSelectedLiability(null);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update liability');
+      showThemedAlert('Error', e?.message || 'Failed to update liability');
     } finally {
       setIsSaving(false);
     }
@@ -84,7 +85,7 @@ export default function LiabilitiesListScreen() {
 
   const handleDelete = () => {
     if (!selectedLiability) return;
-    Alert.alert(
+    showThemedAlert(
       'Delete Liability',
       `Are you sure you want to delete ${selectedLiability.name}? If it is referenced by past transactions, it will be safely archived to preserve records.`,
       [
@@ -99,7 +100,7 @@ export default function LiabilitiesListScreen() {
               setEditModalVisible(false);
               setSelectedLiability(null);
             } catch (e: any) {
-              Alert.alert('Delete Error', e?.message || 'Failed to delete liability');
+              showThemedAlert('Delete Error', e?.message || 'Failed to delete liability');
             }
           },
         },

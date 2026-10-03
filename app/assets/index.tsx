@@ -10,6 +10,7 @@ import { EmptyState } from '../../src/components/ui/EmptyState';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { Asset, AssetCategory } from '../../src/domain/finance/types';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 
 function getAssetIcon(cat: AssetCategory) {
   switch (cat) {
@@ -62,11 +63,11 @@ export default function AssetsListScreen() {
   const handleSaveEdit = async () => {
     if (isSaving || !selectedAsset) return;
     if (!editName.trim()) {
-      Alert.alert('Required', 'Please enter an asset name');
+      showThemedAlert('Required', 'Please enter an asset name');
       return;
     }
     if (editValue <= 0) {
-      Alert.alert('Required', 'Please enter a valuation greater than zero');
+      showThemedAlert('Required', 'Please enter a valuation greater than zero');
       return;
     }
     try {
@@ -80,7 +81,7 @@ export default function AssetsListScreen() {
       setEditModalVisible(false);
       setSelectedAsset(null);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update asset');
+      showThemedAlert('Error', e?.message || 'Failed to update asset');
     } finally {
       setIsSaving(false);
     }
@@ -88,7 +89,7 @@ export default function AssetsListScreen() {
 
   const handleDelete = () => {
     if (!selectedAsset) return;
-    Alert.alert(
+    showThemedAlert(
       'Delete Asset',
       `Are you sure you want to delete ${selectedAsset.name}? If it is referenced by past transactions, it will be safely archived to preserve transaction history.`,
       [
@@ -103,7 +104,7 @@ export default function AssetsListScreen() {
               setEditModalVisible(false);
               setSelectedAsset(null);
             } catch (e: any) {
-              Alert.alert('Delete Error', e?.message || 'Failed to delete asset');
+              showThemedAlert('Delete Error', e?.message || 'Failed to delete asset');
             }
           },
         },

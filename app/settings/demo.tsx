@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Sparkles, RefreshCw, AlertTriangle } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
@@ -7,6 +7,7 @@ import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useTheme } from '../../src/theme';
 import { seedDemoData, resetAllData } from '../../src/utils/demoData';
 
@@ -19,13 +20,13 @@ export default function DemoSettingsScreen() {
     try {
       setIsLoading(true);
       await seedDemoData();
-      Alert.alert(
+      showThemedAlert(
         'Sample Portfolio Loaded',
         'Demo accounts (Cash, Bank, Investment), people (Rahul, Amit), and realistic transactions have been added to your local database.',
         [{ text: 'View Dashboard', onPress: () => router.replace('/(tabs)/home') }]
       );
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Failed to load demo data');
+      showThemedAlert('Error', e?.message ?? 'Failed to load demo data');
     } finally {
       setIsLoading(false);
     }
@@ -33,7 +34,7 @@ export default function DemoSettingsScreen() {
 
   const handleResetData = () => {
     if (isLoading) return;
-    Alert.alert(
+    showThemedAlert(
       'Reset All Data',
       'This will erase all accounts, people, assets, liabilities, and transactions. This action cannot be undone.',
       [
@@ -46,11 +47,11 @@ export default function DemoSettingsScreen() {
             try {
               setIsLoading(true);
               await resetAllData();
-              Alert.alert('Reset Complete', 'All data has been cleared.', [
+              showThemedAlert('Reset Complete', 'All data has been cleared.', [
                 { text: 'OK', onPress: () => router.replace('/(tabs)/home') },
               ]);
             } catch (e: any) {
-              Alert.alert('Error', e?.message ?? 'Failed to reset database');
+              showThemedAlert('Error', e?.message ?? 'Failed to reset database');
             } finally {
               setIsLoading(false);
             }

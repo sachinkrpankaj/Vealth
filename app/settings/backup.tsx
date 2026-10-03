@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, FileSpreadsheet, HardDriveDownload, HardDriveUpload, CheckCircle } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
@@ -7,6 +7,7 @@ import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useTheme } from '../../src/theme';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
@@ -29,7 +30,7 @@ export default function BackupScreen() {
       await exportTransactionsToCSV(transactions);
       setStatusMessage('CSV exported successfully');
     } catch (e: any) {
-      Alert.alert('Export Error', e?.message ?? 'Failed to export CSV');
+      showThemedAlert('Export Error', e?.message ?? 'Failed to export CSV');
     } finally {
       setIsExportingCsv(false);
     }
@@ -43,7 +44,7 @@ export default function BackupScreen() {
       await exportBackupToFile();
       setStatusMessage('Backup generated and shared successfully');
     } catch (e: any) {
-      Alert.alert('Backup Error', e?.message ?? 'Failed to create backup');
+      showThemedAlert('Backup Error', e?.message ?? 'Failed to create backup');
     } finally {
       setIsExportingBackup(false);
     }
@@ -51,7 +52,7 @@ export default function BackupScreen() {
 
   const handleRestoreBackup = () => {
     if (isRestoring) return;
-    Alert.alert(
+    showThemedAlert(
       'Restore Backup',
       'Restoring a backup will replace current records with the data from your backup file. Do you want to select a backup file to proceed?',
       [
@@ -67,12 +68,12 @@ export default function BackupScreen() {
               if (result.success) {
                 await refresh();
                 setStatusMessage(result.message);
-                Alert.alert('Restore Complete', result.message);
+                showThemedAlert('Restore Complete', result.message);
               } else if (result.message !== 'Restore cancelled.') {
-                Alert.alert('Restore Failed', result.message);
+                showThemedAlert('Restore Failed', result.message);
               }
             } catch (err: any) {
-              Alert.alert('Restore Error', err?.message || 'Failed to restore backup.');
+              showThemedAlert('Restore Error', err?.message || 'Failed to restore backup.');
             } finally {
               setIsRestoring(false);
             }

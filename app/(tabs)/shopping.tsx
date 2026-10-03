@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Plus, ShoppingBag } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
@@ -10,6 +10,7 @@ import { ListActionModal } from '../../src/components/shopping/ListActionModal';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { SegmentedControl } from '../../src/components/ui/SegmentedControl';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useShoppingData } from '../../src/hooks/useShoppingData';
 import { ShoppingList, ShoppingListSummary } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -241,13 +242,13 @@ export default function ShoppingScreen() {
             await archiveList(actionListSummary.list.id, !actionListSummary.list.isArchived);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
           } catch (e: any) {
-            Alert.alert('Archive Error', e?.message || 'Failed to update archive status.');
+            showThemedAlert('Archive Error', e?.message || 'Failed to update archive status.');
           }
         }}
         onDelete={() => {
           if (!actionListSummary) return;
           const target = actionListSummary.list;
-          Alert.alert(
+          showThemedAlert(
             'Delete Shopping List',
             `Are you sure you want to delete "${target.name}"? If it contains purchased items with financial history, it will be safely archived instead of deleted.`,
             [
@@ -259,12 +260,12 @@ export default function ShoppingScreen() {
                   try {
                     const res = await deleteList(target.id);
                     if (res.archivedInstead) {
-                      Alert.alert('List Safely Archived', res.message);
+                      showThemedAlert('List Safely Archived', res.message);
                     } else {
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
                     }
                   } catch (e: any) {
-                    Alert.alert('Delete Error', e?.message || 'Failed to delete list.');
+                    showThemedAlert('Delete Error', e?.message || 'Failed to delete list.');
                   }
                 },
               },

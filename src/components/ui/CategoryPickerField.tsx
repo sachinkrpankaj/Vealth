@@ -7,7 +7,6 @@ import {
   Modal,
   ScrollView,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -35,6 +34,7 @@ import {
 } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 import { LiquidGlassCard } from './LiquidGlassCard';
+import { showThemedAlert } from './ThemedDialog';
 import { Category } from '../../domain/finance/types';
 import {
   getSelectableExpenseCategories,
@@ -138,7 +138,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
 
   const handleOpenEdit = (cat: Category) => {
     if (isMonthlyGeneralCategory(cat)) {
-      Alert.alert('System Category', 'Monthly General categories cannot be renamed.');
+      showThemedAlert('System Category', 'Monthly General categories cannot be renamed.');
       return;
     }
     setEditingCategory(cat);
@@ -150,7 +150,7 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
 
   const handleSaveCategory = async () => {
     if (!newCatName.trim()) {
-      Alert.alert('Required', 'Please enter a category name');
+      showThemedAlert('Required', 'Please enter a category name');
       return;
     }
 
@@ -175,12 +175,12 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       await loadCategories();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to save category');
+      showThemedAlert('Error', err?.message || 'Failed to save category');
     }
   };
 
   const handleArchive = async (cat: Category) => {
-    Alert.alert(
+    showThemedAlert(
       'Archive Category',
       `Archive "${cat.name}"? Existing expenses will preserve this category in records, but it will be hidden from new expenses.`,
       [

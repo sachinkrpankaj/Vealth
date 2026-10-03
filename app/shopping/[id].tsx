@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
@@ -28,6 +27,7 @@ import { ItemFormModal } from '../../src/components/shopping/ItemFormModal';
 import { PurchaseItemModal } from '../../src/components/shopping/PurchaseItemModal';
 import { ListFormModal } from '../../src/components/shopping/ListFormModal';
 import { useShoppingData } from '../../src/hooks/useShoppingData';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { ShoppingItem } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -95,7 +95,7 @@ export default function ShoppingListDetailScreen() {
   const handleDeleteList = () => {
     if (!currentList) return;
 
-    Alert.alert(
+    showThemedAlert(
       'Delete Shopping List',
       `Are you sure you want to delete "${currentList.name}"? If it has historical purchased items, it will be safely archived to preserve financial records.`,
       [
@@ -107,7 +107,7 @@ export default function ShoppingListDetailScreen() {
             try {
               const res = await deleteList(currentList.id);
               if (res.archivedInstead) {
-                Alert.alert('List Safely Archived', res.message, [
+                showThemedAlert('List Safely Archived', res.message, [
                   { text: 'OK', onPress: () => router.back() },
                 ]);
               } else {
@@ -115,7 +115,7 @@ export default function ShoppingListDetailScreen() {
                 router.back();
               }
             } catch (e: any) {
-              Alert.alert('Delete Error', e?.message || 'Failed to delete list.');
+              showThemedAlert('Delete Error', e?.message || 'Failed to delete list.');
             }
           },
         },
@@ -129,12 +129,12 @@ export default function ShoppingListDetailScreen() {
       await archiveList(currentList.id, !currentList.isArchived);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (e: any) {
-      Alert.alert('Archive Error', e?.message || 'Failed to update archive status.');
+      showThemedAlert('Archive Error', e?.message || 'Failed to update archive status.');
     }
   };
 
   const handleDeleteDiscardedItem = (item: ShoppingItem) => {
-    Alert.alert(
+    showThemedAlert(
       'Delete Item Permanently',
       `Are you sure you want to permanently delete "${item.name}"? This action cannot be undone.`,
       [
@@ -147,7 +147,7 @@ export default function ShoppingListDetailScreen() {
               await deleteItem(item.id);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             } catch (e: any) {
-              Alert.alert('Error', e?.message || 'Failed to delete discarded item.');
+              showThemedAlert('Error', e?.message || 'Failed to delete discarded item.');
             }
           },
         },
@@ -458,7 +458,7 @@ export default function ShoppingListDetailScreen() {
                   await discardItem(item.id);
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                 } catch (e: any) {
-                  Alert.alert('Error', e?.message || 'Failed to discard item.');
+                  showThemedAlert('Error', e?.message || 'Failed to discard item.');
                 }
               } : undefined}
             />
@@ -540,7 +540,7 @@ export default function ShoppingListDetailScreen() {
                       await restoreItem(item.id);
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
                     } catch (e: any) {
-                      Alert.alert('Error', e?.message || 'Failed to restore item.');
+                      showThemedAlert('Error', e?.message || 'Failed to restore item.');
                     }
                   } : undefined}
                   onDeletePress={!isReadOnly ? () => handleDeleteDiscardedItem(item) : undefined}

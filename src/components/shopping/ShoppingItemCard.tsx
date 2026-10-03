@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking } from 'react-native';
 import {
   Circle,
   CheckCircle,
@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { ShoppingItem } from '../../domain/finance/types';
 import { LiquidGlassCard } from '../ui/LiquidGlassCard';
+import { showThemedAlert } from '../ui/ThemedDialog';
 import { formatRupee } from '../../domain/finance/currency';
 import { useTheme } from '../../theme';
 import * as Haptics from 'expo-haptics';
@@ -52,7 +53,7 @@ export const ShoppingItemCard: React.FC<ShoppingItemCardProps> = ({
       }
       await Linking.openURL(cleanUrl);
     } catch {
-      Alert.alert('Link Error', 'Unable to open link in browser.');
+      showThemedAlert('Link Error', 'Unable to open link in browser.');
     }
   };
 

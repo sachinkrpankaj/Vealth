@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TextInput, Switch } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Lock, Fingerprint, ShieldCheck } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useSecurityStore } from '../../src/stores/useSecurityStore';
 import { useTheme } from '../../src/theme';
 
@@ -39,14 +40,14 @@ export default function SecuritySettingsScreen() {
       setNewPin('');
       setConfirmPin('');
       setError(null);
-      Alert.alert('Success', 'Security PIN has been set.');
+      showThemedAlert('Success', 'Security PIN has been set.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save the PIN securely.');
     }
   };
 
   const handleDisablePin = () => {
-    Alert.alert(
+    showThemedAlert(
       'Disable PIN',
       'Are you sure you want to disable PIN lock?',
       [
@@ -59,7 +60,7 @@ export default function SecuritySettingsScreen() {
               await setPin(null);
               await setBiometricEnabled(false);
             } catch (err) {
-              Alert.alert(
+              showThemedAlert(
                 'Security Error',
                 err instanceof Error ? err.message : 'Failed to disable the PIN securely.'
               );
@@ -231,7 +232,7 @@ export default function SecuritySettingsScreen() {
               try {
                 await setBiometricEnabled(enabled);
               } catch (err) {
-                Alert.alert(
+                showThemedAlert(
                   'Security Error',
                   err instanceof Error ? err.message : 'Failed to update biometric settings.'
                 );

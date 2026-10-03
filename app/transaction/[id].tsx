@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  Alert,
   ScrollView,
   TextInput,
 } from 'react-native';
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
+import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { Badge } from '../../src/components/ui/Badge';
 import { AmountText } from '../../src/components/ui/AmountText';
@@ -116,7 +116,7 @@ export default function TransactionDetailScreen() {
   }, [id]);
 
   const handleDelete = () => {
-    Alert.alert(
+    showThemedAlert(
       'Delete Transaction',
       'Are you sure you want to delete this transaction? All associated account balances and debt effects will be reversed.',
       [
@@ -132,7 +132,7 @@ export default function TransactionDetailScreen() {
               router.back();
             } catch (e: any) {
               setIsDeleting(false);
-              Alert.alert('Delete Error', e?.message || 'Failed to delete transaction.');
+              showThemedAlert('Delete Error', e?.message || 'Failed to delete transaction.');
             }
           },
         },
@@ -155,7 +155,7 @@ export default function TransactionDetailScreen() {
         const maxAllowed = currentOutstanding + transaction.amount;
         if (editAmount > maxAllowed) {
           setIsSaving(false);
-          Alert.alert(
+          showThemedAlert(
             'Overpayment Error',
             `Edited repayment (${formatRupee(editAmount)}) cannot exceed total outstanding balance of ${formatRupee(maxAllowed)}.`
           );
@@ -169,7 +169,7 @@ export default function TransactionDetailScreen() {
       const maxPossible = asset.currentValue + transaction.amount;
       if (editAmount > maxPossible) {
         setIsSaving(false);
-        Alert.alert(
+        showThemedAlert(
           'Valuation Limit',
           `Sale amount (${formatRupee(editAmount)}) cannot exceed available asset valuation (${formatRupee(maxPossible)}).`
         );
@@ -186,7 +186,7 @@ export default function TransactionDetailScreen() {
       setIsEditing(false);
       await loadData();
     } catch (e: any) {
-      Alert.alert('Update Error', e?.message || 'Failed to update transaction.');
+      showThemedAlert('Update Error', e?.message || 'Failed to update transaction.');
     } finally {
       setIsSaving(false);
     }
