@@ -3,19 +3,18 @@
   "compilerOptions": {
     "strict": true,
     "rootDir": ".",
+    "skipLibCheck": true,
     "types": [
       "jest",
       "node"
     ],
-    "ignoreDeprecations": "6.0",
     "isolatedModules": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "~/*": [
-        "*"
+        "./*"
       ]
     }
   },

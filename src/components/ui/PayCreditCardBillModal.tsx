@@ -377,7 +377,13 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                           accessibilityLabel={`Pay using ${acc.name}`}
                           accessibilityState={{ selected: isSelected }}
                           radius={radii.md} padding={0}
-                          style={[styles.accountOption, isSelected && { borderColor: colors.gold, borderWidth: 2 }]}
+                          style={[
+                            styles.accountOption,
+                            {
+                              borderColor: isSelected ? colors.gold : colors.borderSubtle,
+                              borderWidth: isSelected ? 2 : 1,
+                            },
+                          ]}
                         >
                           <View
                             style={[
@@ -500,7 +506,6 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
   summaryBox: {
     padding: 14,
@@ -535,7 +540,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    borderWidth: 1.5,
   },
   accIconWrap: {
     width: 36,

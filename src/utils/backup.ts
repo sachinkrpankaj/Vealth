@@ -167,7 +167,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     return { isValid: false, error: 'Invalid backup file format.' };
   }
   if (parsed.appName !== 'vealth' && parsed.appName !== 'Vealth' && parsed.appName !== 'Vaelth') {
-    return { isValid: false, error: 'File is not a valid vealth backup (not a valid Vaelth backup).' };
+    return { isValid: false, error: 'File is not a valid vealth backup.' };
   }
   if (parsed.schemaVersion !== 1) {
     return { isValid: false, error: 'Unsupported backup schema version.' };

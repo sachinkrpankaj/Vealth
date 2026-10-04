@@ -9,7 +9,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Home, HandCoins, ArrowLeftRight, SlidersHorizontal, ShoppingBag } from 'lucide-react-native';
 import { useTheme } from '../../theme';
-import { LiquidGlassCard, LiquidGlassPrismOverlay } from '../ui/LiquidGlassCard';
+import { LiquidGlassCard } from '../ui/LiquidGlassCard';
 
 export interface FloatingTabBarProps {
   state: {
@@ -113,46 +113,23 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
               accessibilityLabel={`${tabLabel} tab`}
               style={({ pressed }) => [
                 styles.squircleButton,
-                isDark
-                  ? isFocused
-                    ? [
-                        styles.activeSquircle,
-                        {
-                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                          borderColor: colors.border,
-                          shadowColor: '#000000',
-                        },
-                      ]
-                    : [
-                        styles.inactiveSquircle,
-                        {
-                          backgroundColor: 'transparent',
-                          borderColor: 'transparent',
-                        },
-                      ]
-                  : isFocused
+                isFocused
                   ? [
                       styles.activeSquircle,
                       {
-                        backgroundColor: '#EDF1FA',
-                        shadowColor: '#000000',
+                        backgroundColor: isDark
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : colors.accent,
+                        borderColor: isDark ? colors.border : 'transparent',
                       },
                     ]
-                  : [
-                      styles.inactiveSquircle,
-                      {
-                        backgroundColor: '#EDF1FA',
-                      },
-                    ],
+                  : styles.inactiveSquircle,
                 {
                   transform: [{ scale: pressed ? 0.92 : 1 }],
                 },
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             >
-              {!isDark && (
-                <LiquidGlassPrismOverlay borderRadius={15} isDark={isDark} tone={isFocused ? 'emphasized' : 'default'} />
-              )}
               <IconComponent
                 size={21}
                 color={
@@ -195,16 +172,21 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
   },
   activeSquircle: {
-    elevation: 6,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    elevation: 2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
   },
-  inactiveSquircle: {},
+  inactiveSquircle: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    elevation: 0,
+  },
 });
 

@@ -26,7 +26,7 @@ import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
 import { useTheme } from '../../theme';
 
 // Layout style keys that strictly belong to the outermost container
-const OUTER_STYLE_KEYS = new Set([
+const OUTER_STYLE_KEYS = new Set<string>([
   'flex',
   'flexGrow',
   'flexShrink',
@@ -55,7 +55,7 @@ const OUTER_STYLE_KEYS = new Set([
 ]);
 
 // Surface style keys that belong to the glass shell, NEVER to inner content
-const SURFACE_STYLE_KEYS = new Set([
+const SURFACE_STYLE_KEYS = new Set<string>([
   'borderWidth',
   'borderColor',
   'borderTopWidth',
@@ -126,139 +126,210 @@ export const LiquidGlassPrismOverlay: React.FC<{
     );
   }, []);
 
+  const idPrefix = useMemo(
+    () => `lg_${Math.random().toString(36).substring(2, 9)}`,
+    []
+  );
+
   // Measure the actual surface, including pills and flex-driven cards, for Android SVG geometry.
   const safeRadius = Math.min(r, size.width / 2, size.height / 2);
   const tint = tone === 'positive' ? '#059669' : tone === 'negative' ? '#E11D48' : isDark ? '#6366F1' : '#4F46E5';
+  const isSemanticTone = tone === 'negative' || tone === 'positive';
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
       {size.width > 0 && size.height > 0 && (
         <Svg width={size.width} height={size.height}>
-      <Defs>
-        {/* Base frosted glass gradient */}
-        <LinearGradient id="lgBaseFillDark" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop
-            offset="0%"
-            stopColor={
-              tone === 'default'
-                ? '#161722'
-                : tone === 'emphasized'
-                ? '#1E2030'
-                : tint
-            }
-            stopOpacity={tone === 'default' ? 0.98 : 0.95}
+          <Defs>
+            {/* Base frosted glass gradient */}
+            <LinearGradient id={`${idPrefix}_baseFillDark`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop
+                offset="0%"
+                stopColor={
+                  tone === 'default'
+                    ? '#161722'
+                    : tone === 'emphasized'
+                    ? '#1E2030'
+                    : tint
+                }
+                stopOpacity={tone === 'default' ? 0.98 : 0.95}
+              />
+              <Stop
+                offset="55%"
+                stopColor={
+                  tone === 'default'
+                    ? '#13141D'
+                    : tone === 'emphasized'
+                    ? '#191A28'
+                    : tone === 'positive'
+                    ? '#065F46'
+                    : tone === 'negative'
+                    ? '#9F1239'
+                    : '#312E81'
+                }
+                stopOpacity={tone === 'default' ? 0.98 : 0.94}
+              />
+              <Stop
+                offset="100%"
+                stopColor={
+                  tone === 'default'
+                    ? '#101117'
+                    : tone === 'emphasized'
+                    ? '#141520'
+                    : tone === 'positive'
+                    ? '#064E3B'
+                    : tone === 'negative'
+                    ? '#881337'
+                    : '#1E1B4B'
+                }
+                stopOpacity="0.98"
+              />
+            </LinearGradient>
+            <LinearGradient id={`${idPrefix}_baseFillLight`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop
+                offset="0%"
+                stopColor={tone === 'default' ? '#FFFFFF' : tint}
+                stopOpacity={tone === 'default' ? 0.96 : 0.96}
+              />
+              <Stop
+                offset="55%"
+                stopColor={
+                  tone === 'default'
+                    ? '#F8FAFF'
+                    : tone === 'positive'
+                    ? '#047857'
+                    : tone === 'negative'
+                    ? '#BE123C'
+                    : '#4338CA'
+                }
+                stopOpacity={tone === 'default' ? 0.92 : 0.94}
+              />
+              <Stop
+                offset="100%"
+                stopColor={
+                  tone === 'default'
+                    ? '#E8EDFA'
+                    : tone === 'positive'
+                    ? '#065F46'
+                    : tone === 'negative'
+                    ? '#9F1239'
+                    : '#3730A3'
+                }
+                stopOpacity={tone === 'default' ? 0.90 : 0.98}
+              />
+            </LinearGradient>
+
+            {/* Specular highlight streak across top edge — calm subtle kiss of light in dark mode */}
+            <LinearGradient id={`${idPrefix}_topSpec`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop
+                offset="0%"
+                stopColor="#FFFFFF"
+                stopOpacity={
+                  tone === 'default'
+                    ? isDark
+                      ? 0.03
+                      : 0.55
+                    : isDark
+                    ? 0.02
+                    : isSemanticTone
+                    ? 0.05
+                    : 0.10
+                }
+              />
+              <Stop
+                offset="25%"
+                stopColor="#FFFFFF"
+                stopOpacity={
+                  tone === 'default' ? (isDark ? 0.008 : 0.12) : 0.01
+                }
+              />
+              <Stop offset="50%" stopColor="#FFFFFF" stopOpacity="0" />
+              <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+            </LinearGradient>
+
+            {/* Chromatic prismatic shimmer on sides (disabled in dark mode and semantic tones for clean cohesion) */}
+            <LinearGradient id={`${idPrefix}_prismSheen`} x1="0%" y1="0%" x2="100%" y2="100%">
+              <Stop
+                offset="0%"
+                stopColor="#818CF8"
+                stopOpacity={isDark || isSemanticTone ? '0' : '0.07'}
+              />
+              <Stop
+                offset="35%"
+                stopColor="#38BDF8"
+                stopOpacity={isDark || isSemanticTone ? '0' : '0.05'}
+              />
+              <Stop
+                offset="70%"
+                stopColor="#34D399"
+                stopOpacity={isDark || isSemanticTone ? '0' : '0.04'}
+              />
+              <Stop
+                offset="100%"
+                stopColor="#C084FC"
+                stopOpacity={isDark || isSemanticTone ? '0' : '0.07'}
+              />
+            </LinearGradient>
+
+            {/* Crystalline beveled rim stroke gradient (refined, subtle edge catch) */}
+            <LinearGradient id={`${idPrefix}_rimStrokeDark`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.08" />
+              <Stop offset="35%" stopColor="#FFFFFF" stopOpacity="0.04" />
+              <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.02" />
+              <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.01" />
+            </LinearGradient>
+            <LinearGradient id={`${idPrefix}_rimStrokeLight`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
+              <Stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.65" />
+              <Stop offset="100%" stopColor="rgba(203, 213, 225, 0.45)" />
+            </LinearGradient>
+          </Defs>
+
+          {/* Layer 0: Base glass fill */}
+          <Rect
+            x="0"
+            y="0"
+            width={size.width}
+            height={size.height}
+            rx={safeRadius}
+            ry={safeRadius}
+            fill={isDark ? `url(#${idPrefix}_baseFillDark)` : `url(#${idPrefix}_baseFillLight)`}
           />
-          <Stop
-            offset="55%"
-            stopColor={
-              tone === 'default'
-                ? '#13141D'
-                : tone === 'emphasized'
-                ? '#191A28'
-                : tone === 'positive'
-                ? '#065F46'
-                : tone === 'negative'
-                ? '#9F1239'
-                : '#312E81'
-            }
-            stopOpacity={tone === 'default' ? 0.98 : 0.94}
+
+          {/* Layer 1: Subtle chromatic prism sheen */}
+          <Rect
+            x="0"
+            y="0"
+            width={size.width}
+            height={size.height}
+            rx={safeRadius}
+            ry={safeRadius}
+            fill={`url(#${idPrefix}_prismSheen)`}
           />
-          <Stop
-            offset="100%"
-            stopColor={
-              tone === 'default'
-                ? '#101117'
-                : tone === 'emphasized'
-                ? '#141520'
-                : tone === 'positive'
-                ? '#064E3B'
-                : tone === 'negative'
-                ? '#881337'
-                : '#1E1B4B'
-            }
-            stopOpacity="0.98"
+
+          {/* Layer 2: Top specular highlight reflection (fades smoothly without hard geometric seam) */}
+          <Rect
+            x="0"
+            y="0"
+            width={size.width}
+            height={size.height}
+            rx={safeRadius}
+            ry={safeRadius}
+            fill={`url(#${idPrefix}_topSpec)`}
           />
-        </LinearGradient>
-        <LinearGradient id="lgBaseFillLight" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor={tone === 'default' ? '#FFFFFF' : tint} stopOpacity={tone === 'default' ? 0.96 : 0.96} />
-          <Stop offset="55%" stopColor={tone === 'default' ? '#F8FAFF' : '#4F46E5'} stopOpacity={tone === 'default' ? 0.92 : 0.94} />
-          <Stop offset="100%" stopColor={tone === 'default' ? '#E8EDFA' : '#4338CA'} stopOpacity={tone === 'default' ? 0.90 : 0.98} />
-        </LinearGradient>
 
-        {/* Specular highlight streak across top edge — calm subtle kiss of light in dark mode */}
-        <LinearGradient id="lgTopSpec" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.03 : 0.55) : (isDark ? 0.02 : 0.10)} />
-          <Stop offset="25%" stopColor="#FFFFFF" stopOpacity={tone === 'default' ? (isDark ? 0.008 : 0.12) : 0.01} />
-          <Stop offset="50%" stopColor="#FFFFFF" stopOpacity="0" />
-          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-        </LinearGradient>
-
-        {/* Chromatic prismatic shimmer on sides (disabled in dark mode for calm obsidian cohesion) */}
-        <LinearGradient id="lgPrismSheen" x1="0%" y1="0%" x2="100%" y2="100%">
-          <Stop offset="0%" stopColor="#818CF8" stopOpacity={isDark ? "0" : "0.07"} />
-          <Stop offset="35%" stopColor="#38BDF8" stopOpacity={isDark ? "0" : "0.05"} />
-          <Stop offset="70%" stopColor="#34D399" stopOpacity={isDark ? "0" : "0.04"} />
-          <Stop offset="100%" stopColor="#C084FC" stopOpacity={isDark ? "0" : "0.07"} />
-        </LinearGradient>
-
-        {/* Crystalline beveled rim stroke gradient (refined, subtle edge catch) */}
-        <LinearGradient id="lgRimStrokeDark" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.08" />
-          <Stop offset="35%" stopColor="#FFFFFF" stopOpacity="0.04" />
-          <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.02" />
-          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.01" />
-        </LinearGradient>
-        <LinearGradient id="lgRimStrokeLight" x1="0%" y1="0%" x2="0%" y2="100%">
-          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
-          <Stop offset="45%" stopColor="#FFFFFF" stopOpacity="0.65" />
-          <Stop offset="100%" stopColor="rgba(203, 213, 225, 0.45)" />
-        </LinearGradient>
-      </Defs>
-
-      {/* Layer 0: Base glass fill */}
-      <Rect
-        x="0"
-        y="0"
-        width={size.width}
-        height={size.height}
-        rx={safeRadius}
-        ry={safeRadius}
-        fill={isDark ? "url(#lgBaseFillDark)" : "url(#lgBaseFillLight)"}
-      />
-
-      {/* Layer 1: Subtle chromatic prism sheen */}
-      <Rect
-        x="0"
-        y="0"
-        width={size.width}
-        height={size.height}
-        rx={safeRadius}
-        ry={safeRadius}
-        fill="url(#lgPrismSheen)"
-      />
-
-      {/* Layer 2: Top specular highlight reflection (fades smoothly without hard geometric seam) */}
-      <Rect
-        x="0"
-        y="0"
-        width={size.width}
-        height={size.height}
-        rx={safeRadius}
-        ry={safeRadius}
-        fill="url(#lgTopSpec)"
-      />
-
-      {/* Layer 3: Crystalline beveled rim stroke */}
-      <Rect
-        x="0.5"
-        y="0.5"
-        width={size.width - 1}
-        height={size.height - 1}
-        rx={Math.max(0, safeRadius - 0.5)}
-        ry={Math.max(0, safeRadius - 0.5)}
-        fill="none"
-        stroke={isDark ? "url(#lgRimStrokeDark)" : "url(#lgRimStrokeLight)"}
-        strokeWidth="1"
-      />
+          {/* Layer 3: Crystalline beveled rim stroke */}
+          <Rect
+            x="0.5"
+            y="0.5"
+            width={size.width - 1}
+            height={size.height - 1}
+            rx={Math.max(0, safeRadius - 0.5)}
+            ry={Math.max(0, safeRadius - 0.5)}
+            fill="none"
+            stroke={isDark ? `url(#${idPrefix}_rimStrokeDark)` : `url(#${idPrefix}_rimStrokeLight)`}
+            strokeWidth="1"
+          />
         </Svg>
       )}
     </View>

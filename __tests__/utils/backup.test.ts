@@ -95,7 +95,7 @@ describe('Backup & Restore Integrity Engine', () => {
     it('rejects files from other apps', () => {
       const res = validateBackupData({ ...validSampleBackup, appName: 'OtherApp' });
       expect(res.isValid).toBe(false);
-      expect(res.error).toContain('not a valid Vaelth backup');
+      expect(res.error).toContain('not a valid vealth backup');
     });
 
     it('rejects unsupported future schema versions', () => {

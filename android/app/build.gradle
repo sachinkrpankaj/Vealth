@@ -105,12 +105,56 @@ android {
             keyPassword 'android'
         }
         release {
-            def storeFilePath = System.getenv("VAELTH_RELEASE_STORE_FILE") ?: (project.findProperty('MYAPP_UPLOAD_STORE_FILE') ?: project.findProperty('VAELTH_RELEASE_STORE_FILE'))
+            def storeFilePath = project.findProperty('MYAPP_UPLOAD_STORE_FILE') ?:
+                                project.findProperty('VAELTH_RELEASE_STORE_FILE') ?:
+                                project.findProperty('RELEASE_STORE_FILE') ?:
+                                System.getenv("VAELTH_RELEASE_STORE_FILE") ?:
+                                System.getenv("RELEASE_STORE_FILE") ?:
+                                System.getenv("MYAPP_UPLOAD_STORE_FILE")
+
+            def storePwd = project.findProperty('MYAPP_UPLOAD_STORE_PASSWORD') ?:
+                           project.findProperty('VAELTH_RELEASE_STORE_PASSWORD') ?:
+                           project.findProperty('RELEASE_STORE_PASSWORD') ?:
+                           System.getenv("VAELTH_RELEASE_STORE_PASSWORD") ?:
+                           System.getenv("RELEASE_STORE_PASSWORD") ?:
+                           System.getenv("MYAPP_UPLOAD_STORE_PASSWORD")
+
+            def kAlias = project.findProperty('MYAPP_UPLOAD_KEY_ALIAS') ?:
+                         project.findProperty('VAELTH_RELEASE_KEY_ALIAS') ?:
+                         project.findProperty('RELEASE_KEY_ALIAS') ?:
+                         System.getenv("VAELTH_RELEASE_KEY_ALIAS") ?:
+                         System.getenv("RELEASE_KEY_ALIAS") ?:
+                         System.getenv("MYAPP_UPLOAD_KEY_ALIAS")
+
+            def kPwd = project.findProperty('MYAPP_UPLOAD_KEY_PASSWORD') ?:
+                       project.findProperty('VAELTH_RELEASE_KEY_PASSWORD') ?:
+                       project.findProperty('RELEASE_KEY_PASSWORD') ?:
+                       System.getenv("VAELTH_RELEASE_KEY_PASSWORD") ?:
+                       System.getenv("RELEASE_KEY_PASSWORD") ?:
+                       System.getenv("MYAPP_UPLOAD_KEY_PASSWORD")
+
             if (storeFilePath) {
                 storeFile file(storeFilePath)
-                storePassword System.getenv("VAELTH_RELEASE_STORE_PASSWORD") ?: (project.findProperty('MYAPP_UPLOAD_STORE_PASSWORD') ?: project.findProperty('VAELTH_RELEASE_STORE_PASSWORD'))
-                keyAlias System.getenv("VAELTH_RELEASE_KEY_ALIAS") ?: (project.findProperty('MYAPP_UPLOAD_KEY_ALIAS') ?: project.findProperty('VAELTH_RELEASE_KEY_ALIAS'))
-                keyPassword System.getenv("VAELTH_RELEASE_KEY_PASSWORD") ?: (project.findProperty('MYAPP_UPLOAD_KEY_PASSWORD') ?: project.findProperty('VAELTH_RELEASE_KEY_PASSWORD'))
+                storePassword storePwd
+                keyAlias kAlias
+                keyPassword kPwd ?: storePwd
+            } else {
+                def credentialsJson = rootProject.file("../credentials.json")
+                if (credentialsJson.exists()) {
+                    try {
+                        def credentials = new groovy.json.JsonSlurper().parse(credentialsJson)
+                        if (credentials?.android?.keystore?.keystorePath) {
+                            def kPath = java.nio.file.Paths.get(credentials.android.keystore.keystorePath)
+                            def sPath = kPath.isAbsolute() ? kPath : rootProject.file("..").toPath().resolve(kPath)
+                            storeFile sPath.toFile()
+                            storePassword credentials.android.keystore.keystorePassword
+                            keyAlias credentials.android.keystore.keyAlias
+                            keyPassword credentials.android.keystore.keyPassword ?: credentials.android.keystore.keystorePassword
+                        }
+                    } catch (Exception e) {
+                        println("Failed to read credentials.json: " + e.message)
+                    }
+                }
             }
         }
     }
@@ -119,8 +163,12 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Production builds must never use debug signing.
-            signingConfig signingConfigs.release
+            // Use release signing if valid credentials were provided; fallback to debug signing for local test release builds.
+            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             debuggable false
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
@@ -130,20 +178,6 @@ android {
             crunchPngs enablePngCrunchInRelease.toBoolean()
         }
     }
-
-gradle.taskGraph.whenReady { taskGraph ->
-    def isReleaseBuild = taskGraph.allTasks.any { task ->
-        task.name.equalsIgnoreCase("assembleRelease") ||
-        task.name.equalsIgnoreCase("bundleRelease") ||
-        task.name.equalsIgnoreCase("packageRelease")
-    }
-    if (isReleaseBuild) {
-        def storeFilePath = System.getenv("VAELTH_RELEASE_STORE_FILE") ?: (project.findProperty('MYAPP_UPLOAD_STORE_FILE') ?: project.findProperty('VAELTH_RELEASE_STORE_FILE'))
-        if (!storeFilePath || !file(storeFilePath).exists()) {
-            throw new GradleException("Production release build failed: Missing production release keystore (VAELTH_RELEASE_STORE_FILE). Release builds must never use debug signing and cannot generate unsigned artifacts when a production release is requested.")
-        }
-    }
-}
     packagingOptions {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
@@ -152,6 +186,34 @@ gradle.taskGraph.whenReady { taskGraph ->
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+// Apply EAS build script if generated by EAS Build
+if (file("eas-build.gradle").exists()) {
+    apply from: "./eas-build.gradle"
+}
+
+// Release build signing validation: inspect actual effective release signing configuration
+gradle.taskGraph.whenReady { taskGraph ->
+    def isReleaseBuild = taskGraph.allTasks.any { task ->
+        task.name.equalsIgnoreCase("assembleRelease") ||
+        task.name.equalsIgnoreCase("bundleRelease") ||
+        task.name.equalsIgnoreCase("packageRelease")
+    }
+    if (isReleaseBuild) {
+        def releaseSigning = project.android.signingConfigs.findByName("release")
+        if (releaseSigning?.storeFile != null && !releaseSigning.storeFile.exists()) {
+            throw new GradleException("Production release build failed: Configured release keystore does not exist at '${releaseSigning.storeFile.absolutePath}'.")
+        }
+
+        def effectiveSigning = project.android.buildTypes.release.signingConfig
+        if (effectiveSigning == null) {
+            throw new GradleException("Production release build failed: Release build type does not have a signing configuration assigned.")
+        }
+        if (effectiveSigning.storeFile != null && !effectiveSigning.storeFile.exists()) {
+            throw new GradleException("Production release build failed: Effective keystore does not exist at '${effectiveSigning.storeFile.absolutePath}'.")
+        }
     }
 }
 

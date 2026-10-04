@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.vaelth.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#F3EFEA",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -21,7 +22,9 @@
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ],
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW",
@@ -49,6 +52,17 @@
       "expo-local-authentication",
       "expo-secure-store",
       "expo-document-picker"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "headers": {
+          "Cross-Origin-Embedder-Policy": "credentialless",
+          "Cross-Origin-Opener-Policy": "same-origin"
+        }
+      },
+      "eas": {
+        "projectId": "6673f8c7-d1a0-4b1c-8faa-764e441cd774"
+      }
+    }
   }
 }
