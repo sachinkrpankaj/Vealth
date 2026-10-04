@@ -96,7 +96,7 @@ export default function DemoSettingsScreen() {
               Seed Sample Portfolio
             </Text>
             <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
-              Quickly populate Vealth with realistic personal finance data:
+              Quickly populate vealth with realistic personal finance data:
               {'\n'}• Cash ₹5,000, Bank ₹40,000, Mutual Funds ₹15,000
               {'\n'}• Rahul owes ₹3,000 (with repayments)
               {'\n'}• You owe Amit ₹2,000

@@ -36,7 +36,7 @@ import { formatDateIso, parseLocalDate } from './dateUtils';
 import { generateEntityId } from './idGenerator';
 
 export interface VealthBackupData {
-  appName: 'Vealth' | 'Vaelth';
+  appName: 'vealth' | 'Vealth' | 'Vaelth';
   schemaVersion: number;
   exportedAt: string;
   data: {
@@ -88,7 +88,7 @@ export async function createBackupData(): Promise<VealthBackupData> {
   }
 
   return {
-    appName: 'Vealth',
+    appName: 'vealth',
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     data: {
@@ -122,7 +122,7 @@ export async function exportBackupToFile(): Promise<string> {
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
       mimeType: 'application/json',
-      dialogTitle: 'Export Vealth Backup',
+      dialogTitle: 'Export vealth Backup',
       UTI: 'public.json',
     });
   }
@@ -166,8 +166,8 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   if (!parsed || typeof parsed !== 'object') {
     return { isValid: false, error: 'Invalid backup file format.' };
   }
-  if (parsed.appName !== 'Vealth' && parsed.appName !== 'Vaelth') {
-    return { isValid: false, error: 'File is not a valid Vealth backup (not a valid Vaelth backup).' };
+  if (parsed.appName !== 'vealth' && parsed.appName !== 'Vealth' && parsed.appName !== 'Vaelth') {
+    return { isValid: false, error: 'File is not a valid vealth backup (not a valid Vaelth backup).' };
   }
   if (parsed.schemaVersion !== 1) {
     return { isValid: false, error: 'Unsupported backup schema version.' };

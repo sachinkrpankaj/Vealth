@@ -121,7 +121,7 @@ describe('Financial Snapshot Transaction Boundary Regression Test', () => {
       getFirstAsync: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('FROM app_settings WHERE key = ?')) {
           if (params[0] === 'user_name') {
-            return { value: 'Vealth User' };
+            return { value: 'vealth User' };
           }
           return null;
         }
@@ -200,7 +200,7 @@ describe('Financial Snapshot Transaction Boundary Regression Test', () => {
     const snapshot = await fetchFinancialSnapshot();
 
     expect(snapshot).toBeDefined();
-    expect(snapshot.userName).toBe('Vealth User');
+    expect(snapshot.userName).toBe('vealth User');
     expect(snapshot.accounts).toHaveLength(1);
     expect(snapshot.people).toHaveLength(1);
     expect(snapshot.physicalAssets).toHaveLength(1);
@@ -235,7 +235,7 @@ describe('Financial Snapshot Transaction Boundary Regression Test', () => {
 
     expect(snap1).toBe(snap2);
     expect(snap2).toBe(snap3);
-    expect(snap1.userName).toBe('Vealth User');
+    expect(snap1.userName).toBe('vealth User');
 
     // Only 1 transaction boundary opened for all 3 concurrent requests
     expect(totalTransactionsStarted).toBe(1);

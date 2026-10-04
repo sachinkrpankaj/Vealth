@@ -6,6 +6,7 @@ import {
 } from '../../src/database/repositories/transactionRepository';
 import { validateBackupData, createBackupData } from '../../src/utils/backup';
 import { getTodayLocalDateString, formatDateIso } from '../../src/utils/dateUtils';
+import { calculateAccountBalance, calculateNetWorth } from '../../src/domain/finance/financialEngine';
 import appJson from '../../app.json';
 
 const open = openDatabaseAsync as jest.Mock;
@@ -281,13 +282,13 @@ describe('Vealth Final Audit & Data Integrity Invariants', () => {
   });
 
   describe('3. User-Facing Branding & Compatibility', () => {
-    it('enforces Vealth as the user-facing application name in app.json', () => {
-      expect(appJson.expo.name).toBe('Vealth');
+    it('enforces vealth as the user-facing application name in app.json', () => {
+      expect(appJson.expo.name).toBe('vealth');
     });
 
-    it('validates backup data created with Vealth', () => {
+    it('validates backup data created with vealth', () => {
       const vealthBackup = {
-        appName: 'Vealth',
+        appName: 'vealth',
         schemaVersion: 1,
         exportedAt: '2026-10-04T00:00:00.000Z',
         data: {
@@ -304,7 +305,23 @@ describe('Vealth Final Audit & Data Integrity Invariants', () => {
       expect(result.isValid).toBe(true);
     });
 
-    it('preserves backward compatibility by accepting legacy Vaelth backup files', () => {
+    it('preserves backward compatibility by accepting legacy Vealth and Vaelth backup files', () => {
+      const vealthUpperBackup = {
+        appName: 'Vealth',
+        schemaVersion: 1,
+        exportedAt: '2026-10-04T00:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          settings: {},
+        },
+      };
+      expect(validateBackupData(vealthUpperBackup).isValid).toBe(true);
+
       const legacyBackup = {
         appName: 'Vaelth',
         schemaVersion: 1,
@@ -319,14 +336,61 @@ describe('Vealth Final Audit & Data Integrity Invariants', () => {
           settings: {},
         },
       };
-      const result = validateBackupData(legacyBackup);
-      expect(result.isValid).toBe(true);
+      expect(validateBackupData(legacyBackup).isValid).toBe(true);
     });
 
-    it('createBackupData produces appName Vealth', async () => {
+    it('createBackupData produces appName vealth', async () => {
       const backup = await createBackupData();
-      expect(backup.appName).toBe('Vealth');
+      expect(backup.appName).toBe('vealth');
       expect(validateBackupData(backup).isValid).toBe(true);
+    });
+  });
+
+  describe('4. Future Transactions Consistency', () => {
+    it('allows creating future-dated transactions without altering today balances or net worth', async () => {
+      const today = getTodayLocalDateString();
+      const futureDate = '2026-12-31';
+      expect(futureDate > today).toBe(true);
+
+      const created = await createTransaction({
+        id: 'tx-future-expense',
+        type: 'EXPENSE',
+        amount: 25000,
+        date: futureDate,
+        accountId: 'acc-active',
+      });
+
+      expect(created.id).toBe('tx-future-expense');
+      expect(created.date).toBe(futureDate);
+
+      // Verify that today's balance calculation excludes the future transaction
+      const account = {
+        id: 'acc-active',
+        name: 'Active Bank',
+        type: 'BANK' as const,
+        openingBalance: 100000,
+        currency: 'INR' as const,
+        isArchived: false,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      };
+
+      const balanceToday = calculateAccountBalance(account, [created], today);
+      expect(balanceToday).toBe(100000); // Unchanged
+
+      const netWorthToday = calculateNetWorth({
+        accounts: [account],
+        people: [],
+        physicalAssets: [],
+        standaloneLiabilities: [],
+        transactions: [created],
+        asOfDate: today,
+      });
+      expect(netWorthToday.netWorth).toBe(100000); // Unchanged
+
+      // On the future date, it takes effect
+      const balanceFuture = calculateAccountBalance(account, [created], futureDate);
+      expect(balanceFuture).toBe(75000);
     });
   });
 });

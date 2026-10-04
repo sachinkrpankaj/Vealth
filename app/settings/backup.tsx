@@ -186,7 +186,7 @@ export default function BackupScreen() {
               Restore from JSON Backup
             </Text>
             <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
-              Restore all financial accounts, people, assets, liabilities, and transactions from a previously exported Vealth JSON backup file.
+              Restore all financial accounts, people, assets, liabilities, and transactions from a previously exported vealth JSON backup file.
             </Text>
           </View>
         </View>

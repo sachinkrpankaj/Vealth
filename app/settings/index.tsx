@@ -227,15 +227,15 @@ export default function SettingsIndexScreen() {
         </Pressable>
       </Card>
 
-      {/* About Vealth */}
+      {/* About vealth */}
       <SectionHeader title="About" />
       <Card style={styles.aboutCard}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
           <Info size={18} color={colors.accent} style={{ marginRight: 8 }} />
-          <Text style={[styles.aboutTitle, { color: colors.textPrimary }]}>Vealth v1.0.0</Text>
+          <Text style={[styles.aboutTitle, { color: colors.textPrimary }]}>vealth v1.0.0</Text>
         </View>
         <Text style={[styles.aboutDesc, { color: colors.textSecondary }]}>
-          Vealth is a private, offline-first personal finance and net-worth tracking mobile application. All data is saved on-device with zero cloud telemetry.
+          vealth is a private, offline-first personal finance and net-worth tracking mobile application. All data is saved on-device with zero cloud telemetry.
         </Text>
       </Card>
     </ScreenContainer>

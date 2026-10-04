@@ -571,7 +571,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       if (!hasHardware || !isEnrolled) return false;
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Unlock Vealth',
+        promptMessage: 'Unlock vealth',
         fallbackLabel: 'Use PIN',
       });
 

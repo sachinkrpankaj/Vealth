@@ -78,7 +78,7 @@ export async function exportTransactionsToCSV(transactions: Transaction[]): Prom
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
       mimeType: 'text/csv',
-      dialogTitle: 'Export Vealth Transactions',
+      dialogTitle: 'Export vealth Transactions',
       UTI: 'public.comma-separated-values-text',
     });
   }

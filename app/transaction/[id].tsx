@@ -164,12 +164,6 @@ export default function TransactionDetailScreen() {
     setIsSaving(true);
 
     const effectiveDate = editDate.trim() || transaction.date;
-    const today = getTodayLocalDateString();
-    if (effectiveDate > today) {
-      setIsSaving(false);
-      showThemedAlert('Validation Error', 'Future-dated transactions are not supported.');
-      return;
-    }
 
     const dueVal = validateDueDate(editDueDate, effectiveDate);
     if (!dueVal.isValid) {
@@ -336,8 +330,8 @@ export default function TransactionDetailScreen() {
               value={editDate}
               onChange={setEditDate}
               placeholder="YYYY-MM-DD"
-              includeFutureShortcuts={false}
-              allowFutureDates={false}
+              includeFutureShortcuts={true}
+              allowFutureDates={true}
               style={{ marginBottom: 0 }}
             />
 

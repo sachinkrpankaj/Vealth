@@ -38,7 +38,7 @@ interface OnboardingSlide {
 
 const SLIDES: OnboardingSlide[] = [
   {
-    title: 'Vealth',
+    title: 'vealth',
     subtitle: 'Your money, clearly understood.',
     description: 'A private, refined personal finance & net-worth companion designed for clarity.',
     icon: Wallet,

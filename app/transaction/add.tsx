@@ -215,12 +215,6 @@ export default function AddTransactionScreen() {
     if (isSaving) return;
     setErrorMessage(null);
 
-    const today = getTodayLocalDateString();
-    if (date > today) {
-      setErrorMessage('Future-dated transactions are not supported.');
-      return;
-    }
-
     const validation = validateTransactionRequiredFields({
       type: selectedType,
       amount,
@@ -640,8 +634,8 @@ export default function AddTransactionScreen() {
             value={date}
             onChange={handleDateChange}
             placeholder="YYYY-MM-DD"
-            includeFutureShortcuts={false}
-            allowFutureDates={false}
+            includeFutureShortcuts={true}
+            allowFutureDates={true}
             style={{ marginBottom: 0 }}
           />
         </View>
