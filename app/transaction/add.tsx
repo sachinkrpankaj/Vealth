@@ -29,7 +29,7 @@ import { useTheme } from '../../src/theme';
 import { createTransaction } from '../../src/database/repositories/transactionRepository';
 import { getAssetById, updateAsset } from '../../src/database/repositories/assetRepository';
 import { TransactionType } from '../../src/domain/finance/types';
-import { validateTransactionRequiredFields, validateRepaymentAmount, validateDueDate } from '../../src/domain/finance/validator';
+import { validateTransactionRequiredFields, validateRepaymentAmount, validateDueDate, validateTransactionDate } from '../../src/domain/finance/validator';
 import { formatRupee } from '../../src/domain/finance/currency';
 import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtils';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
@@ -214,6 +214,12 @@ export default function AddTransactionScreen() {
   const handleSubmit = async () => {
     if (isSaving) return;
     setErrorMessage(null);
+
+    const dateValidation = validateTransactionDate(date, false);
+    if (!dateValidation.isValid) {
+      setErrorMessage(dateValidation.error || 'Future-dated transactions are not supported.');
+      return;
+    }
 
     const validation = validateTransactionRequiredFields({
       type: selectedType,
@@ -634,8 +640,8 @@ export default function AddTransactionScreen() {
             value={date}
             onChange={handleDateChange}
             placeholder="YYYY-MM-DD"
-            includeFutureShortcuts={true}
-            allowFutureDates={true}
+            includeFutureShortcuts={false}
+            allowFutureDates={false}
             style={{ marginBottom: 0 }}
           />
         </View>

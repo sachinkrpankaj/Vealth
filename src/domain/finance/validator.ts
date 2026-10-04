@@ -6,7 +6,7 @@ export interface ValidationResult {
   error?: string;
 }
 
-import { parseLocalDate } from '../../utils/dateUtils';
+import { parseLocalDate, getTodayLocalDateString } from '../../utils/dateUtils';
 
 export function validateAmount(amountPaise: number): ValidationResult {
   if (!Number.isFinite(amountPaise) || !Number.isSafeInteger(amountPaise) || isNaN(amountPaise)) {
@@ -168,6 +168,24 @@ export function validateDueDate(
   }
   if (transactionDate && trimmed < transactionDate) {
     return { isValid: false, error: 'Due date cannot be earlier than the transaction date.' };
+  }
+  return { isValid: true };
+}
+
+export function validateTransactionDate(
+  dateStr?: string | null,
+  allowFutureDates = false,
+  referenceDate = getTodayLocalDateString()
+): ValidationResult {
+  if (!dateStr || !dateStr.trim()) {
+    return { isValid: false, error: 'Transaction date is required.' };
+  }
+  const trimmed = dateStr.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed) || !parseLocalDate(trimmed)) {
+    return { isValid: false, error: 'Enter a valid calendar date in YYYY-MM-DD format.' };
+  }
+  if (!allowFutureDates && trimmed > referenceDate) {
+    return { isValid: false, error: 'Future-dated transactions are not supported.' };
   }
   return { isValid: true };
 }

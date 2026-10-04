@@ -44,7 +44,7 @@ import { getAssetById } from '../../src/database/repositories/assetRepository';
 import { getCategoryById } from '../../src/database/repositories/categoryRepository';
 import { calculateFinancialEffect } from '../../src/domain/finance/accountingRules';
 import { calculatePersonDebt } from '../../src/domain/finance/financialEngine';
-import { validateDueDate } from '../../src/domain/finance/validator';
+import { validateDueDate, validateTransactionDate } from '../../src/domain/finance/validator';
 import { getTodayLocalDateString } from '../../src/utils/dateUtils';
 import { Transaction, Account, Person, Asset, Category } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
@@ -164,6 +164,12 @@ export default function TransactionDetailScreen() {
     setIsSaving(true);
 
     const effectiveDate = editDate.trim() || transaction.date;
+    const dateVal = validateTransactionDate(effectiveDate, false);
+    if (!dateVal.isValid) {
+      setIsSaving(false);
+      showThemedAlert('Validation Error', dateVal.error || 'Future-dated transactions are not supported.');
+      return;
+    }
 
     const dueVal = validateDueDate(editDueDate, effectiveDate);
     if (!dueVal.isValid) {
@@ -330,8 +336,8 @@ export default function TransactionDetailScreen() {
               value={editDate}
               onChange={setEditDate}
               placeholder="YYYY-MM-DD"
-              includeFutureShortcuts={true}
-              allowFutureDates={true}
+              includeFutureShortcuts={false}
+              allowFutureDates={false}
               style={{ marginBottom: 0 }}
             />
 

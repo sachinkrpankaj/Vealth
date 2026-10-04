@@ -1,5 +1,5 @@
 import { openDatabaseAsync } from 'expo-sqlite';
-import { validateDueDate } from '../../src/domain/finance/validator';
+import { validateDueDate, validateTransactionDate } from '../../src/domain/finance/validator';
 import {
   createTransaction,
   updateTransaction,
@@ -346,8 +346,33 @@ describe('Vealth Final Audit & Data Integrity Invariants', () => {
     });
   });
 
-  describe('4. Future Transactions Consistency', () => {
-    it('allows creating future-dated transactions without altering today balances or net worth', async () => {
+  describe('4. Future Transactions & Form Date Validation Consistency', () => {
+    it('strictly forbids future transaction dates in normal transaction forms (allowFutureDates=false)', () => {
+      const today = getTodayLocalDateString();
+      const futureDate = '2026-12-31';
+      const pastDate = '2026-01-15';
+
+      // Past date: valid
+      expect(validateTransactionDate(pastDate, false, today)).toEqual({ isValid: true });
+      // Today: valid
+      expect(validateTransactionDate(today, false, today)).toEqual({ isValid: true });
+      // Future date: rejected
+      const futureResult = validateTransactionDate(futureDate, false, today);
+      expect(futureResult.isValid).toBe(false);
+      expect(futureResult.error).toContain('Future-dated transactions are not supported');
+
+      // Invalid format rejected
+      expect(validateTransactionDate('', false, today).isValid).toBe(false);
+      expect(validateTransactionDate('invalid-date', false, today).isValid).toBe(false);
+    });
+
+    it('keeps future due dates fully permitted for liabilities/debts', () => {
+      const today = getTodayLocalDateString();
+      const futureDueDate = '2026-12-31';
+      expect(validateDueDate(futureDueDate, today)).toEqual({ isValid: true });
+    });
+
+    it('allows creating future-dated transactions internally by the engine without altering today balances or net worth', async () => {
       const today = getTodayLocalDateString();
       const futureDate = '2026-12-31';
       expect(futureDate > today).toBe(true);
