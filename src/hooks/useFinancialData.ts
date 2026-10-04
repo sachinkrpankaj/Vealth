@@ -36,32 +36,48 @@ export interface FinancialSnapshotData {
   userName: string;
 }
 
+let activeSnapshotPromise: Promise<FinancialSnapshotData> | null = null;
+
 /**
  * Reads a consistent point-in-time snapshot of all primary financial tables
- * to guarantee no intermediate concurrent writes produce mixed-state data.
+ * inside a single atomic transaction boundary.
+ * In-flight requests are deduplicated so concurrent component mounts do not
+ * trigger redundant SQLite reads or race conditions.
  */
 export async function fetchFinancialSnapshot(): Promise<FinancialSnapshotData> {
-  const db = await getDatabase();
-  let snapshot!: FinancialSnapshotData;
-  await db.withTransactionAsync(async () => {
-    const accs = await getAllAccounts(true);
-    const ppl = await getAllPeople(true);
-    const txs = await getAllTransactions();
-    const asts = await getAllAssets(true);
-    const libs = await getAllLiabilities(true);
-    const cats = await getAllCategories(true);
-    const storedName = await getSetting('user_name');
-    snapshot = {
-      accounts: accs,
-      people: ppl,
-      transactions: txs,
-      physicalAssets: asts,
-      standaloneLiabilities: libs,
-      categories: cats,
-      userName: storedName || '',
-    };
-  });
-  return snapshot;
+  if (activeSnapshotPromise) {
+    return activeSnapshotPromise;
+  }
+
+  activeSnapshotPromise = (async () => {
+    try {
+      const db = await getDatabase();
+      let snapshot!: FinancialSnapshotData;
+      await db.withTransactionAsync(async () => {
+        const accs = await getAllAccounts(true, db);
+        const ppl = await getAllPeople(true, db);
+        const txs = await getAllTransactions(undefined, db);
+        const asts = await getAllAssets(true, db);
+        const libs = await getAllLiabilities(true, db);
+        const cats = await getAllCategories(true, db);
+        const storedName = await getSetting('user_name', db);
+        snapshot = {
+          accounts: accs,
+          people: ppl,
+          transactions: txs,
+          physicalAssets: asts,
+          standaloneLiabilities: libs,
+          categories: cats,
+          userName: storedName || '',
+        };
+      });
+      return snapshot;
+    } finally {
+      activeSnapshotPromise = null;
+    }
+  })();
+
+  return activeSnapshotPromise;
 }
 
 export interface FinancialDataState {

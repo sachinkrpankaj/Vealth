@@ -21,8 +21,11 @@ export default function AccountsListScreen() {
     }, [refresh])
   );
 
-  const totalBalance = Array.from(accountBalances.values()).reduce(
-    (acc, curr) => acc + curr,
+  const activeAccounts = accounts.filter((a) => !a.isArchived);
+  const archivedAccounts = accounts.filter((a) => a.isArchived);
+
+  const totalBalance = activeAccounts.reduce(
+    (acc, curr) => acc + (accountBalances.get(curr.id) ?? curr.openingBalance),
     0
   );
 
@@ -54,7 +57,9 @@ export default function AccountsListScreen() {
           style={{ marginVertical: 4 }}
         />
         <Text style={[styles.totalSub, { color: colors.textMuted }]}>
-          Across {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
+          {archivedAccounts.length === 0
+            ? `Across ${activeAccounts.length} ${activeAccounts.length === 1 ? 'account' : 'accounts'}`
+            : `${activeAccounts.length} active • ${archivedAccounts.length} archived`}
         </Text>
       </Card>
 

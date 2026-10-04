@@ -44,6 +44,8 @@ import { getAssetById } from '../../src/database/repositories/assetRepository';
 import { getCategoryById } from '../../src/database/repositories/categoryRepository';
 import { calculateFinancialEffect } from '../../src/domain/finance/accountingRules';
 import { calculatePersonDebt } from '../../src/domain/finance/financialEngine';
+import { validateDueDate } from '../../src/domain/finance/validator';
+import { getTodayLocalDateString } from '../../src/utils/dateUtils';
 import { Transaction, Account, Person, Asset, Category } from '../../src/domain/finance/types';
 import { formatRupee } from '../../src/domain/finance/currency';
 
@@ -67,6 +69,7 @@ export default function TransactionDetailScreen() {
   const [editAmount, setEditAmount] = useState(0);
   const [editNote, setEditNote] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
   const [editCategory, setEditCategory] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -90,6 +93,7 @@ export default function TransactionDetailScreen() {
       setEditAmount(tx.amount);
       setEditNote(tx.note || '');
       setEditDate(tx.date);
+      setEditDueDate(tx.dueDate || '');
       setEditCategory(tx.categoryId || null);
 
       if (tx.categoryId) {
@@ -159,6 +163,21 @@ export default function TransactionDetailScreen() {
     if (isSaving || !transaction || editAmount <= 0) return;
     setIsSaving(true);
 
+    const effectiveDate = editDate.trim() || transaction.date;
+    const today = getTodayLocalDateString();
+    if (effectiveDate > today) {
+      setIsSaving(false);
+      showThemedAlert('Validation Error', 'Future-dated transactions are not supported.');
+      return;
+    }
+
+    const dueVal = validateDueDate(editDueDate, effectiveDate);
+    if (!dueVal.isValid) {
+      setIsSaving(false);
+      showThemedAlert('Validation Error', dueVal.error || 'Due date cannot be earlier than transaction date.');
+      return;
+    }
+
     // Enforce repayment balance checks on edit
     if (transaction.type === 'REPAYMENT_RECEIVED' || transaction.type === 'REPAYMENT_MADE') {
       if (person) {
@@ -183,7 +202,8 @@ export default function TransactionDetailScreen() {
       await updateTransaction(transaction.id, {
         amount: editAmount,
         note: editNote.trim() || undefined,
-        date: editDate.trim() || transaction.date,
+        date: effectiveDate,
+        dueDate: editDueDate.trim() || undefined,
         categoryId: transaction.type === 'EXPENSE' ? (editCategory || null) : (transaction.categoryId ?? null),
       });
       setIsEditing(false);
@@ -321,6 +341,19 @@ export default function TransactionDetailScreen() {
               style={{ marginBottom: 0 }}
             />
 
+            {(transaction.type === 'LEND' || transaction.type === 'BORROW') ? (
+              <DatePickerField
+                label="Due Date (optional)"
+                value={editDueDate}
+                onChange={setEditDueDate}
+                placeholder="YYYY-MM-DD"
+                isClearable
+                includeFutureShortcuts={true}
+                minDate={editDate || transaction.date}
+                style={{ marginTop: 12, marginBottom: 0 }}
+              />
+            ) : null}
+
             {transaction.type === 'EXPENSE' ? (
               <CategoryPickerField
                 selectedCategoryId={editCategory}
@@ -385,9 +418,16 @@ export default function TransactionDetailScreen() {
           <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>
             <Wallet size={18} color={colors.textMuted} style={styles.metaIcon} />
             <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>Account</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-              {account.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {account.name}
+              </Text>
+              {account.isArchived && (
+                <View style={{ backgroundColor: colors.surfaceSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.xs }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>ARCHIVED</Text>
+                </View>
+              )}
+            </View>
           </View>
         ) : null}
 
@@ -395,9 +435,16 @@ export default function TransactionDetailScreen() {
           <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>
             <Wallet size={18} color={colors.textMuted} style={styles.metaIcon} />
             <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>To Account</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-              {destAccount.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {destAccount.name}
+              </Text>
+              {destAccount.isArchived && (
+                <View style={{ backgroundColor: colors.surfaceSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.xs }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>ARCHIVED</Text>
+                </View>
+              )}
+            </View>
           </View>
         ) : null}
 
@@ -405,9 +452,16 @@ export default function TransactionDetailScreen() {
           <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>
             <User size={18} color={colors.textMuted} style={styles.metaIcon} />
             <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>Person</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-              {person.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {person.name}
+              </Text>
+              {person.isArchived && (
+                <View style={{ backgroundColor: colors.surfaceSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.xs }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>ARCHIVED</Text>
+                </View>
+              )}
+            </View>
           </View>
         ) : null}
 
@@ -415,9 +469,16 @@ export default function TransactionDetailScreen() {
           <View style={[styles.metaRow, { borderTopColor: colors.borderSubtle, borderTopWidth: 1 }]}>
             <ShoppingBag size={18} color={colors.textMuted} style={styles.metaIcon} />
             <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>Asset</Text>
-            <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
-              {asset.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={[styles.metaValue, { color: colors.textPrimary }]}>
+                {asset.name}
+              </Text>
+              {asset.isArchived && (
+                <View style={{ backgroundColor: colors.surfaceSubtle, paddingHorizontal: 6, paddingVertical: 2, borderRadius: radii.xs }}>
+                  <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>ARCHIVED</Text>
+                </View>
+              )}
+            </View>
           </View>
         ) : null}
 

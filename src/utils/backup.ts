@@ -35,8 +35,8 @@ import {
 import { formatDateIso, parseLocalDate } from './dateUtils';
 import { generateEntityId } from './idGenerator';
 
-export interface VaelthBackupData {
-  appName: 'Vaelth';
+export interface VealthBackupData {
+  appName: 'Vealth' | 'Vaelth';
   schemaVersion: number;
   exportedAt: string;
   data: {
@@ -53,6 +53,8 @@ export interface VaelthBackupData {
   };
 }
 
+export type VaelthBackupData = VealthBackupData;
+
 export function isSecurityKey(key: string): boolean {
   const lower = key.toLowerCase();
   return (
@@ -65,7 +67,7 @@ export function isSecurityKey(key: string): boolean {
   );
 }
 
-export async function createBackupData(): Promise<VaelthBackupData> {
+export async function createBackupData(): Promise<VealthBackupData> {
   const accounts = await getAllAccounts(true);
   const people = await getAllPeople(true);
   const categories = await getAllCategories(true);
@@ -86,7 +88,7 @@ export async function createBackupData(): Promise<VaelthBackupData> {
   }
 
   return {
-    appName: 'Vaelth',
+    appName: 'Vealth',
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
     data: {
@@ -108,7 +110,7 @@ export async function exportBackupToFile(): Promise<string> {
   const backup = await createBackupData();
   const jsonStr = JSON.stringify(backup, null, 2);
   const dateStr = formatDateIso(new Date());
-  const fileName = `vaelth_backup_${dateStr}.json`;
+  const fileName = `vealth_backup_${dateStr}.json`;
   const baseDir = FileSystem.documentDirectory || '';
   const cleanDir = baseDir.endsWith('/') ? baseDir : `${baseDir}/`;
   const fileUri = `${cleanDir}${fileName}`;
@@ -120,7 +122,7 @@ export async function exportBackupToFile(): Promise<string> {
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
       mimeType: 'application/json',
-      dialogTitle: 'Export Vaelth Backup',
+      dialogTitle: 'Export Vealth Backup',
       UTI: 'public.json',
     });
   }
@@ -164,8 +166,8 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   if (!parsed || typeof parsed !== 'object') {
     return { isValid: false, error: 'Invalid backup file format.' };
   }
-  if (parsed.appName !== 'Vaelth') {
-    return { isValid: false, error: 'File is not a valid Vaelth backup.' };
+  if (parsed.appName !== 'Vealth' && parsed.appName !== 'Vaelth') {
+    return { isValid: false, error: 'File is not a valid Vealth backup (not a valid Vaelth backup).' };
   }
   if (parsed.schemaVersion !== 1) {
     return { isValid: false, error: 'Unsupported backup schema version.' };

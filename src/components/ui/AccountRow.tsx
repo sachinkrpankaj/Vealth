@@ -63,18 +63,34 @@ export const AccountRow: React.FC<AccountRowProps> = ({
       </View>
 
       <View style={styles.details}>
-        <Text
-          style={[
-            styles.name,
-            {
-              color: colors.textPrimary,
-              fontSize: typography.fontSizes.body,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {account.name}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text
+            style={[
+              styles.name,
+              {
+                color: colors.textPrimary,
+                fontSize: typography.fontSizes.body,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {account.name}
+          </Text>
+          {account.isArchived && (
+            <View
+              style={{
+                backgroundColor: colors.surfaceSubtle,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: radii.xs,
+              }}
+            >
+              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>
+                ARCHIVED
+              </Text>
+            </View>
+          )}
+        </View>
         <Text
           style={[
             styles.type,

@@ -22,9 +22,14 @@ export default function PeopleListScreen() {
     }, [refresh])
   );
 
-  const filtered = personDebts.filter((d) =>
-    d.person.name.toLowerCase().includes(query.toLowerCase().trim())
-  );
+  const filtered = personDebts
+    .filter((d) => d.person.name.toLowerCase().includes(query.toLowerCase().trim()))
+    .sort((a, b) => {
+      if (Boolean(a.person.isArchived) !== Boolean(b.person.isArchived)) {
+        return a.person.isArchived ? 1 : -1;
+      }
+      return a.person.name.localeCompare(b.person.name);
+    });
 
   return (
     <ScreenContainer>

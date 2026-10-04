@@ -60,7 +60,7 @@ export const SecurityLockScreen: React.FC = () => {
           <View style={styles.header}>
             <VealthLogo size={64} style={{ marginBottom: 12 }} />
             <Text style={[styles.title, { color: colors.textPrimary, fontSize: typography.fontSizes.headingMd }]}>
-              Vaelth is locked
+              Vealth is locked
             </Text>
             <Text style={[styles.subtitle, { color: colors.textSecondary, textAlign: 'center' }]}>
               {securityConfigError}
@@ -148,7 +148,7 @@ export const SecurityLockScreen: React.FC = () => {
               { color: colors.textPrimary, fontSize: typography.fontSizes.headingMd },
             ]}
           >
-            Vaelth
+            Vealth
           </Text>
           <Text
             style={[

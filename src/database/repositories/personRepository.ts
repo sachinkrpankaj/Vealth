@@ -1,3 +1,4 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 import { Person } from '../../domain/finance/types';
 
@@ -27,8 +28,11 @@ function mapRowToPerson(row: PersonRow): Person {
   };
 }
 
-export async function getAllPeople(includeArchived = false): Promise<Person[]> {
-  const db = await getDatabase();
+export async function getAllPeople(
+  includeArchived = false,
+  executor?: SQLiteDatabase
+): Promise<Person[]> {
+  const db = executor ?? (await getDatabase());
   const sql = includeArchived
     ? 'SELECT * FROM people ORDER BY name ASC;'
     : 'SELECT * FROM people WHERE isArchived = 0 ORDER BY name ASC;';
@@ -36,8 +40,11 @@ export async function getAllPeople(includeArchived = false): Promise<Person[]> {
   return rows.map(mapRowToPerson);
 }
 
-export async function getPersonById(id: string): Promise<Person | null> {
-  const db = await getDatabase();
+export async function getPersonById(
+  id: string,
+  executor?: SQLiteDatabase
+): Promise<Person | null> {
+  const db = executor ?? (await getDatabase());
   const row = await db.getFirstAsync<PersonRow>('SELECT * FROM people WHERE id = ?;', [id]);
   return row ? mapRowToPerson(row) : null;
 }

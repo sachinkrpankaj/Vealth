@@ -92,8 +92,11 @@ export interface TransactionFilter {
   offset?: number;
 }
 
-export async function getAllTransactions(filter?: TransactionFilter): Promise<Transaction[]> {
-  const db = await getDatabase();
+export async function getAllTransactions(
+  filter?: TransactionFilter,
+  executor?: SQLiteDatabase
+): Promise<Transaction[]> {
+  const db = executor ?? (await getDatabase());
   const conditions: string[] = [];
   const params: any[] = [];
 
@@ -180,9 +183,10 @@ export async function getAllTransactions(filter?: TransactionFilter): Promise<Tr
 
 export async function getTransactionById(
   id: string,
-  includeDeleted = false
+  includeDeleted = false,
+  executor?: SQLiteDatabase
 ): Promise<Transaction | null> {
-  const db = await getDatabase();
+  const db = executor ?? (await getDatabase());
   const sql = includeDeleted
     ? 'SELECT * FROM transactions WHERE id = ?;'
     : 'SELECT * FROM transactions WHERE id = ? AND deletedAt IS NULL;';
@@ -255,8 +259,13 @@ async function validateFinalTransaction(
   }
   const required = validateTransactionRequiredFields(tx);
   if (!required.isValid) throw new Error(required.error || 'Transaction is missing required fields.');
-  if (!isValidOptionalDate(tx.dueDate)) {
-    throw new Error('Due date must be a valid calendar date in YYYY-MM-DD format.');
+  if (tx.dueDate) {
+    if (!isValidOptionalDate(tx.dueDate)) {
+      throw new Error('Due date must be a valid calendar date in YYYY-MM-DD format.');
+    }
+    if (tx.dueDate < tx.date) {
+      throw new Error('Due date cannot be earlier than the transaction date.');
+    }
   }
 
   if (tx.type !== 'TRANSFER' && tx.destinationAccountId) {
@@ -379,8 +388,12 @@ async function validateFinalTransaction(
       [tx.assetId!]
     );
     if (!asset) throw new Error(`Asset "${tx.assetId}" does not exist.`);
-    if (tx.type === 'ASSET_SALE' && asset.isArchived === 1 && tx.assetId !== existing?.assetId) {
-      throw new Error('An archived asset cannot be sold.');
+    if (asset.isArchived === 1 && tx.assetId !== existing?.assetId) {
+      if (tx.type === 'ASSET_SALE') {
+        throw new Error('An archived asset cannot be sold.');
+      } else {
+        throw new Error('An archived asset cannot be purchased.');
+      }
     }
   }
 }

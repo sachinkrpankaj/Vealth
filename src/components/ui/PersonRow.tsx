@@ -81,7 +81,9 @@ export const PersonRow: React.FC<PersonRowProps> = ({
           >
             {person.name}
           </Text>
-          {dueStatus !== 'NO_DUE_DATE' && dueStatus !== 'SETTLED' ? (
+          {person.isArchived ? (
+            <Badge label="Archived" variant="muted" style={styles.badge} />
+          ) : dueStatus !== 'NO_DUE_DATE' && dueStatus !== 'SETTLED' ? (
             <Badge dueStatus={dueStatus} style={styles.badge} />
           ) : null}
         </View>

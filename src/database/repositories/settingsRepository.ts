@@ -1,7 +1,8 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 
-export async function getSetting(key: string): Promise<string | null> {
-  const db = await getDatabase();
+export async function getSetting(key: string, executor?: SQLiteDatabase): Promise<string | null> {
+  const db = executor ?? (await getDatabase());
   const row = await db.getFirstAsync<{ value: string }>(
     'SELECT value FROM app_settings WHERE key = ?;',
     [key]

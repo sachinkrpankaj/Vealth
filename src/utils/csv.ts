@@ -67,7 +67,7 @@ export function generateTransactionsCSV(transactions: Transaction[]): string {
 
 export async function exportTransactionsToCSV(transactions: Transaction[]): Promise<void> {
   const csvData = generateTransactionsCSV(transactions);
-  const fileName = `vaelth_transactions_${formatDateIso(new Date())}.csv`;
+  const fileName = `vealth_transactions_${formatDateIso(new Date())}.csv`;
   const docDir = FileSystem.documentDirectory || '';
   const fileUri = docDir.endsWith('/') ? `${docDir}${fileName}` : `${docDir}/${fileName}`;
 
@@ -78,7 +78,7 @@ export async function exportTransactionsToCSV(transactions: Transaction[]): Prom
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(fileUri, {
       mimeType: 'text/csv',
-      dialogTitle: 'Export Vaelth Transactions',
+      dialogTitle: 'Export Vealth Transactions',
       UTI: 'public.comma-separated-values-text',
     });
   }

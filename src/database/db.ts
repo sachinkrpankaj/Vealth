@@ -290,3 +290,8 @@ export async function executeInTransaction<T>(
 
   return result!;
 }
+
+export function _resetDatabaseForTesting(): void {
+  dbInstance = null;
+  initPromise = null;
+}

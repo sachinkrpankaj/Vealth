@@ -1,3 +1,4 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 import { Category, CategoryType, CATEGORY_TYPES } from '../../domain/finance/types';
 
@@ -48,8 +49,11 @@ function mapRowToCategory(row: CategoryRow): Category {
   };
 }
 
-export async function getAllCategories(includeArchived = false): Promise<Category[]> {
-  const db = await getDatabase();
+export async function getAllCategories(
+  includeArchived = false,
+  executor?: SQLiteDatabase
+): Promise<Category[]> {
+  const db = executor ?? (await getDatabase());
   const query = includeArchived
     ? 'SELECT * FROM categories ORDER BY isDefault DESC, name ASC;'
     : 'SELECT * FROM categories WHERE isArchived = 0 OR isArchived IS NULL ORDER BY isDefault DESC, name ASC;';

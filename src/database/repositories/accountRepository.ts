@@ -1,3 +1,4 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 import { Account, AccountType, ACCOUNT_TYPES } from '../../domain/finance/types';
 
@@ -44,8 +45,11 @@ export async function repairMisclassifiedCreditCards(): Promise<void> {
   return Promise.resolve();
 }
 
-export async function getAllAccounts(includeArchived = false): Promise<Account[]> {
-  const db = await getDatabase();
+export async function getAllAccounts(
+  includeArchived = false,
+  executor?: SQLiteDatabase
+): Promise<Account[]> {
+  const db = executor ?? (await getDatabase());
   const sql = includeArchived
     ? 'SELECT * FROM accounts ORDER BY createdAt ASC;'
     : 'SELECT * FROM accounts WHERE isArchived = 0 ORDER BY createdAt ASC;';
@@ -53,8 +57,11 @@ export async function getAllAccounts(includeArchived = false): Promise<Account[]
   return rows.map(mapRowToAccount);
 }
 
-export async function getAccountById(id: string): Promise<Account | null> {
-  const db = await getDatabase();
+export async function getAccountById(
+  id: string,
+  executor?: SQLiteDatabase
+): Promise<Account | null> {
+  const db = executor ?? (await getDatabase());
   const row = await db.getFirstAsync<AccountRow>('SELECT * FROM accounts WHERE id = ?;', [id]);
   return row ? mapRowToAccount(row) : null;
 }

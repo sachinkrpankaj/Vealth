@@ -29,9 +29,9 @@ import { useTheme } from '../../src/theme';
 import { createTransaction } from '../../src/database/repositories/transactionRepository';
 import { getAssetById, updateAsset } from '../../src/database/repositories/assetRepository';
 import { TransactionType } from '../../src/domain/finance/types';
-import { validateTransactionRequiredFields, validateRepaymentAmount } from '../../src/domain/finance/validator';
+import { validateTransactionRequiredFields, validateRepaymentAmount, validateDueDate } from '../../src/domain/finance/validator';
 import { formatRupee } from '../../src/domain/finance/currency';
-import { formatDateIso } from '../../src/utils/dateUtils';
+import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtils';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
@@ -132,6 +132,10 @@ export default function AddTransactionScreen() {
 
   const { accounts, people, personDebts, physicalAssets, refresh } = useFinancialData();
 
+  const activeAccounts = React.useMemo(() => accounts.filter((a) => !a.isArchived), [accounts]);
+  const activePeople = React.useMemo(() => people.filter((p) => !p.isArchived), [people]);
+  const activeAssets = React.useMemo(() => physicalAssets.filter((a) => !a.isArchived), [physicalAssets]);
+
   // Nested add-person/add-asset routes return to this mounted form; reload their new entries.
   useFocusEffect(React.useCallback(() => {
     refresh();
@@ -140,11 +144,20 @@ export default function AddTransactionScreen() {
   const initialType: TransactionType = (params.defaultType as TransactionType) || 'EXPENSE';
   const [selectedType, setSelectedType] = useState<TransactionType>(initialType);
   const [amount, setAmount] = useState<number>(0);
-  const [selectedAccount, setSelectedAccount] = useState<string>(
-    params.accountId || (accounts[0]?.id ?? '')
-  );
+  const [selectedAccount, setSelectedAccount] = useState<string>(() => {
+    if (params.accountId && accounts.some((a) => a.id === params.accountId && !a.isArchived)) {
+      return params.accountId;
+    }
+    const firstActive = accounts.find((a) => !a.isArchived);
+    return firstActive?.id ?? '';
+  });
   const [destinationAccount, setDestinationAccount] = useState<string>('');
-  const [selectedPerson, setSelectedPerson] = useState<string>(params.personId || '');
+  const [selectedPerson, setSelectedPerson] = useState<string>(() => {
+    if (params.personId && people.some((p) => p.id === params.personId && !p.isArchived)) {
+      return params.personId;
+    }
+    return '';
+  });
   const [selectedAsset, setSelectedAsset] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -153,20 +166,28 @@ export default function AddTransactionScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Set default accounts when loaded
+  // Set default active accounts, destination account, and assets when loaded
   useEffect(() => {
-    if (!selectedAccount && accounts.length > 0) {
-      setSelectedAccount(accounts[0].id);
+    if ((!selectedAccount || !activeAccounts.some((a) => a.id === selectedAccount)) && activeAccounts.length > 0) {
+      const matchParam = params.accountId && activeAccounts.some((a) => a.id === params.accountId);
+      setSelectedAccount(matchParam ? params.accountId! : activeAccounts[0].id);
     }
-    if (selectedType === 'TRANSFER' && accounts.length > 1 &&
-        (!destinationAccount || destinationAccount === selectedAccount)) {
-      const second = accounts.find((a) => a.id !== selectedAccount);
+    if (
+      selectedType === 'TRANSFER' &&
+      activeAccounts.length > 1 &&
+      (!destinationAccount || destinationAccount === selectedAccount || !activeAccounts.some((a) => a.id === destinationAccount))
+    ) {
+      const second = activeAccounts.find((a) => a.id !== selectedAccount);
       if (second) setDestinationAccount(second.id);
     }
-    if ((selectedType === 'ASSET_PURCHASE' || selectedType === 'ASSET_SALE') && physicalAssets.length > 0 && !selectedAsset) {
-      setSelectedAsset(physicalAssets[0].id);
+    if (
+      (selectedType === 'ASSET_PURCHASE' || selectedType === 'ASSET_SALE') &&
+      activeAssets.length > 0 &&
+      (!selectedAsset || !activeAssets.some((a) => a.id === selectedAsset))
+    ) {
+      setSelectedAsset(activeAssets[0].id);
     }
-  }, [accounts, selectedType, physicalAssets, selectedAccount, destinationAccount, selectedAsset]);
+  }, [accounts, activeAccounts, selectedType, physicalAssets, activeAssets, selectedAccount, destinationAccount, selectedAsset, params.accountId]);
 
   // Outstanding amount lookup for repayments
   const outstandingInfo = React.useMemo(() => {
@@ -183,9 +204,22 @@ export default function AddTransactionScreen() {
     return null;
   }, [selectedPerson, selectedType, personDebts]);
 
+  const handleDateChange = (newDate: string) => {
+    setDate(newDate);
+    if (dueDate && dueDate < newDate) {
+      setDueDate('');
+    }
+  };
+
   const handleSubmit = async () => {
     if (isSaving) return;
     setErrorMessage(null);
+
+    const today = getTodayLocalDateString();
+    if (date > today) {
+      setErrorMessage('Future-dated transactions are not supported.');
+      return;
+    }
 
     const validation = validateTransactionRequiredFields({
       type: selectedType,
@@ -199,6 +233,12 @@ export default function AddTransactionScreen() {
 
     if (!validation.isValid) {
       setErrorMessage(validation.error || 'Please fill in all required fields');
+      return;
+    }
+
+    const dueValidation = validateDueDate(dueDate, date);
+    if (!dueValidation.isValid) {
+      setErrorMessage(dueValidation.error || 'Invalid due date.');
       return;
     }
 
@@ -354,7 +394,7 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
 
-          {people.length === 0 ? (
+          {activePeople.length === 0 ? (
             <Pressable
               onPress={() => router.push('/people/add')}
               style={[
@@ -376,7 +416,7 @@ export default function AddTransactionScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, paddingRight: 16 }}
             >
-              {people.map((p) => {
+              {activePeople.map((p) => {
                 const isSelected = selectedPerson === p.id;
                 return (
                   <Pressable
@@ -442,7 +482,7 @@ export default function AddTransactionScreen() {
             </Pressable>
           </View>
 
-          {physicalAssets.length === 0 ? (
+          {activeAssets.length === 0 ? (
             <Pressable
               onPress={() => router.push('/assets/add')}
               style={[
@@ -464,7 +504,7 @@ export default function AddTransactionScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, paddingRight: 16 }}
             >
-              {physicalAssets.map((ast) => {
+              {activeAssets.map((ast) => {
                 const isSelected = selectedAsset === ast.id;
                 return (
                   <Pressable
@@ -512,7 +552,7 @@ export default function AddTransactionScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8, paddingRight: 16 }}
         >
-          {accounts.map((acc) => {
+          {activeAccounts.map((acc) => {
             const isSelected = selectedAccount === acc.id;
             return (
               <Pressable
@@ -550,7 +590,7 @@ export default function AddTransactionScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8, paddingRight: 16 }}
           >
-            {accounts
+            {activeAccounts
               .filter((a) => a.id !== selectedAccount)
               .map((acc) => {
                 const isSelected = destinationAccount === acc.id;
@@ -598,7 +638,7 @@ export default function AddTransactionScreen() {
           <DatePickerField
             label="Date"
             value={date}
-            onChange={setDate}
+            onChange={handleDateChange}
             placeholder="YYYY-MM-DD"
             includeFutureShortcuts={false}
             allowFutureDates={false}
@@ -615,6 +655,7 @@ export default function AddTransactionScreen() {
               placeholder="YYYY-MM-DD"
               isClearable
               includeFutureShortcuts={true}
+              minDate={date}
               style={{ marginBottom: 0 }}
             />
           </View>

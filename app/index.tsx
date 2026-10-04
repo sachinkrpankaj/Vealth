@@ -30,7 +30,7 @@ export default function Index() {
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <VealthLogo size={72} />
         <Text style={[styles.brandTitle, { color: colors.textPrimary, marginTop: spacing.md }]}>
-          Vaelth
+          Vealth
         </Text>
         <Text style={[styles.brandSubtitle, { color: colors.textSecondary, marginBottom: spacing.xl }]}>
           Private Personal Finance & Net Worth

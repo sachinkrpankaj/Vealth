@@ -113,11 +113,14 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
     'withExclusiveTransactionAsync',
     queue,
     async (originalMethod, task: (txn: any) => Promise<void>) => {
-      // Do not serialize withExclusiveTransactionAsync on db's queue,
-      // as it creates an independent connection.
-      // But ensure the child txn has its own per-handle serialization.
       return originalMethod(async (txn: any) => {
         const serializedTxn = serializeDatabase(txn);
+        (serializedTxn as any).withExclusiveTransactionAsync = async (nestedTask: (child: any) => Promise<void>) => {
+          return nestedTask(serializedTxn);
+        };
+        (serializedTxn as any).withTransactionAsync = async (nestedTask: () => Promise<void>) => {
+          return nestedTask();
+        };
         await task(serializedTxn);
       });
     }
@@ -128,10 +131,9 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
     db,
     'withTransactionAsync',
     queue,
-    async (originalMethod, task: (txn?: any) => Promise<any>) => {
-      return originalMethod(async (txn?: any) => {
-        const wrappedTxn = txn ? serializeDatabase(txn) : db;
-        return task(wrappedTxn);
+    async (originalMethod, task: () => Promise<any>) => {
+      return originalMethod(async () => {
+        return task();
       });
     }
   );

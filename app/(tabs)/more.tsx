@@ -264,7 +264,7 @@ export default function MoreScreen() {
             },
           ]}
         >
-          vaelth
+          vealth
         </Text>
         <Text
           style={[

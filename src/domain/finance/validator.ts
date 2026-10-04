@@ -154,3 +154,20 @@ export function validateTransactionRequiredFields(params: {
 
   return { isValid: true };
 }
+
+export function validateDueDate(
+  dueDate?: string | null,
+  transactionDate?: string
+): ValidationResult {
+  if (!dueDate || !dueDate.trim()) {
+    return { isValid: true };
+  }
+  const trimmed = dueDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed) || !parseLocalDate(trimmed)) {
+    return { isValid: false, error: 'Due date must be a valid calendar date in YYYY-MM-DD format.' };
+  }
+  if (transactionDate && trimmed < transactionDate) {
+    return { isValid: false, error: 'Due date cannot be earlier than the transaction date.' };
+  }
+  return { isValid: true };
+}

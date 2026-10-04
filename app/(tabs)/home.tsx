@@ -151,7 +151,7 @@ export default function HomeScreen() {
     <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.scrollContent}>
       {/* 1. Header (matching Reference Image 1) */}
       <AppHeader
-        title="vaelth"
+        title="vealth"
         onProfilePress={() => router.push('/profile')}
         actionIcon={<Plus size={18} color={colors.textPrimary} strokeWidth={2.4} />}
         actionAccessibilityLabel="Add transaction"

@@ -1,3 +1,4 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 import { Asset, AssetArchiveState, AssetCategory, AssetValuation, Transaction, ASSET_CATEGORIES } from '../../domain/finance/types';
 import { calculateAssetValueAsOf, isAssetArchivedAsOf } from '../../domain/finance/financialEngine';
@@ -60,11 +61,11 @@ function mapRowToAsset(row: AssetRow): Asset {
   };
 }
 
-async function hydrateAssets(rows: AssetRow[]): Promise<Asset[]> {
+async function hydrateAssets(rows: AssetRow[], executor?: SQLiteDatabase): Promise<Asset[]> {
   const assets = rows.map(mapRowToAsset);
   if (!assets.length) return assets;
 
-  const db = await getDatabase();
+  const db = executor ?? (await getDatabase());
   const placeholders = assets.map(() => '?').join(', ');
   const ids = assets.map((asset) => asset.id);
   const valuationRows = await db.getAllAsync<AssetValuationRow>(
@@ -162,27 +163,41 @@ async function recordArchiveState(
   );
 }
 
-export async function getAllAssets(includeArchived = false): Promise<Asset[]> {
-  const db = await getDatabase();
+export async function getAllAssets(
+  includeArchived = false,
+  executor?: SQLiteDatabase
+): Promise<Asset[]> {
+  const db = executor ?? (await getDatabase());
   const initialRows = await db.getAllAsync<AssetRow>('SELECT * FROM assets ORDER BY createdAt DESC;');
   if (initialRows.length) {
-    await db.withExclusiveTransactionAsync(async (txn) => {
-      await reconcileAssetState(txn, initialRows.map((asset) => asset.id));
-    });
+    if (executor) {
+      await reconcileAssetState(executor, initialRows.map((asset) => asset.id));
+    } else {
+      await db.withExclusiveTransactionAsync(async (txn) => {
+        await reconcileAssetState(txn, initialRows.map((asset) => asset.id));
+      });
+    }
   }
   const rows = await db.getAllAsync<AssetRow>('SELECT * FROM assets ORDER BY createdAt DESC;');
-  const assets = await hydrateAssets(rows);
+  const assets = await hydrateAssets(rows, db);
   return includeArchived ? assets : assets.filter((asset) => !asset.isArchived);
 }
 
-export async function getAssetById(id: string): Promise<Asset | null> {
-  const db = await getDatabase();
-  await db.withExclusiveTransactionAsync(async (txn) => {
-    await reconcileAssetState(txn, [id]);
-  });
+export async function getAssetById(
+  id: string,
+  executor?: SQLiteDatabase
+): Promise<Asset | null> {
+  const db = executor ?? (await getDatabase());
+  if (executor) {
+    await reconcileAssetState(executor, [id]);
+  } else {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      await reconcileAssetState(txn, [id]);
+    });
+  }
   const row = await db.getFirstAsync<AssetRow>('SELECT * FROM assets WHERE id = ?;', [id]);
   if (!row) return null;
-  const [asset] = await hydrateAssets([row]);
+  const [asset] = await hydrateAssets([row], db);
   return asset;
 }
 

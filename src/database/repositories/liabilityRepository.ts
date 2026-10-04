@@ -1,3 +1,4 @@
+import { SQLiteDatabase } from 'expo-sqlite';
 import { getDatabase } from '../db';
 import {
   Liability,
@@ -66,10 +67,10 @@ async function recordArchiveState(
   );
 }
 
-async function hydrateLiabilities(rows: LiabilityRow[]): Promise<Liability[]> {
+async function hydrateLiabilities(rows: LiabilityRow[], executor?: SQLiteDatabase): Promise<Liability[]> {
   const liabilities = rows.map(mapRowToLiability);
   if (!liabilities.length) return liabilities;
-  const db = await getDatabase();
+  const db = executor ?? (await getDatabase());
   const placeholders = liabilities.map(() => '?').join(', ');
   const ids = liabilities.map((liability) => liability.id);
   const amountRows = await db.getAllAsync<{
@@ -119,18 +120,24 @@ async function hydrateLiabilities(rows: LiabilityRow[]): Promise<Liability[]> {
   }));
 }
 
-export async function getAllLiabilities(includeArchived = false): Promise<Liability[]> {
-  const db = await getDatabase();
+export async function getAllLiabilities(
+  includeArchived = false,
+  executor?: SQLiteDatabase
+): Promise<Liability[]> {
+  const db = executor ?? (await getDatabase());
   const rows = await db.getAllAsync<LiabilityRow>('SELECT * FROM liabilities ORDER BY createdAt DESC;');
-  const liabilities = await hydrateLiabilities(rows);
+  const liabilities = await hydrateLiabilities(rows, db);
   return includeArchived ? liabilities : liabilities.filter((liability) => !liability.isArchived);
 }
 
-export async function getLiabilityById(id: string): Promise<Liability | null> {
-  const db = await getDatabase();
+export async function getLiabilityById(
+  id: string,
+  executor?: SQLiteDatabase
+): Promise<Liability | null> {
+  const db = executor ?? (await getDatabase());
   const row = await db.getFirstAsync<LiabilityRow>('SELECT * FROM liabilities WHERE id = ?;', [id]);
   if (!row) return null;
-  const [liability] = await hydrateLiabilities([row]);
+  const [liability] = await hydrateLiabilities([row], db);
   return liability;
 }
 
