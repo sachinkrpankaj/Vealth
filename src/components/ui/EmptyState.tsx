@@ -51,7 +51,9 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </Text>
 
       {actionTitle && onAction ? (
-        <PrimaryButton title={actionTitle} onPress={onAction} style={styles.button} />
+        <View style={styles.buttonWrapper}>
+          <PrimaryButton title={actionTitle} onPress={onAction} style={styles.button} />
+        </View>
       ) : null}
     </View>
   );
@@ -59,6 +61,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    width: '100%',
+    alignSelf: 'stretch',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
@@ -76,7 +80,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     maxWidth: 280,
   },
+  buttonWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   button: {
     minWidth: 160,
+    alignSelf: 'center',
   },
 });

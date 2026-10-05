@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, ScrollView, Modal } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Plus, ArrowUpDown, Search } from 'lucide-react-native';
+import { Plus, ArrowUpDown, Search, Check, X, Calendar, Clock, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
 import { SearchBar } from '../../src/components/ui/SearchBar';
@@ -9,6 +9,7 @@ import { FilterChip } from '../../src/components/ui/FilterChip';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { Transaction } from '../../src/domain/finance/types';
@@ -37,6 +38,33 @@ const FILTER_ITEMS: { label: string; key: FilterCategory }[] = [
   { label: 'Assets', key: 'ASSETS' },
 ];
 
+const SORT_OPTIONS: { key: SortOption; label: string; description: string; icon: any }[] = [
+  {
+    key: 'NEWEST',
+    label: 'Newest First',
+    description: 'Most recent transactions first',
+    icon: Calendar,
+  },
+  {
+    key: 'OLDEST',
+    label: 'Oldest First',
+    description: 'Earliest recorded transactions first',
+    icon: Clock,
+  },
+  {
+    key: 'HIGHEST',
+    label: 'Highest Amount',
+    description: 'Largest monetary values first',
+    icon: TrendingUp,
+  },
+  {
+    key: 'LOWEST',
+    label: 'Lowest Amount',
+    description: 'Smallest monetary values first',
+    icon: TrendingDown,
+  },
+];
+
 export default function TransactionsScreen() {
   const { colors, typography, isDark } = useTheme();
   const {
@@ -52,7 +80,7 @@ export default function TransactionsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('NEWEST');
-  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showSortSheet, setShowSortSheet] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -127,6 +155,8 @@ export default function TransactionsScreen() {
     return result;
   }, [transactions, activeFilter, searchQuery, sortBy, accountMap, personMap, categoryMap, assetMap, liabilityMap]);
 
+  const activeSortLabel = SORT_OPTIONS.find((s) => s.key === sortBy)?.label || sortBy;
+
   return (
     <ScreenContainer scrollable hasTabBar contentContainerStyle={styles.listContent}>
       {/* 1. Header matching Reference Image 1 */}
@@ -147,59 +177,145 @@ export default function TransactionsScreen() {
             placeholder="Search notes, accounts, people..."
           />
         </View>
-        <LiquidGlassCard
-          radius={14}
-          padding={10}
+        <Pressable
           onPress={() => {
             Haptics.selectionAsync().catch(() => {});
-            setShowSortMenu(!showSortMenu);
+            setShowSortSheet(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel="Sort transactions"
-          style={styles.sortButton}
+          accessibilityLabel={`Sort transactions. Currently sorted by ${activeSortLabel}`}
+          hitSlop={6}
+          style={({ pressed }) => [
+            styles.sortButton,
+            {
+              backgroundColor: sortBy !== 'NEWEST' ? colors.accent + '22' : colors.surface,
+              borderColor: sortBy !== 'NEWEST' ? colors.accent : colors.border,
+              borderRadius: 14,
+              opacity: pressed ? 0.75 : 1,
+            },
+          ]}
         >
           <ArrowUpDown
-            size={17}
-            color={showSortMenu ? colors.gold : colors.textPrimary}
+            size={18}
+            color={sortBy !== 'NEWEST' ? colors.accent : colors.textPrimary}
             strokeWidth={2.2}
           />
-        </LiquidGlassCard>
+          {sortBy !== 'NEWEST' && (
+            <View style={[styles.sortBadgeDot, { backgroundColor: colors.accent }]} />
+          )}
+        </Pressable>
       </View>
 
-      {/* Sort Dropdown */}
-      {showSortMenu && (
-        <LiquidGlassCard style={styles.sortDropdown} radius={18} padding={14}>
-          <Text
+      {/* Sort Bottom Sheet Modal */}
+      <Modal
+        visible={showSortSheet}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSortSheet(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowSortSheet(false)}
+            accessibilityLabel="Close sort menu"
+          />
+          <View
             style={[
-              styles.sortDropdownTitle,
+              styles.modalSheet,
               {
-                color: colors.textSecondary,
-                fontFamily: typography.fontFamilies.medium,
+                backgroundColor: colors.surfaceElevated || colors.surface,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                borderColor: colors.border,
               },
             ]}
           >
-            Sort by
-          </Text>
-          <View style={styles.sortPillsRow}>
-            {[
-              { label: 'Newest', key: 'NEWEST' as SortOption },
-              { label: 'Oldest', key: 'OLDEST' as SortOption },
-              { label: 'Highest', key: 'HIGHEST' as SortOption },
-              { label: 'Lowest', key: 'LOWEST' as SortOption },
-            ].map((opt) => (
-              <FilterChip
-                key={opt.key}
-                label={opt.label}
-                selected={sortBy === opt.key}
-                onPress={() => {
-                  setSortBy(opt.key);
-                  setShowSortMenu(false);
-                }}
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                  Sort Activity
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                  Order transactions by date or amount
+                </Text>
+              </View>
+              <IconButton
+                icon={<X size={16} color={colors.textPrimary} />}
+                size={32}
+                onPress={() => setShowSortSheet(false)}
+                accessibilityLabel="Close sort sheet"
               />
-            ))}
+            </View>
+            <View style={styles.sortOptionsContainer}>
+              {SORT_OPTIONS.map((opt) => {
+                const isSelected = sortBy === opt.key;
+                const OptionIcon = opt.icon;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setSortBy(opt.key);
+                      setShowSortSheet(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${opt.label}: ${opt.description}`}
+                    style={({ pressed }) => [
+                      styles.sortOptionRow,
+                      {
+                        backgroundColor: isSelected
+                          ? (colors.accent + '18')
+                          : pressed
+                          ? colors.borderSubtle
+                          : 'transparent',
+                        borderColor: isSelected ? colors.accent : colors.borderSubtle || 'transparent',
+                        borderRadius: 14,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.sortOptionIconBadge,
+                        {
+                          backgroundColor: isSelected
+                            ? (colors.accent + '22')
+                            : colors.surface,
+                        },
+                      ]}
+                    >
+                      <OptionIcon
+                        size={18}
+                        color={isSelected ? colors.accent : colors.textPrimary}
+                      />
+                    </View>
+                    <View style={styles.sortOptionContent}>
+                      <Text
+                        style={[
+                          styles.sortOptionTitle,
+                          {
+                            color: isSelected ? colors.accent : colors.textPrimary,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                      <Text style={[styles.sortOptionDesc, { color: colors.textSecondary }]}>
+                        {opt.description}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Check size={18} color={colors.accent} style={{ marginLeft: 8 }} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-        </LiquidGlassCard>
-      )}
+        </View>
+      </Modal>
 
       {/* 3. Filter Category Chips in Horizontal Scroll */}
       <View style={styles.filterScrollContainer}>
@@ -213,7 +329,10 @@ export default function TransactionsScreen() {
               key={item.key}
               label={item.label}
               selected={activeFilter === item.key}
-              onPress={() => setActiveFilter(item.key)}
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setActiveFilter(item.key);
+              }}
             />
           ))}
         </ScrollView>
@@ -276,26 +395,79 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sortDropdown: {
-    marginBottom: 12,
-  },
-  sortDropdownTitle: {
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  sortPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sortPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
     borderWidth: 1,
+    position: 'relative',
   },
-  sortPillText: {
+  sortBadgeDot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  modalSheet: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(148, 163, 184, 0.4)',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sheetSubtitle: {
     fontSize: 12,
+    marginTop: 2,
+  },
+  sortOptionsContainer: {
+    gap: 8,
+    paddingBottom: 36,
+  },
+  sortOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  sortOptionIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortOptionContent: {
+    flex: 1,
+  },
+  sortOptionTitle: {
+    fontSize: 14,
+  },
+  sortOptionDesc: {
+    fontSize: 12,
+    marginTop: 2,
   },
   filterScrollContainer: {
     height: 44,
@@ -303,7 +475,8 @@ const styles = StyleSheet.create({
     marginHorizontal: -16,
   },
   filterScroll: {
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 24,
     gap: 8,
     alignItems: 'center',
   },

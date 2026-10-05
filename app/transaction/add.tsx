@@ -7,6 +7,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
@@ -20,6 +21,8 @@ import {
   X,
   Calendar,
   UserPlus,
+  ChevronDown,
+  Check,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
@@ -35,6 +38,7 @@ import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtil
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { generateEntityId } from '../../src/utils/idGenerator';
 
 
@@ -165,6 +169,10 @@ export default function AddTransactionScreen() {
   const [dueDate, setDueDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+
+  const selectedTypeConfig = TRANSACTION_TYPES.find((t) => t.type === selectedType) || TRANSACTION_TYPES[0];
+  const SelectedTypeIcon = selectedTypeConfig.icon;
 
   // Set default active accounts, destination account, and assets when loaded
   useEffect(() => {
@@ -302,62 +310,145 @@ export default function AddTransactionScreen() {
       {/* Modal Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Record Transaction</Text>
-        <LiquidGlassCard
+        <IconButton
+          icon={<X size={18} color={colors.textPrimary} />}
+          size={36}
           onPress={() => {
             if (router.canGoBack()) router.back();
             else router.replace('/(tabs)/home');
           }}
-          hitSlop={10} accessibilityLabel="Close transaction form"
-          radius={radii.full} padding={0} style={styles.closeBtn}>
-          <X size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+          accessibilityLabel="Close transaction form"
+        />
       </View>
 
-      {/* Transaction Type Selector Pills */}
+      {/* Transaction Type Selector Field */}
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>What happened?</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingRight: 16, marginBottom: 16 }}
-      >
-        {TRANSACTION_TYPES.map((t) => {
-          const isSelected = selectedType === t.type;
-          return (
-            <LiquidGlassCard
-              key={t.type} onPress={() => setSelectedType(t.type)}
-              accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={`${t.label} transaction type`}
-              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-              tone={isSelected ? 'emphasized' : 'default'}
-              radius={radii.md} padding={0} style={styles.typePill}>
-              <Text
-                style={[
-                  styles.typePillText,
-                  { color: isSelected ? '#FFFFFF' : colors.textPrimary },
-                ]}
-              >
-                {t.label}
-              </Text>
-            </LiquidGlassCard>
-          );
-        })}
-      </ScrollView>
-
-      {/* Type explanation tip */}
-      <View
-        style={[
-          styles.tipBox,
+      <Pressable
+        onPress={() => setTypeModalVisible(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Transaction type: ${selectedTypeConfig.label}. Tap to change.`}
+        style={({ pressed }) => [
+          styles.typeSelectorCard,
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
-            borderRadius: radii.md,
+            borderRadius: radii.lg,
+            opacity: pressed ? 0.85 : 1,
           },
         ]}
       >
-        <Text style={[styles.tipText, { color: colors.textSecondary }]}>
-          {TRANSACTION_TYPES.find((t) => t.type === selectedType)?.description}
-        </Text>
-      </View>
+        <View style={[styles.typeIconBadge, { backgroundColor: selectedTypeConfig.bg }]}>
+          <SelectedTypeIcon size={20} color={selectedTypeConfig.color} />
+        </View>
+        <View style={styles.typeDetailsCol}>
+          <Text style={[styles.typeSelectorTitle, { color: colors.textPrimary }]}>
+            {selectedTypeConfig.label}
+          </Text>
+          <Text style={[styles.typeSelectorDesc, { color: colors.textSecondary }]} numberOfLines={1}>
+            {selectedTypeConfig.description}
+          </Text>
+        </View>
+        <ChevronDown size={18} color={colors.textMuted} />
+      </Pressable>
+
+      {/* Transaction Type Selection Bottom Sheet */}
+      <Modal
+        visible={typeModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setTypeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setTypeModalVisible(false)}
+            accessibilityLabel="Close sheet"
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: colors.surfaceElevated || colors.surface,
+                borderTopLeftRadius: radii.xl,
+                borderTopRightRadius: radii.xl,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                  Transaction Type
+                </Text>
+                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                  Select how this transaction affects your finances
+                </Text>
+              </View>
+              <IconButton
+                icon={<X size={16} color={colors.textPrimary} />}
+                size={32}
+                onPress={() => setTypeModalVisible(false)}
+                accessibilityLabel="Close selection sheet"
+              />
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40, paddingTop: 4 }}
+            >
+              {TRANSACTION_TYPES.map((t) => {
+                const isSelected = selectedType === t.type;
+                const TypeIcon = t.icon;
+                return (
+                  <Pressable
+                    key={t.type}
+                    onPress={() => {
+                      setSelectedType(t.type);
+                      setTypeModalVisible(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${t.label}: ${t.description}`}
+                    style={({ pressed }) => [
+                      styles.typeOptionRow,
+                      {
+                        backgroundColor: isSelected
+                          ? (colors.accent + '18')
+                          : pressed
+                          ? colors.borderSubtle
+                          : 'transparent',
+                        borderColor: isSelected ? colors.accent : colors.borderSubtle || 'transparent',
+                        borderRadius: radii.md,
+                      },
+                    ]}
+                  >
+                    <View style={[styles.typeOptionIcon, { backgroundColor: t.bg }]}>
+                      <TypeIcon size={18} color={t.color} />
+                    </View>
+                    <View style={styles.typeOptionContent}>
+                      <Text
+                        style={[
+                          styles.typeOptionTitle,
+                          {
+                            color: isSelected ? colors.accent : colors.textPrimary,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}
+                      >
+                        {t.label}
+                      </Text>
+                      <Text style={[styles.typeOptionDesc, { color: colors.textSecondary }]}>
+                        {t.description}
+                      </Text>
+                    </View>
+                    {isSelected && <Check size={18} color={colors.accent} style={{ marginLeft: 8 }} />}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Amount Input */}
       <AmountInput
@@ -723,24 +814,93 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  typePill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  typePillText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tipBox: {
+  typeSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 16,
+    gap: 12,
   },
-  tipText: {
+  typeIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeDetailsCol: {
+    flex: 1,
+  },
+  typeSelectorTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  typeSelectorDesc: {
     fontSize: 12,
-    lineHeight: 18,
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  modalSheet: {
+    maxHeight: '75%',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(148, 163, 184, 0.4)',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sheetSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  typeOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 12,
+  },
+  typeOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeOptionContent: {
+    flex: 1,
+  },
+  typeOptionTitle: {
+    fontSize: 14,
+  },
+  typeOptionDesc: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
   },
   formSection: {
     marginTop: 16,

@@ -195,7 +195,7 @@ function calculateBaseFinancialEffect(
         descriptionLines: [
           `${accountLabel}: +${formatRupee(amount)}`,
           `${assetLabel}: -${formatRupee(bookValue)}`,
-          `Net Worth: ${gainOrLoss >= 0 ? '+' : ''}${formatRupee(gainOrLoss)}`,
+          `Net Worth: ${formatRupee(gainOrLoss, { showSign: true })}`,
         ],
       };
     }

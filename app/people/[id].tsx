@@ -27,6 +27,7 @@ import {
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { Avatar } from '../../src/components/ui/Avatar';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { AmountText } from '../../src/components/ui/AmountText';
@@ -189,9 +190,11 @@ export default function PersonDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back" radius={radii.full} padding={0} style={styles.iconBtn}>
-          <ArrowLeft size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+        <IconButton
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+          icon={<ArrowLeft size={18} color={colors.textPrimary} />}
+        />
 
         <View style={styles.headerRightActions}>
           <LiquidGlassCard onPress={handleOpenEdit} hitSlop={8} accessibilityLabel="Edit person" radius={radii.full} padding={0} style={styles.actionPill}>
@@ -199,9 +202,12 @@ export default function PersonDetailScreen() {
             <Text style={[styles.actionPillText, { color: colors.textPrimary }]}>Edit</Text>
           </LiquidGlassCard>
 
-          <LiquidGlassCard onPress={handleArchive} hitSlop={10} accessibilityLabel="Delete or archive person" radius={radii.full} padding={0} tone="negative" style={styles.iconBtn}>
-            <Trash2 size={16} color={colors.textPrimary} />
-          </LiquidGlassCard>
+          <IconButton
+            onPress={handleArchive}
+            accessibilityLabel="Delete or archive person"
+            variant="destructive"
+            icon={<Trash2 size={16} color={colors.negative} />}
+          />
         </View>
       </View>
 

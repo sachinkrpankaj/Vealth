@@ -157,6 +157,7 @@ export default function AssetsListScreen() {
           description="Keep track of gold, properties, vehicles, electronics or other valuables in your net worth."
           actionTitle="Add Asset"
           onAction={() => router.push('/assets/add')}
+          style={styles.emptyState}
         />
       ) : (
         <FlatList
@@ -342,6 +343,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   heroCard: {
     padding: 20,

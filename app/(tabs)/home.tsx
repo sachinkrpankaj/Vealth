@@ -242,9 +242,7 @@ export default function HomeScreen() {
               },
             ]}
           >
-            {isBalanceHidden
-              ? `${animatedMonthChange.formattedText} this month`
-              : `${animatedMonthChange.displayValue >= 0 ? '+' : ''}${animatedMonthChange.formattedText} this month`}
+            {`${animatedMonthChange.formattedText} this month`}
           </Text>
         </View>
       </View>
@@ -1243,8 +1241,9 @@ export default function HomeScreen() {
                     showSign: true,
                     spaceAfterSymbol: true,
                   })
-                : (netWorth.incomeMonth >= netWorth.expenseMonth ? '+' : '') +
-                  formatRupee(netWorth.incomeMonth - netWorth.expenseMonth)}
+                : formatRupee(netWorth.incomeMonth - netWorth.expenseMonth, {
+                    showSign: true,
+                  })}
             </Text>
           </View>
         </View>

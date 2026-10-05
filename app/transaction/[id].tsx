@@ -24,6 +24,7 @@ import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { Badge } from '../../src/components/ui/Badge';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { AmountInput } from '../../src/components/ui/AmountInput';
@@ -286,17 +287,25 @@ export default function TransactionDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back" radius={radii.full} padding={0} style={styles.backBtn}>
-          <ArrowLeft size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+        <IconButton
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+          icon={<ArrowLeft size={18} color={colors.textPrimary} />}
+        />
 
         <View style={styles.headerActions}>
-          <LiquidGlassCard onPress={() => setIsEditing(!isEditing)} hitSlop={10} accessibilityLabel={isEditing ? 'Cancel editing' : 'Edit transaction'} radius={radii.full} padding={0} tone={isEditing ? 'emphasized' : 'default'} style={styles.actionBtn}>
-            <Edit2 size={16} color={colors.textPrimary} />
-          </LiquidGlassCard>
-          <LiquidGlassCard onPress={handleDelete} hitSlop={10} accessibilityLabel="Delete transaction" radius={radii.full} padding={0} tone="negative" style={styles.actionBtn}>
-            <Trash2 size={16} color={colors.textPrimary} />
-          </LiquidGlassCard>
+          <IconButton
+            onPress={() => setIsEditing(!isEditing)}
+            accessibilityLabel={isEditing ? 'Cancel editing' : 'Edit transaction'}
+            variant={isEditing ? 'accent' : 'default'}
+            icon={<Edit2 size={16} color={isEditing ? colors.accent : colors.textPrimary} />}
+          />
+          <IconButton
+            onPress={handleDelete}
+            accessibilityLabel="Delete transaction"
+            variant="destructive"
+            icon={<Trash2 size={16} color={colors.negative} />}
+          />
         </View>
       </View>
 

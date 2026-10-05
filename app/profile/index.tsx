@@ -34,6 +34,7 @@ import {
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
@@ -205,15 +206,22 @@ export default function ProfileScreen() {
                       },
                     ]}
                   />
-                  <LiquidGlassCard onPress={handleSaveName} disabled={isSavingName}
-                    accessibilityLabel="Save name" accessibilityState={{ disabled: isSavingName }}
-                    tone="positive" radius={radii.full} padding={0} style={styles.actionIconBtn}>
-                    <Check size={16} color="#FFFFFF" strokeWidth={3} />
-                  </LiquidGlassCard>
-                  <LiquidGlassCard onPress={handleCancelEdit} accessibilityLabel="Cancel name edit"
-                    radius={radii.full} padding={0} style={styles.actionIconBtn}>
-                    <X size={16} color={colors.textSecondary} strokeWidth={2.5} />
-                  </LiquidGlassCard>
+                  <IconButton
+                    onPress={handleSaveName}
+                    disabled={isSavingName}
+                    accessibilityLabel="Save name"
+                    accessibilityState={{ disabled: isSavingName }}
+                    variant="success"
+                    size={36}
+                    icon={<Check size={18} color="#FFFFFF" strokeWidth={3} />}
+                  />
+                  <IconButton
+                    onPress={handleCancelEdit}
+                    accessibilityLabel="Cancel name edit"
+                    variant="default"
+                    size={36}
+                    icon={<X size={18} color={colors.textSecondary} strokeWidth={2.5} />}
+                  />
                 </View>
               ) : (
                 <View style={styles.nameDisplayRow}>
@@ -744,8 +752,7 @@ export default function ProfileScreen() {
                   },
                 ]}
               >
-                {netWorth.netWorthChangeMonth >= 0 ? '+' : ''}
-                {formatRupee(netWorth.netWorthChangeMonth)} this month
+                {formatRupee(netWorth.netWorthChangeMonth, { showSign: true })} this month
               </Text>
             </View>
 
@@ -792,15 +799,22 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 24,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 28,
+    marginTop: Platform.OS === 'android' ? -1 : 0,
   },
   identityDetails: {
     flex: 1,
+    justifyContent: 'center',
   },
   nameDisplayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+    minHeight: 36,
   },
   userNameText: {
     fontSize: 18,
@@ -822,28 +836,26 @@ const styles = StyleSheet.create({
   editInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    minHeight: 40,
   },
   nameTextInput: {
     flex: 1,
-    height: 38,
-    borderRadius: 10,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 1.5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
     fontSize: 15,
-  },
-  actionIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: Platform.OS === 'android' ? 20 : undefined,
   },
   membershipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: 6,
+    marginTop: 4,
   },
   membershipText: {
     fontSize: 11,

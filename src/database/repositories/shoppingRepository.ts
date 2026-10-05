@@ -581,8 +581,15 @@ export async function purchaseShoppingItem(params: {
     assertShoppingItemTransition(itemRow.status as ShoppingItemStatus, 'PURCHASED');
 
     // 2. Verify account and spendability
-    const account = await txn.getFirstAsync<{ id: string; name: string; type: string; openingBalance: number; isArchived: number }>(
-      'SELECT id, name, type, openingBalance, isArchived FROM accounts WHERE id = ?;',
+    const account = await txn.getFirstAsync<{
+      id: string;
+      name: string;
+      type: string;
+      openingBalance: number;
+      creditLimit: number | null;
+      isArchived: number;
+    }>(
+      'SELECT id, name, type, openingBalance, creditLimit, isArchived FROM accounts WHERE id = ?;',
       [purchaseAccountId]
     );
     if (!account) {
@@ -591,11 +598,11 @@ export async function purchaseShoppingItem(params: {
     if (account.isArchived === 1) {
       throw new Error(`Account "${account.name}" is archived and cannot be used for spending.`);
     }
-    if (account.type === 'CREDIT_CARD' || account.type === 'INVESTMENT') {
-      throw new Error(`Account type "${account.type}" cannot be used as a direct funding source.`);
+    if (account.type === 'INVESTMENT') {
+      throw new Error('Investment accounts cannot be used as a direct funding source.');
     }
 
-    // 3. Verify source balance
+    // 3. Verify source balance / available credit
     // Validate against the account balance on the selected purchase date.
     const txCredits = await txn.getFirstAsync<{ total: number }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
@@ -618,10 +625,21 @@ export async function purchaseShoppingItem(params: {
       Math.round(txCredits?.total ?? 0) -
       Math.round(txDebits?.total ?? 0);
 
-    if (currentBalance < purchasePrice) {
-      throw new Error(
-        `Insufficient balance: Account "${account.name}" has only ${formatRupee(currentBalance)}, but this purchase requires ${formatRupee(purchasePrice)}.`
-      );
+    if (account.type === 'CREDIT_CARD') {
+      const creditLimit = Math.max(0, account.creditLimit ?? 0);
+      const usedAmount = Math.max(0, -currentBalance);
+      const availableCredit = Math.max(0, creditLimit - usedAmount);
+      if (availableCredit < purchasePrice) {
+        throw new Error(
+          `Insufficient credit limit: Credit card "${account.name}" has only ${formatRupee(availableCredit)} available credit, but this purchase requires ${formatRupee(purchasePrice)}.`
+        );
+      }
+    } else {
+      if (currentBalance < purchasePrice) {
+        throw new Error(
+          `Insufficient balance: Account "${account.name}" has only ${formatRupee(currentBalance)}, but this purchase requires ${formatRupee(purchasePrice)}.`
+        );
+      }
     }
 
     // 4. Verify category if provided

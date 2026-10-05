@@ -22,6 +22,7 @@ import {
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { ShoppingItemCard } from '../../src/components/shopping/ShoppingItemCard';
 import { ItemFormModal } from '../../src/components/shopping/ItemFormModal';
 import { PurchaseItemModal } from '../../src/components/shopping/PurchaseItemModal';
@@ -165,7 +166,7 @@ export default function ShoppingListDetailScreen() {
     >
       {/* 1. Header Bar */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.sm }]}>
-        <LiquidGlassCard
+        <IconButton
           onPress={() => {
             if (router.canGoBack()) {
               router.back();
@@ -173,15 +174,9 @@ export default function ShoppingListDetailScreen() {
               router.replace('/(tabs)/shopping');
             }
           }}
-          hitSlop={10}
-          accessibilityRole="button"
           accessibilityLabel="Go back"
-          radius={radii.full}
-          padding={0}
-          style={styles.iconBtn}
-        >
-          <ArrowLeft size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+          icon={<ArrowLeft size={18} color={colors.textPrimary} />}
+        />
 
         <View style={styles.headerTitleContainer}>
           <Text
@@ -214,45 +209,34 @@ export default function ShoppingListDetailScreen() {
         </View>
 
         <View style={styles.headerRightActions}>
-          {!isReadOnly ? <LiquidGlassCard
-            onPress={() => setIsRenameModalOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Rename list"
-            radius={radii.full}
-            padding={0}
-            style={styles.iconBtn}
-          >
-            <Edit2 size={16} color={colors.textPrimary} />
-          </LiquidGlassCard> : null}
-
-          <LiquidGlassCard
-            onPress={handleToggleArchive}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={currentList?.isArchived ? 'Unarchive list' : 'Archive list'}
-            radius={radii.full}
-            padding={0}
-            style={styles.iconBtn}
-          >
-            <Archive
-              size={16}
-              color={currentList?.isArchived ? colors.accent : colors.textPrimary}
+          {!isReadOnly ? (
+            <IconButton
+              onPress={() => setIsRenameModalOpen(true)}
+              accessibilityLabel="Rename list"
+              icon={<Edit2 size={16} color={colors.textPrimary} />}
             />
-          </LiquidGlassCard>
+          ) : null}
 
-          {/* Harmonious delete button with red icon instead of stark solid background */}
-          {!isReadOnly ? <LiquidGlassCard
-            onPress={handleDeleteList}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Delete list"
-            radius={radii.full}
-            padding={0}
-            style={styles.iconBtn}
-          >
-            <Trash2 size={16} color={colors.negative} />
-          </LiquidGlassCard> : null}
+          <IconButton
+            onPress={handleToggleArchive}
+            accessibilityLabel={currentList?.isArchived ? 'Unarchive list' : 'Archive list'}
+            variant={currentList?.isArchived ? 'accent' : 'default'}
+            icon={
+              <Archive
+                size={16}
+                color={currentList?.isArchived ? colors.accent : colors.textPrimary}
+              />
+            }
+          />
+
+          {!isReadOnly ? (
+            <IconButton
+              onPress={handleDeleteList}
+              accessibilityLabel="Delete list"
+              variant="destructive"
+              icon={<Trash2 size={16} color={colors.negative} />}
+            />
+          ) : null}
         </View>
       </View>
 

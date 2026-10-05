@@ -131,8 +131,7 @@ export default function NetWorthScreen() {
               },
             ]}
           >
-            {netWorth.netWorthChangeMonth >= 0 ? '+' : ''}
-            {formatRupee(netWorth.netWorthChangeMonth)} this month
+            {formatRupee(netWorth.netWorthChangeMonth, { showSign: true })} this month
           </Text>
         </View>
 

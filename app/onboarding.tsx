@@ -13,6 +13,9 @@ import {
   Sun,
   User,
   ChevronLeft,
+  ArrowRightLeft,
+  PieChart,
+  CheckCircle2,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../src/components/ui/ScreenContainer';
 import { PrimaryButton } from '../src/components/ui/PrimaryButton';
@@ -20,6 +23,7 @@ import { AmountInput } from '../src/components/ui/AmountInput';
 import { VealthLogo } from '../src/components/ui/VealthLogo';
 import { LiquidGlassCard } from '../src/components/ui/LiquidGlassCard';
 import { ColorWheelPicker } from '../src/components/ui/ColorWheelPicker';
+import { IconButton } from '../src/components/ui/IconButton';
 import { useTheme } from '../src/theme';
 import { typography } from '../src/theme/typography';
 import { useThemeStore } from '../src/stores/useThemeStore';
@@ -34,36 +38,41 @@ interface OnboardingSlide {
   description: string;
   icon: any;
   color: string;
+  badges: string[];
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
-    title: 'vealth',
-    subtitle: 'Your money, clearly understood.',
-    description: 'A private, refined personal finance & net-worth companion designed for clarity.',
-    icon: Wallet,
-    color: '#6366F1',
-  },
-  {
-    title: 'Know your net worth.',
-    subtitle: 'Real-time financial position',
-    description: 'See what you own, what you owe, and where you stand with exact accounting rules.',
+    title: 'Know Your Net Worth',
+    subtitle: 'Accounts, Assets & Liabilities',
+    description: 'vealth brings accounts, valuable assets and liabilities together so you can see your true net worth in real time.',
     icon: TrendingUp,
     color: '#10B981',
+    badges: ['Bank & Cash Balances', 'Valuable Assets', 'Credit & Loans'],
   },
   {
-    title: 'Track credit & debts.',
-    subtitle: 'Lending, borrowing & repayments',
-    description: 'Keep track of credit extended or taken. Automatic balance and due-date tracking.',
-    icon: Users,
+    title: 'Track Every Money Movement',
+    subtitle: 'Zero Double-Counting',
+    description: 'Seamlessly record income, daily expenses, inter-account transfers, lending to friends, borrowing and repayments.',
+    icon: ArrowRightLeft,
+    color: '#6366F1',
+    badges: ['Income & Expenses', 'Transfers', 'Lending & Debt Tracking'],
+  },
+  {
+    title: 'Understand Where Your Money Goes',
+    subtitle: 'Categories & Spending Visibility',
+    description: 'Gain complete clarity into your capital flows with visual category breakdowns, monthly insights, and searchable history.',
+    icon: PieChart,
     color: '#F59E0B',
+    badges: ['Custom Categories', 'Monthly Insights', 'Searchable Activity'],
   },
   {
-    title: 'Private by design.',
-    subtitle: '100% offline & local-first',
-    description: 'Your financial data never leaves your device. No bank API credentials or ads.',
+    title: 'Your Finances, Private',
+    subtitle: '100% On-Device & Hardware Encrypted',
+    description: 'Your financial data is stored locally on your device with hardware-backed SecureStore, PIN protection, and biometric unlock.',
     icon: ShieldCheck,
     color: '#06B6D4',
+    badges: ['Offline-First / Zero Cloud', 'PIN Protection', 'Biometric Unlock'],
   },
 ];
 
@@ -179,42 +188,51 @@ export default function OnboardingScreen() {
     return (
       <ScreenContainer>
         <View style={styles.slideContainer}>
-          <View style={styles.topProgress}>
-            {SLIDES.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.progressPill,
-                  {
-                    backgroundColor: i === currentStep ? colors.accent : colors.surfaceSubtle,
-                  },
-                ]}
-              />
-            ))}
+          {/* Top Progress & Skip */}
+          <View style={styles.topProgressRow}>
+            <View style={styles.topProgress}>
+              {SLIDES.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.progressPill,
+                    {
+                      backgroundColor: i === currentStep ? colors.accent : colors.surfaceSubtle,
+                      opacity: i === currentStep ? 1 : 0.4,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <Pressable
+              onPress={() => setCurrentStep(SLIDES.length)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Skip onboarding introduction"
+            >
+              <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip</Text>
+            </Pressable>
           </View>
 
+          {/* Center Graphic & Messaging */}
           <View style={styles.centerContent}>
             <View
               style={[
                 styles.iconBubble,
                 {
-                  backgroundColor: currentStep === 0 ? 'transparent' : `${slide.color}20`,
-                  borderColor: currentStep === 0 ? 'transparent' : `${slide.color}40`,
+                  backgroundColor: `${slide.color}15`,
+                  borderColor: `${slide.color}35`,
                   borderRadius: radii.full,
                 },
               ]}
             >
-              {currentStep === 0 ? (
-                <VealthLogo size={76} />
-              ) : (
-                <Icon size={44} color={slide.color} />
-              )}
+              <Icon size={46} color={slide.color} strokeWidth={2.2} />
             </View>
 
             <Text
               style={[
                 styles.slideTitle,
-                { color: colors.textPrimary, fontSize: typography.fontSizes.hero },
+                { color: colors.textPrimary, fontSize: typography.fontSizes.headingLg },
               ]}
             >
               {slide.title}
@@ -223,7 +241,7 @@ export default function OnboardingScreen() {
             <Text
               style={[
                 styles.slideSubtitle,
-                { color: colors.accent, fontSize: typography.fontSizes.headingSm },
+                { color: slide.color, fontSize: typography.fontSizes.body },
               ]}
             >
               {slide.subtitle}
@@ -232,14 +250,45 @@ export default function OnboardingScreen() {
             <Text
               style={[
                 styles.slideDesc,
-                { color: colors.textSecondary, fontSize: typography.fontSizes.bodyLg },
+                { color: colors.textSecondary, fontSize: typography.fontSizes.body },
               ]}
             >
               {slide.description}
             </Text>
+
+            {/* Value Highlights Badges */}
+            <View style={styles.highlightsContainer}>
+              {slide.badges.map((badge, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.highlightPill,
+                    {
+                      backgroundColor: isDark ? colors.surface : 'rgba(0,0,0,0.04)',
+                      borderColor: isDark ? colors.border : 'rgba(0,0,0,0.08)',
+                    },
+                  ]}
+                >
+                  <CheckCircle2 size={13} color={slide.color} style={{ marginRight: 6 }} />
+                  <Text style={[styles.highlightText, { color: colors.textPrimary }]}>
+                    {badge}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
 
+          {/* Bottom Bar with Back & Next/Get Started */}
           <View style={styles.bottomBar}>
+            {currentStep > 0 ? (
+              <IconButton
+                icon={<ChevronLeft size={22} color={colors.textPrimary} />}
+                size={48}
+                onPress={() => setCurrentStep((prev) => prev - 1)}
+                accessibilityLabel="Previous slide"
+                style={{ marginRight: 12 }}
+              />
+            ) : null}
             <PrimaryButton
               title={currentStep === SLIDES.length - 1 ? 'Get Started' : 'Next'}
               onPress={handleNext}
@@ -706,15 +755,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 20,
   },
+  topProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 16,
+  },
   topProgress: {
+    flex: 1,
     flexDirection: 'row',
     gap: 8,
-    marginTop: 12,
   },
   progressPill: {
     flex: 1,
     height: 4,
     borderRadius: 2,
+  },
+  skipText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   centerContent: {
     alignItems: 'center',
@@ -726,7 +786,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   slideTitle: {
     fontWeight: '800',
@@ -743,6 +803,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     maxWidth: 320,
+  },
+  highlightsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    maxWidth: 340,
+  },
+  highlightPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  highlightText: {
+    fontSize: 12,
+    fontFamily: typography.fontFamilies.medium,
   },
   bottomBar: {
     flexDirection: 'row',

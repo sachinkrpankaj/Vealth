@@ -722,7 +722,8 @@ describe('Shopping Feature Flow & Financial Integration', () => {
       ).rejects.toThrow('is archived and cannot be used for spending');
     });
 
-    it('rejects CREDIT_CARD and INVESTMENT accounts directly', async () => {
+    it('supports CREDIT_CARD and rejects INVESTMENT accounts directly', async () => {
+      // acc-credit-1 has openingBalance: 0, creditLimit: undefined (0), so purchase fails on insufficient credit limit
       await expect(
         purchaseShoppingItem({
           itemId: testItemId,
@@ -730,8 +731,9 @@ describe('Shopping Feature Flow & Financial Integration', () => {
           purchaseAccountId: 'acc-credit-1',
           categoryId: 'cat-electronics',
         })
-      ).rejects.toThrow('cannot be used as a direct funding source');
+      ).rejects.toThrow('Insufficient credit limit');
 
+      // acc-inv-1 is an INVESTMENT account and cannot be used
       await expect(
         purchaseShoppingItem({
           itemId: testItemId,

@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { User, Bell } from 'lucide-react-native';
 import { useTheme } from '../../theme';
 import { typography } from '../../theme/typography';
 import * as Haptics from 'expo-haptics';
-import { LiquidGlassCard } from '../ui/LiquidGlassCard';
+import { IconButton } from '../ui/IconButton';
 
 interface AppHeaderProps {
   title: string;
@@ -51,22 +51,18 @@ export function AppHeader({
         </Text>
       </View>
 
-      {/* Profile Button — LiquidGlass pill on the left */}
+      {/* Profile Button */}
       <View style={styles.leftActionsRow}>
-        <Pressable
+        <IconButton
+          size={38}
+          variant="default"
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             onProfilePress?.();
           }}
-          accessibilityRole="button"
           accessibilityLabel="User profile"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-        >
-          <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-            <User size={18} color={colors.textPrimary} strokeWidth={2.2} />
-          </LiquidGlassCard>
-        </Pressable>
+          icon={<User size={18} color={colors.textPrimary} strokeWidth={2.2} />}
+        />
       </View>
 
       {/* Right Actions */}
@@ -74,32 +70,26 @@ export function AppHeader({
         <View style={styles.rightActionsRow}>{rightComponent}</View>
       ) : actionIcon ? (
         <View style={styles.rightActionsRow}>
-          <Pressable
+          <IconButton
+            size={38}
+            variant="default"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onActionPress?.();
             }}
-            accessibilityRole="button"
             accessibilityLabel={actionAccessibilityLabel || 'Action'}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-          >
-            <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-              {actionIcon}
-            </LiquidGlassCard>
-          </Pressable>
-          <Pressable
+            icon={actionIcon}
+          />
+          <IconButton
+            size={38}
+            variant="default"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onRightPress?.();
             }}
-            accessibilityRole="button"
             accessibilityLabel={rightAccessibilityLabel || 'Settings and notifications'}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-          >
-            <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-              {rightIcon ? (
+            icon={
+              rightIcon ? (
                 rightIcon
               ) : (
                 <View style={styles.bellWrapper}>
@@ -108,24 +98,22 @@ export function AppHeader({
                     <View style={[styles.notificationDot, { backgroundColor: colors.positive }]} />
                   )}
                 </View>
-              )}
-            </LiquidGlassCard>
-          </Pressable>
+              )
+            }
+          />
         </View>
       ) : (
         <View style={styles.rightActionsRow}>
-          <Pressable
+          <IconButton
+            size={38}
+            variant="default"
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
               onRightPress?.();
             }}
-            accessibilityRole="button"
             accessibilityLabel={rightAccessibilityLabel || (rightIcon ? 'Action' : 'Notifications')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={({ pressed }) => [{ opacity: pressed ? 0.75 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] }]}
-          >
-            <LiquidGlassCard radius={19} padding={9} style={styles.iconButton}>
-              {rightIcon ? (
+            icon={
+              rightIcon ? (
                 rightIcon
               ) : (
                 <View style={styles.bellWrapper}>
@@ -134,9 +122,9 @@ export function AppHeader({
                     <View style={[styles.notificationDot, { backgroundColor: colors.positive }]} />
                   )}
                 </View>
-              )}
-            </LiquidGlassCard>
-          </Pressable>
+              )
+            }
+          />
         </View>
       )}
     </View>

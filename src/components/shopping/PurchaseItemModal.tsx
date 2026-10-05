@@ -10,12 +10,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Wallet, AlertCircle, ShoppingBag } from 'lucide-react-native';
+import { X, Wallet, AlertCircle, ShoppingBag, CreditCard } from 'lucide-react-native';
 import { ShoppingItem } from '../../domain/finance/types';
 import { AmountInput } from '../ui/AmountInput';
 import { DatePickerField } from '../ui/DatePickerField';
 import { CategoryPickerField } from '../ui/CategoryPickerField';
 import { PrimaryButton } from '../ui/PrimaryButton';
+import { IconButton } from '../ui/IconButton';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { formatRupee } from '../../domain/finance/currency';
 import { formatDateIso, getTodayLocalDateString } from '../../utils/dateUtils';
@@ -56,10 +57,20 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Spendable accounts: exclude archived, CREDIT_CARD, and INVESTMENT
+  // Spendable accounts: exclude archived and INVESTMENT (allow CREDIT_CARD)
   const spendableAccounts = accounts.filter(
-    (a) => !a.isArchived && a.type !== 'CREDIT_CARD' && a.type !== 'INVESTMENT'
+    (a) => !a.isArchived && a.type !== 'INVESTMENT'
   );
+
+  const getAccountAvailableFunds = (acc: typeof accounts[0]) => {
+    const bal = accountBalances.get(acc.id) ?? 0;
+    if (acc.type === 'CREDIT_CARD') {
+      const limit = Math.max(0, acc.creditLimit ?? 0);
+      const used = Math.max(0, -bal);
+      return Math.max(0, limit - used);
+    }
+    return bal;
+  };
 
   useEffect(() => {
     if (visible && item) {
@@ -85,8 +96,8 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   if (!item) return null;
 
   const selectedAccount = spendableAccounts.find((a) => a.id === selectedAccountId);
-  const currentAccountBalance = selectedAccount ? accountBalances.get(selectedAccount.id) ?? 0 : 0;
-  const isInsufficient = actualPrice > 0 && currentAccountBalance < actualPrice;
+  const selectedAccountAvailableFunds = selectedAccount ? getAccountAvailableFunds(selectedAccount) : 0;
+  const isInsufficient = actualPrice > 0 && selectedAccountAvailableFunds < actualPrice;
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
@@ -102,10 +113,15 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
     }
 
     if (isInsufficient) {
+      const isCC = selectedAccount?.type === 'CREDIT_CARD';
       setErrorMessage(
-        `Insufficient balance in ${selectedAccount?.name || 'account'}. Available: ${formatRupee(
-          currentAccountBalance
-        )}, Required: ${formatRupee(actualPrice)}.`
+        isCC
+          ? `Insufficient credit limit on ${selectedAccount?.name || 'card'}. Available: ${formatRupee(
+              selectedAccountAvailableFunds
+            )}, Required: ${formatRupee(actualPrice)}.`
+          : `Insufficient balance in ${selectedAccount?.name || 'account'}. Available: ${formatRupee(
+              selectedAccountAvailableFunds
+            )}, Required: ${formatRupee(actualPrice)}.`
       );
       return;
     }
@@ -181,15 +197,12 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                 {item.name}
               </Text>
             </View>
-            <Pressable
+            <IconButton
+              icon={<X size={18} color={colors.textPrimary} />}
+              size={34}
               onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
               accessibilityLabel="Close"
-              style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
-            >
-              <X size={18} color={colors.textPrimary} />
-            </Pressable>
+            />
           </View>
 
           {/* Form Content */}
@@ -277,7 +290,9 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountsScroll}>
               {spendableAccounts.map((acc) => {
                 const isSelected = acc.id === selectedAccountId;
-                const bal = accountBalances.get(acc.id) ?? 0;
+                const isCC = acc.type === 'CREDIT_CARD';
+                const avail = getAccountAvailableFunds(acc);
+                const IconComponent = isCC ? CreditCard : Wallet;
                 return (
                   <Pressable
                     key={acc.id}
@@ -287,7 +302,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                     }}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${acc.name}, balance ${formatRupee(bal)}`}
+                    accessibilityLabel={`${acc.name}, ${isCC ? 'available credit' : 'balance'} ${formatRupee(avail)}`}
                     style={[
                       styles.accountChip,
                       {
@@ -307,7 +322,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                       },
                     ]}
                   >
-                    <Wallet
+                    <IconComponent
                       size={14}
                       color={isSelected ? '#FFFFFF' : colors.textSecondary}
                       style={{ marginRight: 6 }}
@@ -335,7 +350,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                           },
                         ]}
                       >
-                        {formatRupee(bal)}
+                        {isCC ? `Avail: ${formatRupee(avail)}` : formatRupee(avail)}
                       </Text>
                     </View>
                   </Pressable>
@@ -343,7 +358,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               })}
             </ScrollView>
 
-            {/* Insufficient Funds Warning */}
+            {/* Insufficient Funds / Credit Warning */}
             {isInsufficient ? (
               <View
                 style={[
@@ -361,7 +376,9 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
                     },
                   ]}
                 >
-                  Insufficient funds in {selectedAccount?.name} ({formatRupee(currentAccountBalance)})
+                  {selectedAccount?.type === 'CREDIT_CARD'
+                    ? `Available credit on ${selectedAccount.name} (${formatRupee(selectedAccountAvailableFunds)}) is less than purchase price (${formatRupee(actualPrice)}).`
+                    : `Account balance in ${selectedAccount?.name || 'account'} (${formatRupee(selectedAccountAvailableFunds)}) is less than purchase price (${formatRupee(actualPrice)}).`}
                 </Text>
               </View>
             ) : null}

@@ -394,17 +394,20 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   const resolvedPadding = hasCustomPadding ? undefined : padding;
   const isFlexOuter = outerStyles.flex !== undefined;
 
+  const effectiveRadius = radius !== undefined ? radius : ((surfaceStyles.borderRadius as number) ?? 18);
+
   const cardShadowStyle: ViewStyle = {
-    borderRadius: radius,
+    borderRadius: effectiveRadius,
+    overflow: 'hidden',
   };
 
   const cardSurfaceStyle: ViewStyle = {
-    borderRadius: radius,
-    borderWidth: 1,
+    borderWidth: surfaceStyles.borderWidth !== undefined ? surfaceStyles.borderWidth : (showPrism ? 0 : 1),
     borderColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.92)',
     overflow: 'hidden',
     position: 'relative',
     ...surfaceStyles,
+    borderRadius: effectiveRadius,
     backgroundColor: surfaceStyles.backgroundColor ?? (isDark ? '#12131A' : '#EDF1FA'),
   };
 

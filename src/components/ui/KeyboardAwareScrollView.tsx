@@ -52,6 +52,9 @@ export const KeyboardAwareScrollView = React.forwardRef<
       [ref]
     );
 
+    const scrollYRef = useRef(0);
+    const scrollViewHeightRef = useRef(0);
+
     const fallbackScrollResponder = (currentlyFocusedInput: any) => {
       try {
         if (!internalRef.current || !currentlyFocusedInput) return;
@@ -60,8 +63,6 @@ export const KeyboardAwareScrollView = React.forwardRef<
           responder &&
           typeof responder.scrollResponderScrollNativeHandleToKeyboard === 'function'
         ) {
-          // In Fabric, scrollResponderScrollNativeHandleToKeyboard accepts the HostInstance ref directly.
-          // On legacy Paper, fallback to reactTag if needed.
           const target =
             typeof currentlyFocusedInput.measureLayout === 'function'
               ? currentlyFocusedInput
@@ -90,10 +91,6 @@ export const KeyboardAwareScrollView = React.forwardRef<
 
         if (!currentlyFocusedInput) return;
 
-        // Obtain valid native component reference supported by modern React Native (Fabric)
-        // 1. getInnerViewRef() returns the native content container View (ReactNativeElement)
-        // 2. innerViewRef ref object attached to ScrollView
-        // 3. getNativeScrollRef() returns the native ScrollView element
         const containerNode =
           (internalRef.current as any)?.getInnerViewRef?.() ??
           innerViewRef.current ??
@@ -110,15 +107,32 @@ export const KeyboardAwareScrollView = React.forwardRef<
             containerNode,
             (x: number, y: number, width: number, height: number) => {
               if (!isMountedRef.current || !internalRef.current) return;
-              // Scroll to position input comfortably above bottom (accounting for labels/CTA)
-              const targetY = Math.max(
-                0,
-                y - (extraScrollHeight > 60 ? 60 : extraScrollHeight)
-              );
-              internalRef.current.scrollTo({ y: targetY, animated: true });
+              const currentScrollY = scrollYRef.current;
+              const viewportHeight = scrollViewHeightRef.current || 400;
+
+              // The vertical extent of the focused input with a comfortable padding margin
+              const inputTop = y;
+              const inputBottom = y + height + 24;
+
+              // Check if the input is below the currently visible viewport
+              if (inputBottom > currentScrollY + viewportHeight) {
+                // Input is partially or fully hidden beneath the bottom of the viewport / keyboard.
+                // Scroll down just enough to bring the input and its margin into comfortable view.
+                const targetY = inputBottom - viewportHeight + 20;
+                internalRef.current.scrollTo({ y: Math.max(0, targetY), animated: true });
+              } else if (inputTop < currentScrollY) {
+                // Input is scrolled above the top of the viewport.
+                // Scroll up to reveal it with a top margin.
+                const targetY = Math.max(0, inputTop - 16);
+                internalRef.current.scrollTo({ y: targetY, animated: true });
+              }
+              // If inputTop >= currentScrollY && inputBottom <= currentScrollY + viewportHeight:
+              // The input is already completely visible in the viewport!
+              // Do NOT scroll at all. This completely prevents static top elements,
+              // headers, and controls from jumping unnecessarily.
             },
             () => {
-              // Measurement failed (e.g. focused input is inside a modal or another container)
+              // Measurement failed
             }
           );
         } else {
@@ -198,6 +212,15 @@ export const KeyboardAwareScrollView = React.forwardRef<
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         onFocus={handleChildFocus}
+        onScroll={(e) => {
+          scrollYRef.current = e.nativeEvent.contentOffset.y;
+          props.onScroll?.(e);
+        }}
+        onLayout={(e) => {
+          scrollViewHeightRef.current = e.nativeEvent.layout.height;
+          props.onLayout?.(e);
+        }}
+        scrollEventThrottle={16}
         {...props}
       >
         {children}

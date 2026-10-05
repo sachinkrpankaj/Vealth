@@ -5,6 +5,7 @@ import { ArrowLeft, Trash2, Plus, CreditCard, AlertTriangle, Pencil } from 'luci
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
 import { TransactionRow } from '../../src/components/ui/TransactionRow';
@@ -109,30 +110,32 @@ export default function AccountDetailScreen() {
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
-        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back"
-          radius={radii.full} padding={0} style={styles.iconBtn}>
-          <ArrowLeft size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+        <IconButton
+          onPress={() => router.back()}
+          accessibilityLabel="Go back"
+          icon={<ArrowLeft size={18} color={colors.textPrimary} />}
+        />
 
         <View style={styles.headerActions}>
-          <LiquidGlassCard
+          <IconButton
             onPress={() => router.push({ pathname: '/transaction/add', params: { accountId: account.id } })}
-            hitSlop={10} accessibilityLabel="Add transaction for this account"
-            tone="emphasized" radius={radii.full} padding={0} style={styles.iconBtn}>
-            <Plus size={18} color="#FFFFFF" />
-          </LiquidGlassCard>
+            accessibilityLabel="Add transaction for this account"
+            variant="accent"
+            icon={<Plus size={18} color="#FFFFFF" />}
+          />
 
-          <LiquidGlassCard
+          <IconButton
             onPress={() => router.push(`/accounts/${account.id}/edit`)}
-            hitSlop={10} accessibilityLabel="Edit account details"
-            radius={radii.full} padding={0} style={styles.iconBtn}>
-            <Pencil size={16} color={colors.textPrimary} />
-          </LiquidGlassCard>
+            accessibilityLabel="Edit account details"
+            icon={<Pencil size={16} color={colors.textPrimary} />}
+          />
 
-          <LiquidGlassCard onPress={handleArchive} hitSlop={10}
-            accessibilityLabel="Delete or archive account" radius={radii.full} padding={0} style={styles.iconBtn}>
-            <Trash2 size={16} color={colors.textMuted} />
-          </LiquidGlassCard>
+          <IconButton
+            onPress={handleArchive}
+            accessibilityLabel="Delete or archive account"
+            variant="destructive"
+            icon={<Trash2 size={16} color={colors.negative} />}
+          />
         </View>
       </View>
 

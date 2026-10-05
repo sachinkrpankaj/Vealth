@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle } from 'react-native';
+import { Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle, StyleProp } from 'react-native';
 import { useTheme } from '../../theme';
 import { LiquidGlassCard } from './LiquidGlassCard';
 
@@ -8,7 +8,7 @@ interface SecondaryButtonProps {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   textStyle?: TextStyle;
   icon?: React.ReactNode;
 }
