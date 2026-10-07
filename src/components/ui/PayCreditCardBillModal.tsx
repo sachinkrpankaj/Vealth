@@ -73,10 +73,12 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const isClosingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
+      isClosingRef.current = false;
       setPaymentAmount(unpaidBillAmount);
       setPaymentDate(formatDateIso(new Date()));
       if (eligibleAccounts.length > 0 && !eligibleAccounts.some((a) => a.id === selectedAccountId)) {
@@ -84,7 +86,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       }
       setError(null);
     }
-  }, [visible, unpaidBillAmount, creditCard?.id]);
+  }, [visible, unpaidBillAmount, creditCard?.id, accounts]);
 
   // Hooks must run even while there is no selected card (the modal is mounted on Home).
   // Smooth slide-up and fade animation
@@ -93,6 +95,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
 
   useEffect(() => {
     if (visible) {
+      isClosingRef.current = false;
       slideAnim.setValue(280);
       fadeAnim.setValue(0);
       Animated.parallel([
@@ -115,6 +118,8 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
   if (!creditCard) return null;
 
   const handleSmoothClose = (callback?: () => void) => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -468,13 +473,13 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
   },
   modalCardWrapper: {
     width: '100%',
@@ -482,6 +487,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
+    maxHeight: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.5,

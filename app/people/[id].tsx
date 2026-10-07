@@ -380,6 +380,11 @@ export default function PersonDetailScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalBackdrop}
         >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setIsEditModalOpen(false)}
+            accessibilityLabel="Close modal"
+          />
           <View
             style={[
               styles.modalSheet,

@@ -239,6 +239,11 @@ export default function LiabilitiesListScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setEditModalVisible(false)}
+            accessibilityLabel="Close modal overlay"
+          />
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Manage Liability</Text>

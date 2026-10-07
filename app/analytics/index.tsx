@@ -15,7 +15,7 @@ import { getCurrentLocalMonthString, getTodayLocalDateString } from '../../src/u
 
 export default function AnalyticsScreen() {
   const { colors, typography, radii, spacing } = useTheme();
-  const { transactions, netWorth, refresh } = useFinancialData();
+  const { transactions, categories, netWorth, refresh } = useFinancialData();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -30,6 +30,11 @@ export default function AnalyticsScreen() {
     const todayStr = getTodayLocalDateString();
     const expenseMap = new Map<string, number>();
     const incomeMap = new Map<string, number>();
+
+    const categoryMap = new Map<string, (typeof categories)[number]>();
+    for (const cat of categories) {
+      categoryMap.set(cat.id, cat);
+    }
 
     let totalExpense = 0;
     let totalIncome = 0;
@@ -51,29 +56,44 @@ export default function AnalyticsScreen() {
       }
     }
 
-    const formatCategoryName = (key: string) => {
-      if (key.startsWith('cat-')) {
-        return key.replace('cat-', '').replace(/-/g, ' ');
+    const resolveCategory = (key: string) => {
+      const match = categoryMap.get(key);
+      if (match) {
+        return { name: match.name, color: match.color };
       }
-      return key;
+      if (key === 'General' || !key) {
+        return { name: 'General', color: undefined };
+      }
+      if (key.startsWith('cat-')) {
+        return { name: key.replace('cat-', '').replace(/-/g, ' '), color: undefined };
+      }
+      return { name: key, color: undefined };
     };
 
     const expenseItems: CategoryBreakdownItem[] = Array.from(expenseMap.entries())
-      .map(([cat, amt]) => ({
-        id: cat,
-        name: formatCategoryName(cat),
-        amount: amt,
-        percentage: totalExpense > 0 ? (amt / totalExpense) * 100 : 0,
-      }))
+      .map(([cat, amt]) => {
+        const resolved = resolveCategory(cat);
+        return {
+          id: cat,
+          name: resolved.name,
+          color: resolved.color,
+          amount: amt,
+          percentage: totalExpense > 0 ? (amt / totalExpense) * 100 : 0,
+        };
+      })
       .sort((a, b) => b.amount - a.amount);
 
     const incomeItems: CategoryBreakdownItem[] = Array.from(incomeMap.entries())
-      .map(([cat, amt]) => ({
-        id: cat,
-        name: formatCategoryName(cat),
-        amount: amt,
-        percentage: totalIncome > 0 ? (amt / totalIncome) * 100 : 0,
-      }))
+      .map(([cat, amt]) => {
+        const resolved = resolveCategory(cat);
+        return {
+          id: cat,
+          name: resolved.name,
+          color: resolved.color,
+          amount: amt,
+          percentage: totalIncome > 0 ? (amt / totalIncome) * 100 : 0,
+        };
+      })
       .sort((a, b) => b.amount - a.amount);
 
     return {
@@ -82,7 +102,7 @@ export default function AnalyticsScreen() {
       totalExpense,
       totalIncome,
     };
-  }, [transactions, currentMonth]);
+  }, [transactions, categories, currentMonth]);
 
   const savingsRate =
     categoryStats.totalIncome > 0

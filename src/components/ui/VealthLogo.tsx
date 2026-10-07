@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: '#F3EFEA',
+    backgroundColor: 'transparent',
   },
   badgeShadow: {
     borderWidth: 1,

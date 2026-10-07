@@ -306,6 +306,10 @@ async function validateFinalTransaction(
       throw new Error(`Account "${row.name}" is archived and cannot be used.`);
     }
   }
+
+  if (tx.type === 'INCOME' && accounts.get(tx.accountId!)?.type === 'CREDIT_CARD') {
+    throw new Error('A credit card cannot be used as the receiving account for income.');
+  }
   if (tx.type === 'TRANSFER' && tx.accountId === tx.destinationAccountId) {
     throw new Error('Transfer source and destination accounts must be different.');
   }

@@ -1,21 +1,40 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
-import { X, Calendar } from 'lucide-react-native';
+import { X, Calendar, Landmark, Users, CircleDot } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
+import { SelectSheetField, SelectSheetOption } from '../../src/components/ui/SelectSheetField';
 import { useTheme } from '../../src/theme';
 import { createLiability } from '../../src/database/repositories/liabilityRepository';
 import { LiabilityType } from '../../src/domain/finance/types';
 import { generateEntityId } from '../../src/utils/idGenerator';
 
-const LIABILITY_TYPES: { type: LiabilityType; label: string }[] = [
-  { type: 'PERSONAL_LOAN', label: 'Personal Loan' },
-  { type: 'BORROWED_MONEY', label: 'Borrowed Debt' },
-  { type: 'OTHER', label: 'Other Debt' },
+const LIABILITY_TYPE_OPTIONS: SelectSheetOption<LiabilityType>[] = [
+  {
+    value: 'PERSONAL_LOAN',
+    label: 'Personal Loan',
+    description: 'Bank loan, EMI, or personal financing facility',
+    icon: Landmark,
+    color: '#3B82F6',
+  },
+  {
+    value: 'BORROWED_MONEY',
+    label: 'Borrowed Debt',
+    description: 'Money borrowed from individuals, friends, or family',
+    icon: Users,
+    color: '#F59E0B',
+  },
+  {
+    value: 'OTHER',
+    label: 'Other Debt',
+    description: 'Any other outstanding liability or debt commitment',
+    icon: CircleDot,
+    color: '#64748B',
+  },
 ];
 
 export default function AddLiabilityScreen() {
@@ -74,28 +93,14 @@ export default function AddLiabilityScreen() {
       </View>
 
       {/* Type Selector */}
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Liability Type</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, marginBottom: 16 }}
-      >
-        {LIABILITY_TYPES.map((t) => (
-          <LiquidGlassCard key={t.type} onPress={() => setType(t.type)}
-            accessibilityLabel={t.label} accessibilityState={{ selected: type === t.type }}
-            tone={type === t.type ? 'emphasized' : 'default'}
-            radius={radii.md} padding={0} style={styles.typePill}>
-            <Text
-              style={[
-                styles.typePillText,
-                { color: type === t.type ? '#FFFFFF' : colors.textPrimary },
-              ]}
-            >
-              {t.label}
-            </Text>
-          </LiquidGlassCard>
-        ))}
-      </ScrollView>
+      <SelectSheetField<LiabilityType>
+        label="Liability Type"
+        value={type}
+        options={LIABILITY_TYPE_OPTIONS}
+        onSelect={(newType) => setType(newType)}
+        title="Liability Type"
+        subtitle="Select the classification for this liability"
+      />
 
       {/* Name */}
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Name / Description *</Text>

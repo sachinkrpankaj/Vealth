@@ -147,6 +147,14 @@ export default function AddTransactionScreen() {
 
   const initialType: TransactionType = (params.defaultType as TransactionType) || 'EXPENSE';
   const [selectedType, setSelectedType] = useState<TransactionType>(initialType);
+
+  const selectableAccounts = React.useMemo(() => {
+    if (selectedType === 'INCOME') {
+      return activeAccounts.filter((a) => a.type !== 'CREDIT_CARD');
+    }
+    return activeAccounts;
+  }, [activeAccounts, selectedType]);
+
   const [amount, setAmount] = useState<number>(0);
   const [selectedAccount, setSelectedAccount] = useState<string>(() => {
     if (params.accountId && accounts.some((a) => a.id === params.accountId && !a.isArchived)) {
@@ -176,9 +184,22 @@ export default function AddTransactionScreen() {
 
   // Set default active accounts, destination account, and assets when loaded
   useEffect(() => {
-    if ((!selectedAccount || !activeAccounts.some((a) => a.id === selectedAccount)) && activeAccounts.length > 0) {
-      const matchParam = params.accountId && activeAccounts.some((a) => a.id === params.accountId);
-      setSelectedAccount(matchParam ? params.accountId! : activeAccounts[0].id);
+    if (selectedType === 'INCOME') {
+      const currentAcc = activeAccounts.find((a) => a.id === selectedAccount);
+      if (currentAcc && currentAcc.type === 'CREDIT_CARD') {
+        const firstValid = activeAccounts.find((a) => a.type !== 'CREDIT_CARD');
+        setSelectedAccount(firstValid?.id ?? '');
+        return;
+      }
+    }
+
+    const validList = selectedType === 'INCOME'
+      ? activeAccounts.filter((a) => a.type !== 'CREDIT_CARD')
+      : activeAccounts;
+
+    if ((!selectedAccount || !validList.some((a) => a.id === selectedAccount)) && validList.length > 0) {
+      const matchParam = params.accountId && validList.some((a) => a.id === params.accountId);
+      setSelectedAccount(matchParam ? params.accountId! : validList[0].id);
     }
     if (
       selectedType === 'TRANSFER' &&
@@ -229,11 +250,18 @@ export default function AddTransactionScreen() {
       return;
     }
 
+    const chosenAccount = activeAccounts.find((a) => a.id === selectedAccount);
+    if (selectedType === 'INCOME' && chosenAccount?.type === 'CREDIT_CARD') {
+      setErrorMessage('Credit cards cannot be used as receiving accounts for Income transactions. Please select a bank account, cash wallet, or investment account.');
+      return;
+    }
+
     const validation = validateTransactionRequiredFields({
       type: selectedType,
       amount,
       date,
       accountId: selectedAccount,
+      accountType: chosenAccount?.type,
       destinationAccountId: destinationAccount,
       personId: selectedPerson,
       assetId: selectedAsset,
@@ -638,38 +666,57 @@ export default function AddTransactionScreen() {
             : 'Account'}
         </Text>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-        >
-          {activeAccounts.map((acc) => {
-            const isSelected = selectedAccount === acc.id;
-            return (
-              <Pressable
-                key={acc.id}
-                onPress={() => setSelectedAccount(acc.id)}
-                style={[
-                  styles.accountPill,
-                  {
-                    backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                    borderColor: isSelected ? colors.textPrimary : colors.border,
-                    borderRadius: radii.md,
-                  },
-                ]}
-              >
-                <Text
+        {selectableAccounts.length === 0 ? (
+          <View
+            style={[
+              styles.emptySelector,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                borderRadius: radii.md,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.negative || '#EF4444', fontSize: 13, fontWeight: '500' }}>
+              {selectedType === 'INCOME'
+                ? 'No bank, cash, or investment accounts available to receive income. Credit cards cannot receive income.'
+                : 'No active accounts available.'}
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingRight: 16 }}
+          >
+            {selectableAccounts.map((acc) => {
+              const isSelected = selectedAccount === acc.id;
+              return (
+                <Pressable
+                  key={acc.id}
+                  onPress={() => setSelectedAccount(acc.id)}
                   style={[
-                    styles.accountPillText,
-                    { color: isSelected ? colors.background : colors.textPrimary },
+                    styles.accountPill,
+                    {
+                      backgroundColor: isSelected ? colors.textPrimary : colors.surface,
+                      borderColor: isSelected ? colors.textPrimary : colors.border,
+                      borderRadius: radii.md,
+                    },
                   ]}
                 >
-                  {acc.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.accountPillText,
+                      { color: isSelected ? colors.background : colors.textPrimary },
+                    ]}
+                  >
+                    {acc.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {/* Destination Account (For TRANSFERS only) */}

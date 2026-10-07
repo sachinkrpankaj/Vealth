@@ -1,25 +1,62 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
-import { X, Calendar } from 'lucide-react-native';
+import { X, Calendar, Gem, Building2, Car, Laptop, TrendingUp, CircleDot } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
+import { SelectSheetField, SelectSheetOption } from '../../src/components/ui/SelectSheetField';
 import { useTheme } from '../../src/theme';
 import { createAsset } from '../../src/database/repositories/assetRepository';
 import { AssetCategory } from '../../src/domain/finance/types';
 import { formatDateIso } from '../../src/utils/dateUtils';
 import { generateEntityId } from '../../src/utils/idGenerator';
 
-const ASSET_CATEGORIES: { cat: AssetCategory; label: string }[] = [
-  { cat: 'GOLD', label: 'Gold & Jewelry' },
-  { cat: 'PROPERTY', label: 'Real Estate' },
-  { cat: 'VEHICLE', label: 'Vehicle' },
-  { cat: 'ELECTRONICS', label: 'Electronics' },
-  { cat: 'INVESTMENT', label: 'Investment' },
-  { cat: 'OTHER', label: 'Other Asset' },
+const ASSET_CATEGORY_OPTIONS: SelectSheetOption<AssetCategory>[] = [
+  {
+    value: 'GOLD',
+    label: 'Gold & Jewelry',
+    description: 'Physical bullion, coins, or precious ornaments',
+    icon: Gem,
+    color: '#F59E0B',
+  },
+  {
+    value: 'PROPERTY',
+    label: 'Real Estate',
+    description: 'Residential, land, or commercial property',
+    icon: Building2,
+    color: '#3B82F6',
+  },
+  {
+    value: 'VEHICLE',
+    label: 'Vehicle',
+    description: 'Car, motorcycle, or commercial vehicle',
+    icon: Car,
+    color: '#10B981',
+  },
+  {
+    value: 'ELECTRONICS',
+    label: 'Electronics',
+    description: 'Computers, phones, gadgets, and tech hardware',
+    icon: Laptop,
+    color: '#8B5CF6',
+  },
+  {
+    value: 'INVESTMENT',
+    label: 'Investment',
+    description: 'Private equity, collectibles, or commodities',
+    icon: TrendingUp,
+    color: '#EC4899',
+  },
+  {
+    value: 'OTHER',
+    label: 'Other Asset',
+    description: 'Any other valuable physical possession',
+    icon: CircleDot,
+    color: '#64748B',
+  },
 ];
 
 export default function AddAssetScreen() {
@@ -82,28 +119,14 @@ export default function AddAssetScreen() {
       </View>
 
       {/* Category Selection */}
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Asset Category</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, marginBottom: 16 }}
-      >
-        {ASSET_CATEGORIES.map((c) => (
-          <LiquidGlassCard key={c.cat} onPress={() => setCategory(c.cat)}
-            accessibilityLabel={c.label} accessibilityState={{ selected: category === c.cat }}
-            tone={category === c.cat ? 'emphasized' : 'default'}
-            radius={radii.md} padding={0} style={styles.catPill}>
-            <Text
-              style={[
-                styles.catPillText,
-                { color: category === c.cat ? '#FFFFFF' : colors.textPrimary },
-              ]}
-            >
-              {c.label}
-            </Text>
-          </LiquidGlassCard>
-        ))}
-      </ScrollView>
+      <SelectSheetField<AssetCategory>
+        label="Asset Category"
+        value={category}
+        options={ASSET_CATEGORY_OPTIONS}
+        onSelect={(newCat) => setCategory(newCat)}
+        title="Asset Category"
+        subtitle="Select the classification for this asset"
+      />
 
       {/* Name */}
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Asset Name *</Text>

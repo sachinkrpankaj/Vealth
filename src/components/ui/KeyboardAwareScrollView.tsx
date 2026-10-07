@@ -54,6 +54,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
 
     const scrollYRef = useRef(0);
     const scrollViewHeightRef = useRef(0);
+    const keyboardHeightRef = useRef(0);
 
     const fallbackScrollResponder = (currentlyFocusedInput: any) => {
       try {
@@ -94,7 +95,8 @@ export const KeyboardAwareScrollView = React.forwardRef<
         const containerNode =
           (internalRef.current as any)?.getInnerViewRef?.() ??
           innerViewRef.current ??
-          (internalRef.current as any)?.getNativeScrollRef?.();
+          (internalRef.current as any)?.getNativeScrollRef?.() ??
+          internalRef.current;
 
         const targetNode = currentlyFocusedInput as any;
 
@@ -108,17 +110,27 @@ export const KeyboardAwareScrollView = React.forwardRef<
             (x: number, y: number, width: number, height: number) => {
               if (!isMountedRef.current || !internalRef.current) return;
               const currentScrollY = scrollYRef.current;
-              const viewportHeight = scrollViewHeightRef.current || 400;
+              const totalHeight = scrollViewHeightRef.current || 400;
+              const currentKeyboardHeight = keyboardHeightRef.current;
+
+              // Compute the visible viewport height above the keyboard.
+              // On Android (due to translucent status bars or modal dialogs),
+              // the window may not resize automatically, meaning the keyboard overlaps
+              // the bottom region of the ScrollView. We subtract currentKeyboardHeight
+              // so the visible region is calculated accurately.
+              const visibleHeight = currentKeyboardHeight > 0
+                ? Math.max(120, totalHeight - currentKeyboardHeight)
+                : totalHeight;
 
               // The vertical extent of the focused input with a comfortable padding margin
               const inputTop = y;
               const inputBottom = y + height + 24;
 
-              // Check if the input is below the currently visible viewport
-              if (inputBottom > currentScrollY + viewportHeight) {
+              // Check if the input is below the currently visible viewport above the keyboard
+              if (inputBottom > currentScrollY + visibleHeight) {
                 // Input is partially or fully hidden beneath the bottom of the viewport / keyboard.
                 // Scroll down just enough to bring the input and its margin into comfortable view.
-                const targetY = inputBottom - viewportHeight + 20;
+                const targetY = inputBottom - visibleHeight + Math.max(20, Math.min(extraScrollHeight, 50));
                 internalRef.current.scrollTo({ y: Math.max(0, targetY), animated: true });
               } else if (inputTop < currentScrollY) {
                 // Input is scrolled above the top of the viewport.
@@ -126,8 +138,8 @@ export const KeyboardAwareScrollView = React.forwardRef<
                 const targetY = Math.max(0, inputTop - 16);
                 internalRef.current.scrollTo({ y: targetY, animated: true });
               }
-              // If inputTop >= currentScrollY && inputBottom <= currentScrollY + viewportHeight:
-              // The input is already completely visible in the viewport!
+              // If inputTop >= currentScrollY && inputBottom <= currentScrollY + visibleHeight:
+              // The input is already completely visible in the viewport above the keyboard!
               // Do NOT scroll at all. This completely prevents static top elements,
               // headers, and controls from jumping unnecessarily.
             },
@@ -164,12 +176,14 @@ export const KeyboardAwareScrollView = React.forwardRef<
       const onShow = (e: KeyboardEvent) => {
         if (!isMountedRef.current) return;
         const height = e.endCoordinates ? e.endCoordinates.height : 0;
+        keyboardHeightRef.current = height;
         setKeyboardHeight(height);
         scheduleScroll();
       };
 
       const onHide = () => {
         if (!isMountedRef.current) return;
+        keyboardHeightRef.current = 0;
         setKeyboardHeight(0);
       };
 
@@ -198,7 +212,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
     // Provide extra scrollable clearance when keyboard is active
     const dynamicPaddingBottom =
       basePaddingBottom +
-      (keyboardHeight > 0 ? Math.max(extraScrollHeight + 40, 120) : 0);
+      (keyboardHeight > 0 ? Math.max(extraScrollHeight + 40, keyboardHeight + 60) : 0);
 
     return (
       <ScrollView

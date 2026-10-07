@@ -105,6 +105,7 @@ export default function AccountDetailScreen() {
   }
 
   const personMap = new Map(people.map((p) => [p.id, p.name]));
+  const accountMap = new Map(allAccounts.map((a) => [a.id, a.name]));
 
   return (
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
@@ -289,7 +290,12 @@ export default function AccountDetailScreen() {
             <React.Fragment key={tx.id}>
               <TransactionRow
                 transaction={tx}
-                accountName={account.name}
+                accountName={tx.accountId ? accountMap.get(tx.accountId) : account.name}
+                destAccountName={
+                  tx.destinationAccountId
+                    ? accountMap.get(tx.destinationAccountId)
+                    : undefined
+                }
                 personName={tx.personId ? personMap.get(tx.personId) : undefined}
                 onPress={() => router.push(`/transaction/${tx.id}`)}
               />

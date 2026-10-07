@@ -14,7 +14,7 @@
       "package": "com.vaelth.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#F3EFEA",
+        "backgroundColor": "#27282D",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,

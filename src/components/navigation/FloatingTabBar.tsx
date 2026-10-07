@@ -93,6 +93,7 @@ export const FloatingTabBar: React.FC<FloatingTabBarProps> = ({
       ]}
     >
       <LiquidGlassCard
+        style={styles.dockCard}
         contentStyle={styles.dockCapsule}
         radius={28}
         padding={6}
@@ -159,6 +160,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 999,
+  },
+  dockCard: {
+    alignSelf: 'center',
   },
   dockCapsule: {
     flexDirection: 'row',

@@ -1,22 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ArrowLeft, Check, X } from 'lucide-react-native';
+import { ArrowLeft, Check, X, Landmark, Wallet, TrendingUp, CreditCard, HelpCircle } from 'lucide-react-native';
 import { ScreenContainer } from '../../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../../src/components/ui/LiquidGlassCard';
 import { ColorWheelPicker } from '../../../src/components/ui/ColorWheelPicker';
+import { SelectSheetField, SelectSheetOption } from '../../../src/components/ui/SelectSheetField';
 import { useTheme } from '../../../src/theme';
 import { getAccountById, updateAccount } from '../../../src/database/repositories/accountRepository';
 import { Account, AccountType } from '../../../src/domain/finance/types';
 
-const ACCOUNT_TYPES: { type: AccountType; label: string }[] = [
-  { type: 'BANK', label: 'Bank Account' },
-  { type: 'CASH', label: 'Cash Wallet' },
-  { type: 'CREDIT_CARD', label: 'Credit Card' },
-  { type: 'INVESTMENT', label: 'Investment' },
-  { type: 'OTHER', label: 'Other' },
+const ACCOUNT_TYPE_OPTIONS: SelectSheetOption<AccountType>[] = [
+  {
+    value: 'BANK',
+    label: 'Bank Account',
+    description: 'Savings, checking, or salary account',
+    icon: Landmark,
+    color: '#3B82F6',
+  },
+  {
+    value: 'CASH',
+    label: 'Cash Wallet',
+    description: 'Physical cash or petty cash in hand',
+    icon: Wallet,
+    color: '#10B981',
+  },
+  {
+    value: 'INVESTMENT',
+    label: 'Investment',
+    description: 'Stocks, mutual funds, or demat account',
+    icon: TrendingUp,
+    color: '#8B5CF6',
+  },
+  {
+    value: 'CREDIT_CARD',
+    label: 'Credit Card',
+    description: 'Revolving line of credit with billing cycle',
+    icon: CreditCard,
+    color: '#F43F5E',
+  },
+  {
+    value: 'OTHER',
+    label: 'Other',
+    description: 'Any other miscellaneous financial account',
+    icon: HelpCircle,
+    color: '#64748B',
+  },
 ];
 
 const COLOR_OPTIONS = [
@@ -141,34 +172,14 @@ export default function EditAccountScreen() {
       </View>
 
       {/* Account Type Selector */}
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Account Type</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 8, marginBottom: 16 }}
-      >
-        {ACCOUNT_TYPES.map((t) => (
-          <LiquidGlassCard
-            key={t.type}
-            onPress={() => setType(t.type)}
-            accessibilityLabel={t.label}
-            accessibilityState={{ selected: type === t.type }}
-            tone={type === t.type ? 'emphasized' : 'default'}
-            radius={radii.md}
-            padding={0}
-            style={styles.typePill}
-          >
-            <Text
-              style={[
-                styles.typePillText,
-                { color: type === t.type ? '#FFFFFF' : colors.textPrimary },
-              ]}
-            >
-              {t.label}
-            </Text>
-          </LiquidGlassCard>
-        ))}
-      </ScrollView>
+      <SelectSheetField<AccountType>
+        label="Account Type"
+        value={type}
+        options={ACCOUNT_TYPE_OPTIONS}
+        onSelect={(newType) => setType(newType)}
+        title="Account Type"
+        subtitle="Select the classification for this account"
+      />
 
       {/* Account Name */}
       <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Account Name *</Text>

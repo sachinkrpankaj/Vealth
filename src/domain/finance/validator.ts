@@ -1,4 +1,4 @@
-import { TransactionType } from './types';
+import { TransactionType, AccountType } from './types';
 import { formatRupee } from './currency';
 
 export interface ValidationResult {
@@ -7,6 +7,16 @@ export interface ValidationResult {
 }
 
 import { parseLocalDate, getTodayLocalDateString } from '../../utils/dateUtils';
+
+export function validateIncomeAccountType(accountType?: AccountType | string): ValidationResult {
+  if (accountType === 'CREDIT_CARD') {
+    return {
+      isValid: false,
+      error: 'A credit card cannot be used as the receiving account for income.',
+    };
+  }
+  return { isValid: true };
+}
 
 export function validateAmount(amountPaise: number): ValidationResult {
   if (!Number.isFinite(amountPaise) || !Number.isSafeInteger(amountPaise) || isNaN(amountPaise)) {
@@ -76,6 +86,7 @@ export function validateTransactionRequiredFields(params: {
   amount: number;
   date: string;
   accountId?: string;
+  accountType?: AccountType | string;
   destinationAccountId?: string;
   personId?: string;
   assetId?: string;
@@ -93,6 +104,17 @@ export function validateTransactionRequiredFields(params: {
 
   switch (params.type) {
     case 'INCOME':
+      if (!params.accountId) {
+        return { isValid: false, error: 'Select an account.' };
+      }
+      if (params.accountType === 'CREDIT_CARD') {
+        return {
+          isValid: false,
+          error: 'A credit card cannot be used as the receiving account for income.',
+        };
+      }
+      break;
+
     case 'EXPENSE':
       if (!params.accountId) {
         return { isValid: false, error: 'Select an account.' };

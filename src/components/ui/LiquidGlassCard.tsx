@@ -431,7 +431,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
         style={[
           styles.innerContent,
           surfaceHeight !== undefined ? { height: '100%' } : undefined,
-          (isFlexOuter || outerStyles.minHeight !== undefined) ? { flex: 1 } : undefined,
+          isFlexOuter ? { flex: 1 } : undefined,
           resolvedPadding !== undefined ? { padding: resolvedPadding } : undefined,
           innerStyles,
           contentStyle,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     // Root container when static
   },
   surfaceWrapper: {
-    width: '100%',
+    // Surface wrapper for liquid glass shell
   },
   innerContent: {
     position: 'relative',
