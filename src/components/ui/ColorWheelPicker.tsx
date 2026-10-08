@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useId } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  KeyboardAvoidingView,
+  GestureResponderEvent,
+  PanResponderGestureState,
   PanResponder,
 } from 'react-native';
 import Svg, {
@@ -21,7 +24,9 @@ import { Palette, Check, X, Sparkles, Hash } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { IconButton } from './IconButton';
+import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { useTheme } from '../../theme';
+import { colorFieldSelection, hexToHsv, HsvColor, hsvToHex, hueSliderSelection, normalizeHexColor } from '../../utils/colorPicker';
 
 export const DEFAULT_COLOR_PRESETS = [
   '#3B82F6', // Royal Blue
@@ -44,74 +49,6 @@ const DESIGNER_TONES = [
   '#0891B2', '#06B6D4', '#22D3EE', '#67E8F9',
 ];
 
-// HSV <-> HEX Conversion Utilities
-function hexToHsv(hex: string): { h: number; s: number; v: number } {
-  let clean = hex.replace('#', '').trim();
-  if (clean.length === 3) {
-    clean = clean.split('').map((c) => c + c).join('');
-  }
-  const num = parseInt(clean, 16);
-  if (isNaN(num) || clean.length !== 6) {
-    return { h: 230, s: 0.75, v: 0.95 }; // Default safe indigo
-  }
-  const r = ((num >> 16) & 255) / 255;
-  const g = ((num >> 8) & 255) / 255;
-  const b = (num & 255) / 255;
-
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  const s = max === 0 ? 0 : d / max;
-  const v = max;
-
-  if (max !== min) {
-    switch (max) {
-      case r:
-        h = (g - b) / d + (g < b ? 6 : 0);
-        break;
-      case g:
-        h = (b - r) / d + 2;
-        break;
-      case b:
-        h = (r - g) / d + 4;
-        break;
-    }
-    h *= 60;
-  }
-
-  return { h: Math.round(h) % 360, s, v };
-}
-
-function hsvToHex(h: number, s: number, v: number): string {
-  const c = v * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = v - c;
-  let r = 0, g = 0, b = 0;
-
-  if (h >= 0 && h < 60) {
-    r = c; g = x; b = 0;
-  } else if (h >= 60 && h < 120) {
-    r = x; g = c; b = 0;
-  } else if (h >= 120 && h < 180) {
-    r = 0; g = c; b = x;
-  } else if (h >= 180 && h < 240) {
-    r = 0; g = x; b = c;
-  } else if (h >= 240 && h < 300) {
-    r = x; g = 0; b = c;
-  } else {
-    r = c; g = 0; b = x;
-  }
-
-  const toHex = (n: number) => {
-    const val = Math.max(0, Math.min(255, Math.round((n + m) * 255)));
-    const hex = val.toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  };
-
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
-}
-
 interface ColorWheelPickerProps {
   selectedColor: string;
   onSelectColor: (color: string) => void;
@@ -125,6 +62,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
   presets = DEFAULT_COLOR_PRESETS,
 }) => {
   const { colors, isDark, typography, radii } = useTheme();
+  const gradientPrefix = useId().replace(/:/g, '');
   const [modalVisible, setModalVisible] = useState(false);
   const [tempColor, setTempColor] = useState(selectedColor);
 
@@ -135,8 +73,8 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
   const [hexError, setHexError] = useState(false);
 
   // Dimensions for layout-aware touch calculations
-  const [sbSize, setSbSize] = useState({ width: 280, height: 140 });
-  const [hueBarWidth, setHueBarWidth] = useState(280);
+  const [sbSize, setSbSize] = useState({ width: 0, height: 0 });
+  const [hueBarWidth, setHueBarWidth] = useState(0);
 
   // References to keep event handlers current
   const hsvRef = useRef(hsv);
@@ -145,10 +83,12 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
   sbSizeRef.current = sbSize;
   const hueBarWidthRef = useRef(hueBarWidth);
   hueBarWidthRef.current = hueBarWidth;
+  const dragStart = useRef({ x: 0, y: 0 });
 
   const openWheelModal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const initialHsv = hexToHsv(selectedColor);
+    hsvRef.current = initialHsv;
     setHsv(initialHsv);
     setTempColor(selectedColor);
     setHexInput(selectedColor.toUpperCase());
@@ -157,34 +97,34 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
     setModalVisible(true);
   };
 
-  const updateFromHsv = (newHsv: { h: number; s: number; v: number }) => {
+  const updateFromHsv = (newHsv: HsvColor) => {
+    hsvRef.current = newHsv;
     setHsv(newHsv);
     const hex = hsvToHex(newHsv.h, newHsv.s, newHsv.v);
     setTempColor(hex);
     setHexInput(hex);
+    setHexError(false);
   };
 
   const handleApplyPreset = (color: string) => {
     Haptics.selectionAsync().catch(() => {});
     const newHsv = hexToHsv(color);
+    hsvRef.current = newHsv;
     setHsv(newHsv);
     setTempColor(color);
     setHexInput(color.toUpperCase());
+    setHexError(false);
   };
 
   const handleHexSubmit = () => {
-    let formatted = hexInput.trim();
-    if (!formatted.startsWith('#')) {
-      formatted = '#' + formatted;
-    }
-    const isValid = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(formatted);
-    if (isValid) {
+    const formatted = normalizeHexColor(hexInput);
+    if (formatted) {
       setHexError(false);
       const parsedHsv = hexToHsv(formatted);
+      hsvRef.current = parsedHsv;
       setHsv(parsedHsv);
-      const fullHex = hsvToHex(parsedHsv.h, parsedHsv.s, parsedHsv.v);
-      setTempColor(fullHex);
-      setHexInput(fullHex);
+      setTempColor(formatted);
+      setHexInput(formatted);
       setShowHexInput(false);
     } else {
       setHexError(true);
@@ -192,34 +132,33 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
   };
 
   const handleConfirm = () => {
+    const selected = showHexInput ? normalizeHexColor(hexInput) : tempColor;
+    if (!selected) {
+      setHexError(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onSelectColor(tempColor);
+    onSelectColor(selected);
     setModalVisible(false);
   };
 
-  // PanResponder for Saturation-Brightness 2D Visual Field
+  // SVG decorations cannot receive touches; local grant coordinates belong to the field.
+  // Subsequent moves use gesture deltas so dragging outside the field stays stable on Android.
   const sbPanResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (evt) => {
           const { locationX, locationY } = evt.nativeEvent;
+          dragStart.current = { x: locationX, y: locationY };
           const { width, height } = sbSizeRef.current;
-          if (width > 0 && height > 0) {
-            const s = Math.max(0, Math.min(1, locationX / width));
-            const v = Math.max(0, Math.min(1, 1 - locationY / height));
-            updateFromHsv({ ...hsvRef.current, s, v });
-          }
+          updateFromHsv(colorFieldSelection(hsvRef.current, locationX, locationY, width, height));
         },
-        onPanResponderMove: (evt) => {
-          const { locationX, locationY } = evt.nativeEvent;
+        onPanResponderMove: (_evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
           const { width, height } = sbSizeRef.current;
-          if (width > 0 && height > 0) {
-            const s = Math.max(0, Math.min(1, locationX / width));
-            const v = Math.max(0, Math.min(1, 1 - locationY / height));
-            updateFromHsv({ ...hsvRef.current, s, v });
-          }
+          updateFromHsv(colorFieldSelection(hsvRef.current, dragStart.current.x + gesture.dx, dragStart.current.y + gesture.dy, width, height));
         },
       }),
     []
@@ -231,23 +170,16 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (evt) => {
           const { locationX } = evt.nativeEvent;
+          dragStart.current = { x: locationX, y: 0 };
           const width = hueBarWidthRef.current;
-          if (width > 0) {
-            const fraction = Math.max(0, Math.min(1, locationX / width));
-            const h = Math.round(fraction * 360) % 360;
-            updateFromHsv({ ...hsvRef.current, h });
-          }
+          updateFromHsv(hueSliderSelection(hsvRef.current, locationX, width));
         },
-        onPanResponderMove: (evt) => {
-          const { locationX } = evt.nativeEvent;
+        onPanResponderMove: (_evt: GestureResponderEvent, gesture: PanResponderGestureState) => {
           const width = hueBarWidthRef.current;
-          if (width > 0) {
-            const fraction = Math.max(0, Math.min(1, locationX / width));
-            const h = Math.round(fraction * 360) % 360;
-            updateFromHsv({ ...hsvRef.current, h });
-          }
+          updateFromHsv(hueSliderSelection(hsvRef.current, dragStart.current.x + gesture.dx, width));
         },
       }),
     []
@@ -278,7 +210,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
         >
           <Svg width={36} height={36} style={StyleSheet.absoluteFill}>
             <Defs>
-              <LinearGradient id="rainbowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <LinearGradient id={`${gradientPrefix}_rainbow`} x1="0%" y1="0%" x2="100%" y2="100%">
                 <Stop offset="0%" stopColor="#EF4444" />
                 <Stop offset="25%" stopColor="#F59E0B" />
                 <Stop offset="50%" stopColor="#10B981" />
@@ -290,7 +222,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               cx={18}
               cy={18}
               r={16}
-              stroke="url(#rainbowGrad)"
+              stroke={`url(#${gradientPrefix}_rainbow)`}
               strokeWidth={2.5}
               fill="none"
             />
@@ -311,7 +243,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               },
             ]}
           >
-            <Check size={14} color="#FFFFFF" strokeWidth={3.2} style={styles.checkShadow} />
+            <Check size={14} color="#FFFFFF" strokeWidth={3.2} />
           </Pressable>
         )}
 
@@ -340,7 +272,6 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                   size={14}
                   color="#FFFFFF"
                   strokeWidth={3.2}
-                  style={styles.checkShadow}
                 />
               )}
             </Pressable>
@@ -355,7 +286,15 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
         animationType="fade"
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setModalVisible(false)}
+            accessibilityLabel="Dismiss color picker"
+          />
           <LiquidGlassCard
             radius={28}
             padding={20}
@@ -374,7 +313,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     },
                   ]}
                 >
-                  Color Wheel & Picker
+                  Choose a color
                 </Text>
               </View>
               <IconButton
@@ -385,7 +324,143 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               />
             </View>
 
-            {/* 1. Live Color Preview Swatch & Secondary Hex Reference */}
+            <KeyboardAwareScrollView
+              style={{ flex: 0, flexShrink: 1 }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 8 }}
+            >
+
+            {/* Primary visual color field */}
+            <Text
+              style={[
+                styles.sectionLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                },
+              ]}
+            >
+              Drag to choose saturation and brightness
+            </Text>
+            <View
+              testID="color-saturation-brightness"
+              accessibilityLabel="Color saturation and brightness"
+              accessibilityHint="Drag horizontally for saturation and vertically for brightness"
+              onLayout={(e) => {
+                const { width, height } = e.nativeEvent.layout;
+                if (width > 0 && height > 0) {
+                  sbSizeRef.current = { width, height };
+                  setSbSize({ width, height });
+                }
+              }}
+              {...sbPanResponder.panHandlers}
+              style={[
+                styles.sbField,
+                {
+                  borderRadius: radii.md,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Svg pointerEvents="none" width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                <Defs>
+                  <LinearGradient id={`${gradientPrefix}_saturation`} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+                    <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                  </LinearGradient>
+                  <LinearGradient id={`${gradientPrefix}_value`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <Stop offset="0%" stopColor="#000000" stopOpacity="0" />
+                    <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+                  </LinearGradient>
+                </Defs>
+                <Rect width="100%" height="100%" fill={pureHueHex} />
+                <Rect width="100%" height="100%" fill={`url(#${gradientPrefix}_saturation)`} />
+                <Rect width="100%" height="100%" fill={`url(#${gradientPrefix}_value)`} />
+              </Svg>
+
+              {/* Draggable Selector Thumb */}
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.sbThumb,
+                  {
+                    left: sbThumbLeft,
+                    top: sbThumbTop,
+                    backgroundColor: tempColor,
+                  },
+                ]}
+              />
+            </View>
+
+            {/* Hue spectrum slider */}
+            <Text
+              style={[
+                styles.sectionLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                  marginTop: 12,
+                },
+              ]}
+            >
+              Hue
+            </Text>
+            <View
+              testID="color-hue-slider"
+              accessible
+              accessibilityRole="adjustable"
+              accessibilityLabel="Hue"
+              accessibilityValue={{ min: 0, max: 360, now: Math.round(hsv.h) }}
+              accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+              onAccessibilityAction={({ nativeEvent }) => {
+                updateFromHsv({ ...hsvRef.current, h: Math.max(0, Math.min(360, hsvRef.current.h + (nativeEvent.actionName === 'increment' ? 10 : -10))) });
+              }}
+              onLayout={(e) => {
+                const { width } = e.nativeEvent.layout;
+                if (width > 0) {
+                  hueBarWidthRef.current = width;
+                  setHueBarWidth(width);
+                }
+              }}
+              {...huePanResponder.panHandlers}
+              style={[
+                styles.hueBar,
+                {
+                  borderRadius: radii.full,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Svg pointerEvents="none" width="100%" height="100%" style={StyleSheet.absoluteFill}>
+                <Defs>
+                  <LinearGradient id={`${gradientPrefix}_hue`} x1="0%" y1="0%" x2="100%" y2="0%">
+                    <Stop offset="0%" stopColor="#FF0000" />
+                    <Stop offset={`${100 / 6}%`} stopColor="#FFFF00" />
+                    <Stop offset={`${100 / 3}%`} stopColor="#00FF00" />
+                    <Stop offset="50%" stopColor="#00FFFF" />
+                    <Stop offset={`${200 / 3}%`} stopColor="#0000FF" />
+                    <Stop offset={`${500 / 6}%`} stopColor="#FF00FF" />
+                    <Stop offset="100%" stopColor="#FF0000" />
+                  </LinearGradient>
+                </Defs>
+                <Rect width="100%" height="100%" rx={13} ry={13} fill={`url(#${gradientPrefix}_hue)`} />
+              </Svg>
+
+              {/* Draggable Hue Thumb */}
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.hueThumb,
+                  {
+                    left: hueThumbLeft,
+                    backgroundColor: pureHueHex,
+                  },
+                ]}
+              />
+            </View>
+
+            {/* Selection preview and secondary HEX input */}
             <View
               style={[
                 styles.previewContainer,
@@ -414,7 +489,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     },
                   ]}
                 >
-                  {tempColor}
+                  Selected color
                 </Text>
                 <Text
                   style={[
@@ -425,7 +500,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     },
                   ]}
                 >
-                  Active Selection
+                  {tempColor}
                 </Text>
               </View>
 
@@ -469,135 +544,18 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     },
                   ]}
                 />
-                <LiquidGlassCard
+                <IconButton
                   onPress={handleHexSubmit}
                   accessibilityLabel="Apply hex value"
-                  radius={8}
-                  padding={0}
-                  tone="emphasized"
-                  style={styles.applyHexBtn}
-                >
-                  <Check size={14} color="#FFFFFF" strokeWidth={3} />
-                </LiquidGlassCard>
+                  variant="success"
+                  size={38}
+                  icon={<Check size={14} color={colors.positive} strokeWidth={3} />}
+                />
               </View>
             )}
+            {hexError && <Text style={{ color: colors.negative, marginBottom: 8 }}>Enter a valid 3 or 6 digit HEX color.</Text>}
 
-            {/* 2. Visual 2D Saturation-Brightness Picker */}
-            <Text
-              style={[
-                styles.sectionLabel,
-                {
-                  color: colors.textSecondary,
-                  fontFamily: typography.fontFamilies.semibold,
-                },
-              ]}
-            >
-              Saturation & Brightness
-            </Text>
-            <View
-              onLayout={(e) => {
-                const { width, height } = e.nativeEvent.layout;
-                if (width > 0 && height > 0) {
-                  setSbSize({ width, height });
-                }
-              }}
-              {...sbPanResponder.panHandlers}
-              style={[
-                styles.sbField,
-                {
-                  borderRadius: radii.md,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-                <Defs>
-                  <LinearGradient id="satGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
-                    <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-                  </LinearGradient>
-                  <LinearGradient id="valGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <Stop offset="0%" stopColor="#000000" stopOpacity="0" />
-                    <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
-                  </LinearGradient>
-                </Defs>
-                <Rect width="100%" height="100%" fill={pureHueHex} />
-                <Rect width="100%" height="100%" fill="url(#satGrad)" />
-                <Rect width="100%" height="100%" fill="url(#valGrad)" />
-              </Svg>
-
-              {/* Draggable Selector Thumb */}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.sbThumb,
-                  {
-                    left: sbThumbLeft,
-                    top: sbThumbTop,
-                    backgroundColor: tempColor,
-                  },
-                ]}
-              />
-            </View>
-
-            {/* 3. 1D Hue Spectrum Slider */}
-            <Text
-              style={[
-                styles.sectionLabel,
-                {
-                  color: colors.textSecondary,
-                  fontFamily: typography.fontFamilies.semibold,
-                  marginTop: 12,
-                },
-              ]}
-            >
-              Hue Spectrum
-            </Text>
-            <View
-              onLayout={(e) => {
-                const { width } = e.nativeEvent.layout;
-                if (width > 0) {
-                  setHueBarWidth(width);
-                }
-              }}
-              {...huePanResponder.panHandlers}
-              style={[
-                styles.hueBar,
-                {
-                  borderRadius: radii.full,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
-                <Defs>
-                  <LinearGradient id="hueStrip" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <Stop offset="0%" stopColor="#FF0000" />
-                    <Stop offset="17%" stopColor="#FFFF00" />
-                    <Stop offset="33%" stopColor="#00FF00" />
-                    <Stop offset="50%" stopColor="#00FFFF" />
-                    <Stop offset="67%" stopColor="#0000FF" />
-                    <Stop offset="83%" stopColor="#FF00FF" />
-                    <Stop offset="100%" stopColor="#FF0000" />
-                  </LinearGradient>
-                </Defs>
-                <Rect width="100%" height="100%" rx={13} ry={13} fill="url(#hueStrip)" />
-              </Svg>
-
-              {/* Draggable Hue Thumb */}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.hueThumb,
-                  {
-                    left: hueThumbLeft,
-                    backgroundColor: pureHueHex,
-                  },
-                ]}
-              />
-            </View>
-
-            {/* 4. Curated Designer Tones */}
+            {/* Quick color presets */}
             <Text
               style={[
                 styles.sectionLabel,
@@ -608,7 +566,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                 },
               ]}
             >
-              Curated Designer Tones
+              Quick colors
             </Text>
             <View style={styles.paletteGrid}>
               {DESIGNER_TONES.map((pal) => {
@@ -630,12 +588,13 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
                     ]}
                   >
                     {isSelected && (
-                      <Check size={11} color="#FFFFFF" strokeWidth={3.5} style={styles.checkShadow} />
+                      <Check size={11} color="#FFFFFF" strokeWidth={3.5} />
                     )}
                   </Pressable>
                 );
               })}
             </View>
+            </KeyboardAwareScrollView>
 
             {/* Confirm Button */}
             <LiquidGlassCard
@@ -650,7 +609,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({
               <Text style={styles.confirmBtnText}>Apply Color</Text>
             </LiquidGlassCard>
           </LiquidGlassCard>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -673,19 +632,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkShadow: {
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.5,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
   wheelButton: {
     width: 38,
     height: 38,
@@ -701,10 +647,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
+    paddingVertical: 24,
   },
   modalCard: {
     width: '100%',
     maxWidth: 360,
+    maxHeight: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -716,10 +664,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
   modalTitle: {
     fontSize: 17,
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
   previewContainer: {
     flexDirection: 'row',
@@ -727,6 +677,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 14,
     borderWidth: 1,
+    marginTop: 14,
     marginBottom: 12,
     gap: 12,
   },
@@ -735,7 +686,6 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 8,
     borderWidth: 2,
-    elevation: 3,
   },
   previewMeta: {
     flex: 1,
@@ -772,13 +722,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  applyHexBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   sectionLabel: {
     fontSize: 12,
     marginBottom: 6,
@@ -786,7 +729,7 @@ const styles = StyleSheet.create({
   },
   sbField: {
     width: '100%',
-    height: 130,
+    height: 168,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -798,15 +741,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
-    elevation: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
   },
   hueBar: {
     width: '100%',
-    height: 26,
+    height: 44,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -819,11 +757,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2.5,
     borderColor: '#FFFFFF',
-    elevation: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 3,
   },
   paletteGrid: {
     flexDirection: 'row',
@@ -846,7 +779,6 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 46,
     borderRadius: 12,
-    elevation: 3,
   },
   confirmBtnText: {
     color: '#FFFFFF',

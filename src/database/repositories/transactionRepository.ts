@@ -8,7 +8,7 @@ import {
   ACCOUNT_TYPES,
 } from '../../domain/finance/types';
 import { getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
-import { validateTransactionRequiredFields } from '../../domain/finance/validator';
+import { validateIncomeAccountType, validateTransactionRequiredFields } from '../../domain/finance/validator';
 import { ShoppingItemStatus } from '../../domain/finance/types';
 import { assertShoppingItemTransition } from '../../domain/finance/shoppingState';
 import { reconcileAssetState } from './assetStateRepository';
@@ -307,8 +307,9 @@ async function validateFinalTransaction(
     }
   }
 
-  if (tx.type === 'INCOME' && accounts.get(tx.accountId!)?.type === 'CREDIT_CARD') {
-    throw new Error('A credit card cannot be used as the receiving account for income.');
+  if (tx.type === 'INCOME') {
+    const incomeAccount = validateIncomeAccountType(accounts.get(tx.accountId!)?.type);
+    if (!incomeAccount.isValid) throw new Error(incomeAccount.error);
   }
   if (tx.type === 'TRANSFER' && tx.accountId === tx.destinationAccountId) {
     throw new Error('Transfer source and destination accounts must be different.');

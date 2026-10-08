@@ -5,8 +5,7 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -80,6 +79,7 @@ export default function ProfileScreen() {
   );
 
   const handleSaveName = async () => {
+    if (isSavingName) return;
     const trimmed = nameInput.trim();
     if (!trimmed) return;
 
@@ -88,6 +88,7 @@ export default function ProfileScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       await setSetting('user_name', trimmed);
       await refresh();
+      Keyboard.dismiss();
       setIsEditingName(false);
     } catch {
       // Fallback
@@ -97,6 +98,8 @@ export default function ProfileScreen() {
   };
 
   const handleCancelEdit = () => {
+    if (isSavingName) return;
+    Keyboard.dismiss();
     setNameInput(userName || '');
     setIsEditingName(false);
   };
@@ -116,7 +119,7 @@ export default function ProfileScreen() {
   const totalLiabilityValuation = calculateTotalStandaloneLiabilities(standaloneLiabilities, accounts);
 
   // Initial letter for avatar
-  const avatarLetter = (userName || 'V').charAt(0).toUpperCase();
+  const avatarLetter = (userName?.trim() || 'V').charAt(0).toUpperCase();
 
   return (
     <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 140 }}>
@@ -173,6 +176,7 @@ export default function ProfileScreen() {
               ]}
             >
               <Text
+                maxFontSizeMultiplier={1.3}
                 style={[
                   styles.avatarText,
                   {
@@ -217,6 +221,7 @@ export default function ProfileScreen() {
                   />
                   <IconButton
                     onPress={handleCancelEdit}
+                    disabled={isSavingName}
                     accessibilityLabel="Cancel name edit"
                     variant="default"
                     size={36}
@@ -790,6 +795,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   avatarCircle: {
+    flexShrink: 0,
     width: 58,
     height: 58,
     borderRadius: 29,
@@ -802,11 +808,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
-    lineHeight: 28,
-    marginTop: Platform.OS === 'android' ? -1 : 0,
   },
   identityDetails: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
   },
   nameDisplayRow: {
@@ -820,6 +825,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.3,
     flex: 1,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   editPillBtn: {
     flexDirection: 'row',
@@ -835,13 +842,14 @@ const styles = StyleSheet.create({
   },
   editInputRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     minHeight: 40,
   },
   nameTextInput: {
-    flex: 1,
-    height: 40,
+    width: '100%',
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1.5,
     paddingHorizontal: 12,
@@ -849,7 +857,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlignVertical: 'center',
     includeFontPadding: false,
-    lineHeight: Platform.OS === 'android' ? 20 : undefined,
   },
   membershipRow: {
     flexDirection: 'row',

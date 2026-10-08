@@ -35,14 +35,15 @@ export default function AccountDetailScreen() {
   const [isPayModalVisible, setIsPayModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     if (!id) return;
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const acc = await getAccountById(id);
       const allTx = await getAllTransactions({ accountId: id });
       const ppl = await getAllPeople();
-      const accs = await getAllAccounts();
+      // Archived accounts still identify the source/destination of historical transfers.
+      const accs = await getAllAccounts(true);
       const rawAllTx = await getAllTransactions();
 
       if (acc) {
@@ -56,7 +57,7 @@ export default function AccountDetailScreen() {
     } catch (e) {
       console.error('Failed to load account details:', e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -318,7 +319,8 @@ export default function AccountDetailScreen() {
           accounts={allAccounts}
           accountBalances={allAccountBalances}
           onPaymentSuccess={() => {
-            loadData();
+            // Preserve the modal instance until its guarded close animation completes.
+            void loadData(true);
           }}
         />
       )}

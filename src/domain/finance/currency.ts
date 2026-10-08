@@ -155,7 +155,7 @@ export function formatRupeeMasked(
   let prefix = '';
   if (isNegative) {
     prefix = '-';
-  } else if (showSign && minorUnits >= 0) {
+  } else if (showSign && minorUnits > 0) {
     prefix = '+';
   }
 

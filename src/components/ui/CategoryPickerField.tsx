@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
+import { IconButton } from './IconButton';
 import {
   Tag,
   Plus,
@@ -299,13 +300,13 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
                   Optional classification for spending insights
                 </Text>
               </View>
-              <Pressable
+              <IconButton
                 onPress={() => setModalVisible(false)}
                 hitSlop={10}
-                style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
+                accessibilityLabel="Close categories"
               >
                 <X size={18} color={colors.textPrimary} />
-              </Pressable>
+              </IconButton>
             </View>
 
             <ScrollView
@@ -496,12 +497,12 @@ export const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
               <Text style={[styles.createModalTitle, { color: colors.textPrimary }]}>
                 {editingCategory ? 'Edit Category' : 'Create Custom Category'}
               </Text>
-              <Pressable onPress={() => setIsManaging(false)} hitSlop={10}>
+              <IconButton onPress={() => setIsManaging(false)} hitSlop={10} accessibilityLabel="Close category editor">
                 <X size={18} color={colors.textMuted} />
-              </Pressable>
+              </IconButton>
             </View>
 
-            <KeyboardAwareScrollView style={{ flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" extraScrollHeight={100}>
+            <KeyboardAwareScrollView style={{ flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>NAME</Text>
               <TextInput
                 value={newCatName}

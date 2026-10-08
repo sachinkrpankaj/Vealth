@@ -63,7 +63,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         style,
       ]}
     >
-      <Text style={[styles.text, { fontSize }]}>{initials}</Text>
+      <Text style={[styles.text, { fontSize }]} maxFontSizeMultiplier={1.3}>{initials}</Text>
     </View>
   );
 };
@@ -76,6 +76,8 @@ const styles = StyleSheet.create({
   text: {
     color: '#FFFFFF',
     fontWeight: '700',
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput, ScrollView, BackHandler } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import {
   ShieldCheck,
   TrendingUp,
@@ -31,6 +31,7 @@ import { createAccount } from '../src/database/repositories/accountRepository';
 import { setSetting } from '../src/database/repositories/settingsRepository';
 import { generateEntityId } from '../src/utils/idGenerator';
 import { formatRupee } from '../src/domain/finance/currency';
+import { showThemedAlert } from '../src/components/ui/ThemedDialog';
 
 interface OnboardingSlide {
   title: string;
@@ -68,11 +69,11 @@ const SLIDES: OnboardingSlide[] = [
   },
   {
     title: 'Your Finances, Private',
-    subtitle: '100% On-Device & Hardware Encrypted',
-    description: 'Your financial data is stored locally on your device with hardware-backed SecureStore, PIN protection, and biometric unlock.',
+    subtitle: 'Local Records & Optional App Lock',
+    description: 'Your financial records stay on your device. Enable a PIN and supported biometric unlock in Security settings to protect access to the app.',
     icon: ShieldCheck,
     color: '#06B6D4',
-    badges: ['Offline-First / Zero Cloud', 'PIN Protection', 'Biometric Unlock'],
+    badges: ['Works Offline', 'Optional PIN Lock', 'Biometric Unlock'],
   },
 ];
 
@@ -118,9 +119,23 @@ export default function OnboardingScreen() {
   const [bankColor, setBankColor] = useState('#004C8F');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+
+  const handleBack = useCallback(() => {
+    if (submittingRef.current) return true;
+    if (currentStep === 0) return false;
+    setCurrentStep(Math.max(0, currentStep - 1));
+    return true;
+  }, [currentStep]);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBack);
+    return () => subscription.remove();
+  }, [handleBack]));
 
   const handleNext = () => {
-    setCurrentStep((prev) => prev + 1);
+    // A rapid second tap from this render must not skip a slide or a setup step.
+    setCurrentStep(Math.min(currentStep + 1, SLIDES.length + 1));
   };
 
   const handleThemeChange = (mode: 'dark' | 'light') => {
@@ -132,6 +147,8 @@ export default function OnboardingScreen() {
     (includeCash ? cashBalance : 0) + (includeBank ? bankBalance : 0);
 
   const handleFinishSetup = async () => {
+    if (submittingRef.current || (!includeCash && !includeBank)) return;
+    submittingRef.current = true;
     try {
       setIsSubmitting(true);
       // Save user details & theme preference
@@ -174,8 +191,9 @@ export default function OnboardingScreen() {
       await setSetting('onboarding_completed', 'true');
       router.replace('/(tabs)/home');
     } catch (e) {
-      console.error('Failed to create starting accounts:', e);
+      showThemedAlert('Setup could not finish', e instanceof Error ? e.message : 'Please try again.');
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -215,7 +233,12 @@ export default function OnboardingScreen() {
           </View>
 
           {/* Center Graphic & Messaging */}
-          <View style={styles.centerContent}>
+          <ScrollView
+            key={currentStep}
+            style={styles.slideScroll}
+            contentContainerStyle={styles.centerContent}
+            showsVerticalScrollIndicator={false}
+          >
             <View
               style={[
                 styles.iconBubble,
@@ -276,7 +299,7 @@ export default function OnboardingScreen() {
                 </View>
               ))}
             </View>
-          </View>
+          </ScrollView>
 
           {/* Bottom Bar with Back & Next/Get Started */}
           <View style={styles.bottomBar}>
@@ -284,7 +307,7 @@ export default function OnboardingScreen() {
               <IconButton
                 icon={<ChevronLeft size={22} color={colors.textPrimary} />}
                 size={48}
-                onPress={() => setCurrentStep((prev) => prev - 1)}
+                onPress={handleBack}
                 accessibilityLabel="Previous slide"
                 style={{ marginRight: 12 }}
               />
@@ -305,6 +328,12 @@ export default function OnboardingScreen() {
     return (
       <ScreenContainer scrollable contentContainerStyle={{ paddingBottom: 60 }}>
         <View style={styles.setupContainer}>
+          <IconButton
+            icon={<ChevronLeft size={22} color={colors.textPrimary} />}
+            onPress={handleBack}
+            accessibilityLabel="Back to introduction"
+            style={{ marginBottom: 12 }}
+          />
           <View style={styles.setupHeader}>
             <View
               style={[
@@ -379,11 +408,11 @@ export default function OnboardingScreen() {
               style={[styles.themeOptionCard, selectedTheme === 'dark' && { borderColor: colors.accent, borderWidth: 2 }]}
             >
               <View style={styles.themeCardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.themeHeaderDetails}>
                   <View style={[styles.themeIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
                     <Moon size={20} color="#818CF8" />
                   </View>
-                  <View>
+                  <View style={styles.headerText}>
                     <Text style={[styles.themeTitle, { color: colors.textPrimary }]}>Dark Obsidian</Text>
                     <Text style={[styles.themeDesc, { color: colors.textSecondary }]}>
                       Sleek contrast, private & battery-saving
@@ -421,11 +450,11 @@ export default function OnboardingScreen() {
               style={[styles.themeOptionCard, selectedTheme === 'light' && { borderColor: colors.accent, borderWidth: 2 }]}
             >
               <View style={styles.themeCardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.themeHeaderDetails}>
                   <View style={[styles.themeIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                     <Sun size={20} color="#D97706" />
                   </View>
-                  <View>
+                  <View style={styles.headerText}>
                     <Text style={[styles.themeTitle, { color: colors.textPrimary }]}>Clean Light</Text>
                     <Text style={[styles.themeDesc, { color: colors.textSecondary }]}>
                       Bright, modern & crisp slate aesthetic
@@ -477,6 +506,9 @@ export default function OnboardingScreen() {
         {/* Back to Profile button */}
         <Pressable
           onPress={() => setCurrentStep(SLIDES.length)}
+          disabled={isSubmitting}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Profile and Theme"
           style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}
         >
           <ChevronLeft size={18} color={colors.textSecondary} />
@@ -531,7 +563,7 @@ export default function OnboardingScreen() {
               >
                 <Wallet size={20} color="#10B981" />
               </View>
-              <View>
+              <View style={styles.headerText}>
                 <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Cash Wallet</Text>
                 <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
                   Cash in hand / physical wallet
@@ -583,7 +615,7 @@ export default function OnboardingScreen() {
               >
                 <Landmark size={20} color={bankColor} />
               </View>
-              <View>
+              <View style={styles.headerText}>
                 <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Bank Account</Text>
                 <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
                   Savings, current, or salary account
@@ -752,8 +784,7 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   slideContainer: {
     flex: 1,
-    justifyContent: 'space-between',
-    paddingVertical: 20,
+    paddingVertical: 12,
   },
   topProgressRow: {
     flexDirection: 'row',
@@ -777,8 +808,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   centerContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 24,
+  },
+  slideScroll: {
+    flex: 1,
   },
   iconBubble: {
     width: 96,
@@ -813,6 +850,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
   },
   highlightPill: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -821,13 +859,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   highlightText: {
+    flexShrink: 1,
     fontSize: 12,
     fontFamily: typography.fontFamilies.medium,
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingTop: 12,
+    flexShrink: 0,
   },
   setupContainer: {
     paddingTop: 20,
@@ -868,6 +908,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cardHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -888,6 +931,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkbox: {
+    flexShrink: 0,
     width: 24,
     height: 24,
     borderWidth: 2,
@@ -988,7 +1032,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  themeHeaderDetails: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingRight: 12,
+  },
+  headerText: {
+    flex: 1,
+    minWidth: 0,
+  },
   themeIconCircle: {
+    flexShrink: 0,
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -1005,6 +1062,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   radioIndicator: {
+    flexShrink: 0,
     width: 22,
     height: 22,
     borderRadius: 11,

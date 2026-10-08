@@ -16,11 +16,13 @@ import { AmountInput } from './AmountInput';
 import { DatePickerField } from './DatePickerField';
 import { PrimaryButton } from './PrimaryButton';
 import { LiquidGlassCard } from './LiquidGlassCard';
+import { IconButton } from './IconButton';
 import { KeyboardAwareScrollView } from './KeyboardAwareScrollView';
 import { createTransaction } from '../../database/repositories/transactionRepository';
 import { formatRupee } from '../../domain/finance/currency';
 import { formatDateIso, getTodayLocalDateString } from '../../utils/dateUtils';
 import { generateEntityId } from '../../utils/idGenerator';
+import { createModalSubmissionGuard } from '../../utils/modalSubmission';
 import * as Haptics from 'expo-haptics';
 
 interface PayCreditCardBillModalProps {
@@ -53,7 +55,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
   accountBalances,
   onPaymentSuccess,
 }) => {
-  const { colors, typography, radii, spacing, isDark } = useTheme();
+  const { colors, typography, radii, isDark } = useTheme();
 
   // STRICT REQUIREMENT: Only spendable non-credit funding accounts allowed (BANK, OTHER).
   // Strictly exclude CASH, CREDIT_CARD, INVESTMENT, the card itself, and archived accounts.
@@ -72,13 +74,13 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
     eligibleAccounts[0]?.id || ''
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isSubmittingRef = useRef(false);
-  const isClosingRef = useRef(false);
+  const submissionGuard = useRef(createModalSubmissionGuard()).current;
+  const mountedRef = useRef(true);
+  const animationRef = useRef<Animated.CompositeAnimation | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
-      isClosingRef.current = false;
       setPaymentAmount(unpaidBillAmount);
       setPaymentDate(formatDateIso(new Date()));
       if (eligibleAccounts.length > 0 && !eligibleAccounts.some((a) => a.id === selectedAccountId)) {
@@ -86,7 +88,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       }
       setError(null);
     }
-  }, [visible, unpaidBillAmount, creditCard?.id, accounts]);
+  }, [visible, creditCard?.id]);
 
   // Hooks must run even while there is no selected card (the modal is mounted on Home).
   // Smooth slide-up and fade animation
@@ -94,11 +96,12 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (visible) {
-      isClosingRef.current = false;
+    if (visible && creditCard) {
+      submissionGuard.open();
+      setIsSubmitting(false);
       slideAnim.setValue(280);
       fadeAnim.setValue(0);
-      Animated.parallel([
+      const opening = Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 240,
@@ -111,16 +114,33 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
           stiffness: 220,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]);
+      animationRef.current = opening;
+      opening.start();
     }
-  }, [visible]);
+    return () => {
+      // Invalidate before stopping: Animated.stop invokes completion with finished=false.
+      submissionGuard.invalidate();
+      animationRef.current?.stop();
+    };
+  }, [visible, creditCard?.id, slideAnim, fadeAnim, submissionGuard]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (visible && submissionGuard.canSubmit() && !eligibleAccounts.some((account) => account.id === selectedAccountId)) {
+      setSelectedAccountId(eligibleAccounts[0]?.id ?? '');
+    }
+  }, [visible, accounts, creditCard?.id, selectedAccountId, submissionGuard]);
 
   if (!creditCard) return null;
 
-  const handleSmoothClose = (callback?: () => void) => {
-    if (isClosingRef.current) return;
-    isClosingRef.current = true;
-    Animated.parallel([
+  const animateClose = (session: number) => {
+    animationRef.current?.stop();
+    const closing = Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
         duration: 180,
@@ -131,15 +151,21 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
         duration: 200,
         useNativeDriver: true,
       }),
-    ]).start(() => {
-      if (callback) callback();
-      onClose();
+    ]);
+    animationRef.current = closing;
+    closing.start(({ finished }) => {
+      if (finished && submissionGuard.finishDismissal(session)) onClose();
     });
+  };
+
+  const handleSmoothClose = () => {
+    const session = submissionGuard.beginDismissal();
+    if (session !== null) animateClose(session);
   };
 
   const handleConfirm = async () => {
     if (!creditCard) return;
-    if (isSubmittingRef.current || isSubmitting) return;
+    if (!submissionGuard.canSubmit()) return;
 
     if (paymentAmount <= 0) {
       setError('Please enter a payment amount greater than zero.');
@@ -180,8 +206,9 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
       return;
     }
 
+    const session = submissionGuard.beginSubmission();
+    if (session === null) return;
     try {
-      isSubmittingRef.current = true;
       setIsSubmitting(true);
       setError(null);
 
@@ -195,17 +222,21 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
         destinationAccountId: creditCard.id, // Balance credited to credit card (restores limit)
         note: `Credit card bill payment for ${creditCard.name}`,
       });
-
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      handleSmoothClose(() => {
-        onPaymentSuccess();
-      });
     } catch (err: any) {
-      setError(err?.message || 'Failed to record bill payment');
-    } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+      if (submissionGuard.failSubmission(session) && mountedRef.current) {
+        setError(err?.message || 'Failed to record bill payment');
+        setIsSubmitting(false);
+      }
+      return;
     }
+
+    // The database commit is final. Keep submission locked through the close animation;
+    // refreshed account props must not reset it or turn a saved payment into a retry.
+    const shouldClose = submissionGuard.completeSubmission(session);
+    if (!mountedRef.current) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (shouldClose) animateClose(session);
+    onPaymentSuccess();
   };
 
   return (
@@ -220,7 +251,7 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
         style={styles.modalOverlay}
       >
         <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => handleSmoothClose()} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleSmoothClose} disabled={isSubmitting} />
         </Animated.View>
 
         <Animated.View
@@ -258,10 +289,8 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
                 </Text>
               </View>
 
-              <LiquidGlassCard onPress={() => handleSmoothClose()} accessibilityLabel="Close bill payment"
-                radius={radii.full} padding={0} style={styles.closeBtn}>
-                <X size={18} color={colors.textPrimary} />
-              </LiquidGlassCard>
+              <IconButton onPress={handleSmoothClose} accessibilityLabel="Close bill payment"
+                size={34} disabled={isSubmitting} icon={<X size={18} color={colors.textPrimary} />} />
             </View>
 
             <KeyboardAwareScrollView
@@ -269,7 +298,6 @@ export const PayCreditCardBillModal: React.FC<PayCreditCardBillModalProps> = ({
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 16 }}
-              extraScrollHeight={100}
             >
               {/* Unpaid Bill summary pill */}
               <View
@@ -507,16 +535,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  closeBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   summaryBox: {
     padding: 14,
     borderWidth: 1,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -524,12 +548,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 1,
   },
   summaryLabel: {
     fontSize: 13,
+    flexShrink: 1,
   },
   summaryAmount: {
     fontSize: 17,
+    flexShrink: 1,
   },
   fieldLabel: {
     fontSize: 13,

@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TextInput,
   Switch,
-  Platform,
+  Keyboard,
 } from 'react-native';
 import { router } from 'expo-router';
 import {
@@ -44,6 +44,7 @@ export default function SecuritySettingsScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSavePin = async () => {
+    if (isSubmitting) return;
     if (newPin.length !== 4) {
       setError('PIN must be exactly 4 digits');
       return;
@@ -56,6 +57,7 @@ export default function SecuritySettingsScreen() {
     try {
       setIsSubmitting(true);
       await setPin(newPin);
+      Keyboard.dismiss();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setShowSetup(false);
       setNewPin('');
@@ -285,11 +287,13 @@ export default function SecuritySettingsScreen() {
             <SecondaryButton
               title="Cancel"
               onPress={() => {
+                Keyboard.dismiss();
                 setShowSetup(false);
                 setNewPin('');
                 setConfirmPin('');
                 setError(null);
               }}
+              disabled={isSubmitting}
               style={styles.formBtnHalf}
             />
 
@@ -385,11 +389,11 @@ export default function SecuritySettingsScreen() {
         <ShieldCheck size={18} color={colors.accent} style={{ marginTop: 2, marginRight: 10 }} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.privacyNoteTitle, { color: colors.textPrimary }]}>
-            On-Device Hardware Encryption
+            On-Device Privacy
           </Text>
           <Text style={[styles.privacyNoteText, { color: colors.textMuted }]}>
-            vealth operates completely offline. Your security PIN and authentication states are hashed
-            and stored exclusively in your device's hardware-backed SecureStore.
+            Your financial records stay on this device. Your PIN is stored as a salted hash in secure
+            storage. Enable PIN protection and supported biometrics to restrict access to the app.
           </Text>
         </View>
       </View>
@@ -408,6 +412,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    paddingHorizontal: 8,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -434,6 +441,8 @@ const styles = StyleSheet.create({
   },
   titleBadgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
@@ -460,11 +469,13 @@ const styles = StyleSheet.create({
   },
   pinActionsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginTop: 16,
   },
   actionBtnHalf: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 140,
     minHeight: 46,
   },
   setupCard: {
@@ -485,11 +496,10 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   fieldsContainer: {
-    flexDirection: 'row',
     gap: 12,
   },
   fieldBlock: {
-    flex: 1,
+    width: '100%',
   },
   fieldLabel: {
     fontSize: 12,
@@ -497,7 +507,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   pinInput: {
-    height: 50,
+    minHeight: 50,
     borderRadius: 12,
     borderWidth: 1.5,
     textAlign: 'center',
@@ -506,6 +516,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 8,
     includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   errorRow: {
     flexDirection: 'row',
@@ -518,11 +529,14 @@ const styles = StyleSheet.create({
   },
   formButtonRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
     gap: 12,
     marginTop: 20,
   },
   formBtnHalf: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 120,
     minHeight: 48,
   },
   toggleRow: {

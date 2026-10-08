@@ -14,6 +14,7 @@ import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { Transaction } from '../../src/domain/finance/types';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FilterCategory =
   | 'ALL'
@@ -67,6 +68,7 @@ const SORT_OPTIONS: { key: SortOption; label: string; description: string; icon:
 
 export default function TransactionsScreen() {
   const { colors, typography, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const {
     transactions,
     accounts,
@@ -227,12 +229,13 @@ export default function TransactionsScreen() {
                 borderTopLeftRadius: 24,
                 borderTopRightRadius: 24,
                 borderColor: colors.border,
+                paddingBottom: insets.bottom,
               },
             ]}
           >
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <View>
+              <View style={styles.sheetHeaderText}>
                 <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
                   Sort Activity
                 </Text>
@@ -247,7 +250,11 @@ export default function TransactionsScreen() {
                 accessibilityLabel="Close sort sheet"
               />
             </View>
-            <View style={styles.sortOptionsContainer}>
+            <ScrollView
+              style={styles.sortOptionsScroll}
+              contentContainerStyle={styles.sortOptionsContainer}
+              showsVerticalScrollIndicator={false}
+            >
               {SORT_OPTIONS.map((opt) => {
                 const isSelected = sortBy === opt.key;
                 const OptionIcon = opt.icon;
@@ -312,7 +319,7 @@ export default function TransactionsScreen() {
                   </Pressable>
                 );
               })}
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -321,6 +328,7 @@ export default function TransactionsScreen() {
       <View style={styles.filterScrollContainer}>
         <ScrollView
           horizontal
+          style={styles.filterScroller}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScroll}
         >
@@ -415,6 +423,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
   },
   modalSheet: {
+    maxHeight: '85%',
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
@@ -433,6 +442,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 14,
   },
+  sheetHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
+  },
   sheetTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -443,7 +457,10 @@ const styles = StyleSheet.create({
   },
   sortOptionsContainer: {
     gap: 8,
-    paddingBottom: 36,
+    paddingBottom: 20,
+  },
+  sortOptionsScroll: {
+    flexShrink: 1,
   },
   sortOptionRow: {
     flexDirection: 'row',
@@ -461,6 +478,7 @@ const styles = StyleSheet.create({
   },
   sortOptionContent: {
     flex: 1,
+    minWidth: 0,
   },
   sortOptionTitle: {
     fontSize: 14,
@@ -470,15 +488,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   filterScrollContainer: {
-    height: 44,
+    flexShrink: 0,
     marginBottom: 12,
     marginHorizontal: -16,
+  },
+  filterScroller: {
+    flexGrow: 0,
   },
   filterScroll: {
     paddingLeft: 16,
     paddingRight: 24,
     gap: 8,
     alignItems: 'center',
+    paddingVertical: 4,
   },
   listContent: {
     paddingHorizontal: 16,

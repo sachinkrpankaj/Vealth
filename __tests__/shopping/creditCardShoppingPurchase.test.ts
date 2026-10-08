@@ -6,6 +6,7 @@ import {
   restoreShoppingItem,
 } from '../../src/database/repositories/shoppingRepository';
 import { calculateNetWorth, calculateAllAccountBalances } from '../../src/domain/finance/financialEngine';
+import { getCreditCardBillingInfo } from '../../src/domain/finance/creditCardBilling';
 import { Account, Transaction, ShoppingItem } from '../../src/domain/finance/types';
 import { getTodayLocalDateString } from '../../src/utils/dateUtils';
 
@@ -88,24 +89,26 @@ describe('Shopping List - Credit Card & Cash/Bank Purchase Integration', () => {
         if (normalized.includes('FROM categories WHERE id = ?')) {
           return categoriesTable.find((c) => c.id === params[0]) || null;
         }
-        if (normalized.includes("type IN ('INCOME'")) {
+        if (/type IN\s*\(\s*'INCOME'/.test(normalized)) {
           const accId = params[0];
           const credits = transactionsTable
             .filter(
               (t) =>
                 !t.deletedAt &&
+                t.date <= params[2] &&
                 ((t.accountId === accId && ['INCOME', 'BORROW', 'REPAYMENT_RECEIVED', 'ASSET_SALE'].includes(t.type)) ||
                   (t.destinationAccountId === accId && t.type === 'TRANSFER'))
             )
             .reduce((sum, t) => sum + t.amount, 0);
           return { total: credits };
         }
-        if (normalized.includes("type IN ('EXPENSE'")) {
+        if (/type IN\s*\(\s*'EXPENSE'/.test(normalized)) {
           const accId = params[0];
           const debits = transactionsTable
             .filter(
               (t) =>
                 !t.deletedAt &&
+                t.date <= params[1] &&
                 t.accountId === accId &&
                 ['EXPENSE', 'LEND', 'REPAYMENT_MADE', 'TRANSFER', 'ASSET_PURCHASE'].includes(t.type)
             )
@@ -204,15 +207,7 @@ describe('Shopping List - Credit Card & Cash/Bank Purchase Integration', () => {
   const getCardAvailableCredit = (cardAccId: string) => {
     const card = accountsTable.find((a) => a.id === cardAccId);
     if (!card) return 0;
-    const debits = transactionsTable
-      .filter((t) => !t.deletedAt && t.accountId === cardAccId && t.type === 'EXPENSE')
-      .reduce((s, t) => s + t.amount, 0);
-    const credits = transactionsTable
-      .filter((t) => !t.deletedAt && t.destinationAccountId === cardAccId && t.type === 'TRANSFER')
-      .reduce((s, t) => s + t.amount, 0);
-    const balance = card.openingBalance + credits - debits;
-    const used = Math.max(0, -balance);
-    return Math.max(0, (card.creditLimit ?? 0) - used);
+    return getCreditCardBillingInfo(card as Account, transactionsTable as Transaction[]).remainingLimit;
   };
 
   test('1. Bank Purchase: records expense, deducts bank balance, leaves credit card intact', async () => {
@@ -416,5 +411,43 @@ describe('Shopping List - Credit Card & Cash/Bank Purchase Integration', () => {
 
     // Available credit must be fully restored to ₹10,000
     expect(getCardAvailableCredit('acc-cc')).toBe(1000000);
+  });
+
+  test('backdated card purchases use credit available on the purchase date, excluding later bill payments', async () => {
+    shoppingListsTable.push({ id: 'list-1', name: 'List', isArchived: 0 });
+    shoppingItemsTable.push({ id: 'backdated', listId: 'list-1', name: 'Historical purchase', status: 'PENDING' });
+    transactionsTable.push(
+      { id: 'old-spending', type: 'EXPENSE', accountId: 'acc-cc', amount: 900000, date: '2026-09-01' },
+      { id: 'later-payment', type: 'TRANSFER', accountId: 'acc-bank', destinationAccountId: 'acc-cc', amount: 800000, date: '2026-09-20' }
+    );
+    await expect(purchaseShoppingItem({
+      itemId: 'backdated', purchasePrice: 200000, purchaseAccountId: 'acc-cc', purchaseDate: '2026-09-10',
+    })).rejects.toThrow(/Insufficient credit limit/i);
+    expect(transactionsTable).toHaveLength(2);
+    expect(shoppingItemsTable[0].status).toBe('PENDING');
+  });
+
+  test('credit card purchase and reversal preserve opening debt and agree with billing and net worth', async () => {
+    const card = accountsTable.find((account) => account.id === 'acc-cc');
+    card.openingBalance = -200000;
+    shoppingListsTable.push({ id: 'list-1', name: 'List', isArchived: 0 });
+    shoppingItemsTable.push({ id: 'opening-debt', listId: 'list-1', name: 'Purchase', status: 'PENDING' });
+    const financialSummary = () => calculateNetWorth({
+      accounts: accountsTable.filter((account) => account.type !== 'INVESTMENT') as Account[],
+      transactions: transactionsTable as Transaction[], people: [], physicalAssets: [], standaloneLiabilities: [],
+    });
+    const before = financialSummary();
+    await purchaseShoppingItem({
+      itemId: 'opening-debt', purchasePrice: 300000, purchaseAccountId: 'acc-cc', purchaseDate: getTodayLocalDateString(),
+    });
+    expect(getCardAvailableCredit('acc-cc')).toBe(500000);
+    expect(financialSummary()).toMatchObject({
+      totalAssets: before.totalAssets, totalLiabilities: before.totalLiabilities + 300000, netWorth: before.netWorth - 300000,
+    });
+    await restoreShoppingItem('opening-debt');
+    expect(getCardAvailableCredit('acc-cc')).toBe(800000);
+    expect(financialSummary()).toMatchObject({
+      totalAssets: before.totalAssets, totalLiabilities: before.totalLiabilities, netWorth: before.netWorth,
+    });
   });
 });

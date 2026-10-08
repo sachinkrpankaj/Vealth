@@ -5,7 +5,6 @@ import {
   ViewStyle,
   StyleProp,
   Insets,
-  Platform,
 } from 'react-native';
 import { useTheme } from '../../theme';
 
@@ -38,7 +37,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
   accessibilityState,
   style,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   const getVariantStyles = (): ViewStyle => {
     switch (variant) {
@@ -86,6 +85,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
         },
         variantStyle,
         style,
+        styles.cleanSurface,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
@@ -105,6 +105,13 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.75,
     transform: [{ scale: 0.94 }],
+  },
+  cleanSurface: {
+    elevation: 0,
+    shadowOpacity: 0,
+    boxShadow: undefined,
+    filter: undefined,
+    overflow: 'hidden',
   },
   disabled: {
     opacity: 0.4,

@@ -1,16 +1,28 @@
 import { openDatabaseAsync } from 'expo-sqlite';
 import {
   validateIncomeAccountType,
+  getSelectableTransactionAccounts,
   validateTransactionRequiredFields,
 } from '../../src/domain/finance/validator';
 import {
   createTransaction,
   updateTransaction,
 } from '../../src/database/repositories/transactionRepository';
+import { Account } from '../../src/domain/finance/types';
 
 const open = openDatabaseAsync as jest.Mock;
 
 describe('Income Transaction - Credit Card Restriction Regression Tests', () => {
+  test('form choices exclude credit cards and archived accounts for Income but retain cards for expenses', () => {
+    const accounts = [
+      { id: 'card', type: 'CREDIT_CARD', isArchived: false },
+      { id: 'bank', type: 'BANK', isArchived: false },
+      { id: 'closed', type: 'CASH', isArchived: true },
+    ] as Account[];
+    expect(getSelectableTransactionAccounts(accounts, 'INCOME').map((account) => account.id)).toEqual(['bank']);
+    expect(getSelectableTransactionAccounts(accounts, 'EXPENSE').map((account) => account.id)).toEqual(['card', 'bank']);
+    expect(getSelectableTransactionAccounts([accounts[0]], 'INCOME')).toEqual([]);
+  });
   describe('Domain Validator: validateIncomeAccountType', () => {
     test('rejects CREDIT_CARD for income', () => {
       const result = validateIncomeAccountType('CREDIT_CARD');
@@ -215,6 +227,13 @@ describe('Income Transaction - Credit Card Restriction Regression Tests', () => 
           accountId: 'acc-cc',
         })
       ).rejects.toThrow(/credit card cannot be used as the receiving account for income/i);
+    });
+
+    test('rejects changing only the receiving account of existing income without writing financial data', async () => {
+      transactions.push({ id: 'existing-income', type: 'INCOME', amount: 10000, date: '2026-10-05', accountId: 'acc-bank' });
+      await expect(updateTransaction('existing-income', { accountId: 'acc-cc' })).rejects.toThrow(/receiving account for income/i);
+      expect(transactions[0].accountId).toBe('acc-bank');
+      expect(scoped.runAsync).not.toHaveBeenCalled();
     });
   });
 });

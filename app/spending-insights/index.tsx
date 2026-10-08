@@ -989,7 +989,7 @@ export default function SpendingInsightsScreen() {
             </View>
 
             {/* Category List */}
-            <KeyboardAwareScrollView style={{ marginTop: 14, flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false} extraScrollHeight={100}>
+            <KeyboardAwareScrollView style={{ marginTop: 14, flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
               <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
                 CUSTOM & GENERAL CATEGORIES
               </Text>

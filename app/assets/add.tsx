@@ -6,6 +6,7 @@ import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { DatePickerField } from '../../src/components/ui/DatePickerField';
 import { SelectSheetField, SelectSheetOption } from '../../src/components/ui/SelectSheetField';
 import { useTheme } from '../../src/theme';
@@ -112,10 +113,11 @@ export default function AddAssetScreen() {
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Record Asset</Text>
-        <LiquidGlassCard onPress={() => router.back()} hitSlop={10} accessibilityLabel="Close"
-          radius={radii.full} padding={0} style={styles.closeBtn}>
-          <X size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+        <IconButton
+          onPress={() => router.back()}
+          accessibilityLabel="Close"
+          icon={<X size={18} color={colors.textPrimary} />}
+        />
       </View>
 
       {/* Category Selection */}
@@ -226,13 +228,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
   },
   fieldLabel: {
     fontSize: 13,

@@ -13,6 +13,7 @@ import { X, AlertCircle } from 'lucide-react-native';
 import { ShoppingItem } from '../../domain/finance/types';
 import { AmountInput } from '../ui/AmountInput';
 import { PrimaryButton } from '../ui/PrimaryButton';
+import { IconButton } from '../ui/IconButton';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { useTheme } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -144,15 +145,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             >
               {initialItem ? 'Edit Item' : 'Add Item'}
             </Text>
-            <Pressable
+            <IconButton
               onPress={onClose}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Close"
-              style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
+              size={32}
             >
               <X size={18} color={colors.textPrimary} />
-            </Pressable>
+            </IconButton>
           </View>
 
           {/* Form Scroll Area */}
@@ -160,7 +161,6 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            extraScrollHeight={100}
           >
             {/* Product Name */}
             <Text

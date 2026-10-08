@@ -22,6 +22,8 @@ describe('Currency and Sign Formatting Regression Audit (Problem 5)', () => {
     expect(formatted).toBe('₹0');
     expect(formatted.includes('+')).toBe(false);
     expect(formatted.includes('-')).toBe(false);
+    expect(formatRupeeMasked(0, { showSign: true })).toBe('₹ •');
+    expect(formatRupeeMasked(-0, { showSign: true })).toBe('₹ •');
   });
 
   it('formats masked amounts with single sign prefix', () => {

@@ -9,6 +9,7 @@ import {
 import { X, Pencil, Archive, RotateCcw, Trash2 } from 'lucide-react-native';
 import { ShoppingList, ShoppingListSummary } from '../../domain/finance/types';
 import { useTheme } from '../../theme';
+import { IconButton } from '../ui/IconButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
@@ -83,15 +84,15 @@ export const ListActionModal: React.FC<ListActionModalProps> = ({
               </Text>
             </View>
 
-            <Pressable
+            <IconButton
               onPress={onClose}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Close"
-              style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
+              size={32}
             >
               <X size={18} color={colors.textPrimary} />
-            </Pressable>
+            </IconButton>
           </View>
 
           {/* Action List */}

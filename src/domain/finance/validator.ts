@@ -1,4 +1,4 @@
-import { TransactionType, AccountType } from './types';
+import { TransactionType, AccountType, Account } from './types';
 import { formatRupee } from './currency';
 
 export interface ValidationResult {
@@ -16,6 +16,13 @@ export function validateIncomeAccountType(accountType?: AccountType | string): V
     };
   }
   return { isValid: true };
+}
+
+/** The same income rule drives form choices and authoritative save validation. */
+export function getSelectableTransactionAccounts(accounts: Account[], type: TransactionType): Account[] {
+  return accounts.filter((account) =>
+    !account.isArchived && (type !== 'INCOME' || validateIncomeAccountType(account.type).isValid)
+  );
 }
 
 export function validateAmount(amountPaise: number): ValidationResult {
@@ -107,13 +114,7 @@ export function validateTransactionRequiredFields(params: {
       if (!params.accountId) {
         return { isValid: false, error: 'Select an account.' };
       }
-      if (params.accountType === 'CREDIT_CARD') {
-        return {
-          isValid: false,
-          error: 'A credit card cannot be used as the receiving account for income.',
-        };
-      }
-      break;
+      return validateIncomeAccountType(params.accountType);
 
     case 'EXPENSE':
       if (!params.accountId) {

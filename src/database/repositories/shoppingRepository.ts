@@ -4,6 +4,7 @@ import { ShoppingList, ShoppingItem, ShoppingListSummary, ShoppingItemStatus, Tr
 import { assertShoppingItemTransition } from '../../domain/finance/shoppingState';
 import { formatDateIso, getTodayLocalDateString, parseLocalDate } from '../../utils/dateUtils';
 import { formatRupee } from '../../domain/finance/currency';
+import { getAvailableCredit } from '../../domain/finance/creditCardBilling';
 import { generateEntityId } from '../../utils/idGenerator';
 import {
   deleteTransactionInTransaction,
@@ -626,9 +627,7 @@ export async function purchaseShoppingItem(params: {
       Math.round(txDebits?.total ?? 0);
 
     if (account.type === 'CREDIT_CARD') {
-      const creditLimit = Math.max(0, account.creditLimit ?? 0);
-      const usedAmount = Math.max(0, -currentBalance);
-      const availableCredit = Math.max(0, creditLimit - usedAmount);
+      const availableCredit = getAvailableCredit(account.creditLimit, currentBalance);
       if (availableCredit < purchasePrice) {
         throw new Error(
           `Insufficient credit limit: Credit card "${account.name}" has only ${formatRupee(availableCredit)} available credit, but this purchase requires ${formatRupee(purchasePrice)}.`

@@ -57,6 +57,7 @@ export function SelectSheetField<T = string>({
   const [modalVisible, setModalVisible] = useState(false);
 
   const selectedOption = options.find((opt) => opt.value === value);
+  const fieldName = label || title || 'Option';
 
   const renderIcon = (
     icon: React.ComponentType<{ size: number; color: string }> | React.ReactNode | undefined,
@@ -90,7 +91,7 @@ export function SelectSheetField<T = string>({
         }}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${selectedOption ? selectedOption.label : placeholder}. Tap to choose.`}
+        accessibilityLabel={`${fieldName}: ${selectedOption ? selectedOption.label : placeholder}. Tap to choose.`}
         accessibilityState={{ expanded: modalVisible, disabled }}
         style={({ pressed }) => [
           styles.triggerCard,
@@ -208,7 +209,7 @@ export function SelectSheetField<T = string>({
                     },
                   ]}
                 >
-                  {subtitle || `Choose ${label.toLowerCase()}`}
+                  {subtitle || `Choose ${fieldName.toLowerCase()}`}
                 </Text>
               </View>
 

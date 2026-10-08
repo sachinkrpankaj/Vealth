@@ -1,12 +1,12 @@
 /**
  * LiquidGlassCard
  *
- * A drop-in wrapper that applies an authentic, ultra-premium liquid glass effect:
+ * A shared glass surface with a single layout root:
  * 1. Translucent frosted glass gradient fill (Layer 0)
  * 2. Subtle chromatic prismatic edge shimmer (Layer 1)
  * 3. Top-edge specular highlight reflection (Layer 2)
  * 4. Crisp crystalline glass border (Native hardware-accelerated)
- * 5. Platform-safe luminous levitation shadow (0 ghost box artifacts on Android)
+ * 5. Clipped, shadow-free edges on Android
  *
  * Engineered with proper outer vs inner style separation so flexbox layouts,
  * pressables, and dock bars always lay out correctly.
@@ -18,7 +18,6 @@ import {
   StyleProp,
   ViewStyle,
   Pressable,
-  Platform,
   Insets,
   LayoutChangeEvent,
 } from 'react-native';
@@ -44,6 +43,14 @@ const OUTER_STYLE_KEYS = new Set<string>([
   'marginRight',
   'marginHorizontal',
   'marginVertical',
+  'marginStart',
+  'marginEnd',
+  'marginInline',
+  'marginInlineStart',
+  'marginInlineEnd',
+  'marginBlock',
+  'marginBlockStart',
+  'marginBlockEnd',
   'alignSelf',
   'position',
   'top',
@@ -52,6 +59,19 @@ const OUTER_STYLE_KEYS = new Set<string>([
   'right',
   'zIndex',
   'display',
+  'aspectRatio',
+  'start',
+  'end',
+  'inset',
+  'insetBlock',
+  'insetInline',
+  'insetBlockStart',
+  'insetBlockEnd',
+  'insetInlineStart',
+  'insetInlineEnd',
+  'transform',
+  'transformOrigin',
+  'opacity',
 ]);
 
 // Surface style keys that belong to the glass shell, NEVER to inner content
@@ -72,7 +92,7 @@ const SURFACE_STYLE_KEYS = new Set<string>([
   'borderTopRightRadius',
   'borderBottomLeftRadius',
   'borderBottomRightRadius',
-  // Background overrides are deliberately ignored: the shared glass fill must stay visible.
+  // Background sits below the shared glass fill.
   'backgroundColor',
   'shadowColor',
   'shadowOffset',
@@ -80,6 +100,8 @@ const SURFACE_STYLE_KEYS = new Set<string>([
   'shadowRadius',
   'elevation',
   'overflow',
+  'boxShadow',
+  'filter',
 ]);
 
 function splitStyles(style?: StyleProp<ViewStyle>): {
@@ -114,10 +136,11 @@ function splitStyles(style?: StyleProp<ViewStyle>): {
 export type GlassTone = 'default' | 'emphasized' | 'positive' | 'negative';
 
 export const LiquidGlassPrismOverlay: React.FC<{
-  borderRadius: number;
+  borderRadius: ViewStyle['borderRadius'];
   isDark: boolean;
   tone?: GlassTone;
-}> = React.memo(({ borderRadius: r, isDark, tone = 'default' }) => {
+  showBorder?: boolean;
+}> = React.memo(({ borderRadius: r, isDark, tone = 'default', showBorder = true }) => {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -132,7 +155,10 @@ export const LiquidGlassPrismOverlay: React.FC<{
   );
 
   // Measure the actual surface, including pills and flex-driven cards, for Android SVG geometry.
-  const safeRadius = Math.min(r, size.width / 2, size.height / 2);
+  const radiusValue = typeof r === 'number' ? r
+    : typeof r === 'string' && r.endsWith('%') ? Math.min(size.width, size.height) * parseFloat(r) / 100
+    : 18;
+  const safeRadius = Math.min(radiusValue, size.width / 2, size.height / 2);
   const tint = tone === 'positive' ? '#059669' : tone === 'negative' ? '#E11D48' : isDark ? '#6366F1' : '#4F46E5';
   const isSemanticTone = tone === 'negative' || tone === 'positive';
 
@@ -319,7 +345,7 @@ export const LiquidGlassPrismOverlay: React.FC<{
           />
 
           {/* Layer 3: Crystalline beveled rim stroke */}
-          <Rect
+          {showBorder && <Rect
             x="0.5"
             y="0.5"
             width={size.width - 1}
@@ -329,7 +355,7 @@ export const LiquidGlassPrismOverlay: React.FC<{
             fill="none"
             stroke={isDark ? `url(#${idPrefix}_rimStrokeDark)` : `url(#${idPrefix}_rimStrokeLight)`}
             strokeWidth="1"
-          />
+          />}
         </Svg>
       )}
     </View>
@@ -364,7 +390,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   children,
   style,
   contentStyle,
-  radius = 18,
+  radius,
   padding = 16,
   showPrism = true,
   tone = 'default',
@@ -392,14 +418,10 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     innerStyles.paddingRight !== undefined;
 
   const resolvedPadding = hasCustomPadding ? undefined : padding;
-  const isFlexOuter = outerStyles.flex !== undefined;
-
-  const effectiveRadius = radius !== undefined ? radius : ((surfaceStyles.borderRadius as number) ?? 18);
-
-  const cardShadowStyle: ViewStyle = {
-    borderRadius: effectiveRadius,
-    overflow: 'hidden',
-  };
+  const effectiveRadius = radius ?? surfaceStyles.borderRadius ?? 18;
+  const hasNativeBorder = Object.entries(surfaceStyles).some(([key, value]) =>
+    /^border.*Width$/.test(key) && typeof value === 'number' && value > 0
+  );
 
   const cardSurfaceStyle: ViewStyle = {
     borderWidth: surfaceStyles.borderWidth !== undefined ? surfaceStyles.borderWidth : (showPrism ? 0 : 1),
@@ -409,29 +431,21 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     ...surfaceStyles,
     borderRadius: effectiveRadius,
     backgroundColor: surfaceStyles.backgroundColor ?? (isDark ? '#12131A' : '#EDF1FA'),
+    // A clipped glass surface has a single edge; native elevation creates square halos.
+    shadowOpacity: 0,
+    elevation: 0,
+    boxShadow: undefined,
+    filter: undefined,
   };
 
-  const surfaceHeight = outerStyles.height;
-
   const cardContent = (
-    <View
-      style={[
-        styles.surfaceWrapper,
-        cardSurfaceStyle,
-        outerStyles.minHeight !== undefined ? { minHeight: outerStyles.minHeight } : undefined,
-        outerStyles.maxHeight !== undefined ? { maxHeight: outerStyles.maxHeight } : undefined,
-        surfaceHeight !== undefined ? { height: surfaceHeight as any } : undefined,
-        isFlexOuter ? { flex: outerStyles.flex, height: '100%' } : undefined,
-      ]}
-    >
+    <>
       {showPrism && (
-        <LiquidGlassPrismOverlay borderRadius={radius} isDark={isDark} tone={tone} />
+        <LiquidGlassPrismOverlay borderRadius={effectiveRadius} isDark={isDark} tone={tone} showBorder={!hasNativeBorder} />
       )}
       <View
         style={[
           styles.innerContent,
-          surfaceHeight !== undefined ? { height: '100%' } : undefined,
-          isFlexOuter ? { flex: 1 } : undefined,
           resolvedPadding !== undefined ? { padding: resolvedPadding } : undefined,
           innerStyles,
           contentStyle,
@@ -439,7 +453,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
       >
         {children}
       </View>
-    </View>
+    </>
   );
 
   if (onPress) {
@@ -453,7 +467,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
         accessibilityState={accessibilityState}
         style={({ pressed }) => [
           styles.pressableRoot,
-          cardShadowStyle,
+          cardSurfaceStyle,
           outerStyles,
           disabled && styles.disabled,
           pressed && !disabled && styles.pressed,
@@ -465,7 +479,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   }
 
   return (
-    <View style={[styles.viewRoot, cardShadowStyle, outerStyles]}>
+    <View style={[styles.viewRoot, cardSurfaceStyle, outerStyles]}>
       {cardContent}
     </View>
   );
@@ -478,12 +492,15 @@ const styles = StyleSheet.create({
   viewRoot: {
     // Root container when static
   },
-  surfaceWrapper: {
-    // Surface wrapper for liquid glass shell
-  },
   innerContent: {
     position: 'relative',
     zIndex: 1,
+    // Fill the root's resolved dimensions without reapplying percentage sizes or flex.
+    // This also centers content across a minWidth on an intrinsically sized button.
+    alignSelf: 'stretch',
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   pressed: {
     opacity: 0.86,

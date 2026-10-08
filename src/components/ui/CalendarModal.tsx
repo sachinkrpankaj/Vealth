@@ -22,6 +22,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { LiquidGlassCard } from './LiquidGlassCard';
 import { FilterChip } from './FilterChip';
+import { IconButton } from './IconButton';
 import { useTheme } from '../../theme';
 import {
   CalendarDay,
@@ -314,21 +315,15 @@ export function CalendarModal({
                 </Text>
               </View>
 
-              <Pressable
+              <IconButton
                 onPress={() => handleSmoothClose()}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Close calendar"
-                style={({ pressed }) => [
-                  styles.closeBtn,
-                  {
-                    borderRadius: radii.full,
-                    opacity: pressed ? 0.7 : 1,
-                  },
-                ]}
+                size={32}
               >
                 <X size={16} color={colors.textSecondary} />
-              </Pressable>
+              </IconButton>
             </View>
 
           {/* Month & Year Navigation Bar */}

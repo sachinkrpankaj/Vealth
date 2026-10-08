@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Modal,
   Pressable,
-  ScrollView,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +18,9 @@ import { PrimaryButton } from '../ui/PrimaryButton';
 import { IconButton } from '../ui/IconButton';
 import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { formatRupee } from '../../domain/finance/currency';
+import { getAvailableCredit } from '../../domain/finance/creditCardBilling';
+import { calculateAccountBalance } from '../../domain/finance/financialEngine';
+import { SelectSheetField } from '../ui/SelectSheetField';
 import { formatDateIso, getTodayLocalDateString } from '../../utils/dateUtils';
 import { useTheme } from '../../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,7 +49,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
 }) => {
   const { colors, radii, spacing, typography, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { accounts, accountBalances, categories } = useFinancialData();
+  const { accounts, transactions, categories } = useFinancialData();
 
   const [actualPrice, setActualPrice] = useState<number>(0);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -58,18 +60,14 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Spendable accounts: exclude archived and INVESTMENT (allow CREDIT_CARD)
-  const spendableAccounts = accounts.filter(
+  const spendableAccounts = React.useMemo(() => accounts.filter(
     (a) => !a.isArchived && a.type !== 'INVESTMENT'
-  );
+  ), [accounts]);
 
   const getAccountAvailableFunds = (acc: typeof accounts[0]) => {
-    const bal = accountBalances.get(acc.id) ?? 0;
-    if (acc.type === 'CREDIT_CARD') {
-      const limit = Math.max(0, acc.creditLimit ?? 0);
-      const used = Math.max(0, -bal);
-      return Math.max(0, limit - used);
-    }
-    return bal;
+    // Match repository validation for backdated purchases, not today's balance.
+    const balance = calculateAccountBalance(acc, transactions, purchaseDate);
+    return acc.type === 'CREDIT_CARD' ? getAvailableCredit(acc.creditLimit, balance) : balance;
   };
 
   useEffect(() => {
@@ -80,9 +78,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
       setErrorMessage(null);
       setIsSubmitting(false);
 
-      if (spendableAccounts.length > 0) {
-        setSelectedAccountId(spendableAccounts[0].id);
-      }
+      setSelectedAccountId(spendableAccounts[0]?.id ?? '');
 
       // Preselect Shopping or first expense category
       const shoppingCat = categories.find(
@@ -93,11 +89,17 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
     }
   }, [visible, item]);
 
+  useEffect(() => {
+    if (visible && !spendableAccounts.some((account) => account.id === selectedAccountId)) {
+      setSelectedAccountId(spendableAccounts[0]?.id ?? '');
+    }
+  }, [visible, spendableAccounts, selectedAccountId]);
+
   if (!item) return null;
 
   const selectedAccount = spendableAccounts.find((a) => a.id === selectedAccountId);
   const selectedAccountAvailableFunds = selectedAccount ? getAccountAvailableFunds(selectedAccount) : 0;
-  const isInsufficient = actualPrice > 0 && selectedAccountAvailableFunds < actualPrice;
+  const isInsufficient = !!selectedAccount && actualPrice > 0 && selectedAccountAvailableFunds < actualPrice;
 
   const handleConfirm = async () => {
     if (isSubmitting) return;
@@ -107,7 +109,7 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
       return;
     }
 
-    if (!selectedAccountId) {
+    if (!selectedAccount) {
       setErrorMessage('Please select a payment account.');
       return;
     }
@@ -210,7 +212,6 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
             style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            extraScrollHeight={100}
           >
             {/* Item hint card */}
             <View
@@ -273,90 +274,24 @@ export const PurchaseItemModal: React.FC<PurchaseItemModalProps> = ({
               autoFocus
             />
 
-            {/* Account Selector */}
-            <Text
-              style={[
-                styles.fieldLabel,
-                {
-                  color: colors.textSecondary,
-                  fontFamily: typography.fontFamilies.semibold,
-                  marginTop: 16,
-                  marginBottom: 8,
-                },
-              ]}
-            >
-              Paid From Account *
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.accountsScroll}>
-              {spendableAccounts.map((acc) => {
-                const isSelected = acc.id === selectedAccountId;
-                const isCC = acc.type === 'CREDIT_CARD';
-                const avail = getAccountAvailableFunds(acc);
-                const IconComponent = isCC ? CreditCard : Wallet;
-                return (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => {
-                      Haptics.selectionAsync().catch(() => {});
-                      setSelectedAccountId(acc.id);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${acc.name}, ${isCC ? 'available credit' : 'balance'} ${formatRupee(avail)}`}
-                    style={[
-                      styles.accountChip,
-                      {
-                        backgroundColor: isSelected
-                          ? isDark
-                            ? '#6366F1'
-                            : '#4F46E5'
-                          : isDark
-                          ? 'rgba(255,255,255,0.06)'
-                          : 'rgba(0,0,0,0.04)',
-                        borderColor: isSelected
-                          ? isDark
-                            ? '#818CF8'
-                            : '#4F46E5'
-                          : colors.borderSubtle,
-                        borderRadius: radii.md,
-                      },
-                    ]}
-                  >
-                    <IconComponent
-                      size={14}
-                      color={isSelected ? '#FFFFFF' : colors.textSecondary}
-                      style={{ marginRight: 6 }}
-                    />
-                    <View>
-                      <Text
-                        style={[
-                          styles.accountChipName,
-                          {
-                            color: isSelected ? '#FFFFFF' : colors.textPrimary,
-                            fontFamily: isSelected
-                              ? typography.fontFamilies.bold
-                              : typography.fontFamilies.semibold,
-                          },
-                        ]}
-                      >
-                        {acc.name}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.accountChipBalance,
-                          {
-                            color: isSelected ? 'rgba(255,255,255,0.90)' : colors.textMuted,
-                            fontFamily: typography.fontFamilies.medium,
-                          },
-                        ]}
-                      >
-                        {isCC ? `Avail: ${formatRupee(avail)}` : formatRupee(avail)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <SelectSheetField
+              label="Paid From Account"
+              required
+              value={selectedAccountId}
+              onSelect={setSelectedAccountId}
+              options={spendableAccounts.map((account) => ({
+                value: account.id,
+                label: account.name,
+                icon: account.type === 'CREDIT_CARD' ? CreditCard : Wallet,
+                description: `${account.type === 'CREDIT_CARD' ? 'Available credit' : 'Balance'}: ${formatRupee(getAccountAvailableFunds(account))}`,
+              }))}
+              placeholder="Select a payment account"
+              disabled={spendableAccounts.length === 0}
+              containerStyle={{ marginTop: 16 }}
+            />
+            {spendableAccounts.length === 0 ? (
+              <Text style={{ color: colors.textMuted }}>Add an active bank, cash, credit card, or other payment account first.</Text>
+            ) : null}
 
             {/* Insufficient Funds / Credit Warning */}
             {isInsufficient ? (
@@ -537,25 +472,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  accountsScroll: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  accountChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  accountChipName: {
-    fontSize: 13,
-  },
-  accountChipBalance: {
-    fontSize: 11,
-    marginTop: 1,
   },
   warningBox: {
     flexDirection: 'row',

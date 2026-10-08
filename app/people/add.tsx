@@ -5,6 +5,7 @@ import { X, CheckCircle2, ArrowRight } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { IconButton } from '../../src/components/ui/IconButton';
 import { Avatar } from '../../src/components/ui/Avatar';
 import { ColorWheelPicker } from '../../src/components/ui/ColorWheelPicker';
 import { useTheme } from '../../src/theme';
@@ -129,10 +130,11 @@ export default function AddPersonScreen() {
       {/* Header */}
       <View style={[styles.headerRow, { marginTop: spacing.xs, marginBottom: spacing.md }]}>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Add Person</Text>
-        <LiquidGlassCard onPress={navigateBack} hitSlop={10} accessibilityLabel="Close"
-          radius={radii.full} padding={0} style={styles.closeBtn}>
-          <X size={18} color={colors.textPrimary} />
-        </LiquidGlassCard>
+        <IconButton
+          onPress={navigateBack}
+          accessibilityLabel="Close"
+          icon={<X size={18} color={colors.textPrimary} />}
+        />
       </View>
 
       {/* Avatar Preview */}
@@ -282,13 +284,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
   },
   avatarPreviewContainer: {
     alignItems: 'center',

@@ -7,10 +7,11 @@ import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { AmountText } from '../../src/components/ui/AmountText';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
-import { CategoryBreakdownChart, CategoryBreakdownItem } from '../../src/components/charts/CategoryBreakdownChart';
+import { CategoryBreakdownChart } from '../../src/components/charts/CategoryBreakdownChart';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { useTheme } from '../../src/theme';
 import { formatRupee } from '../../src/domain/finance/currency';
+import { calculateCategoryAnalytics } from '../../src/domain/finance/categoryAnalytics';
 import { getCurrentLocalMonthString, getTodayLocalDateString } from '../../src/utils/dateUtils';
 
 export default function AnalyticsScreen() {
@@ -25,84 +26,11 @@ export default function AnalyticsScreen() {
 
   const currentMonth = getCurrentLocalMonthString(); // Local YYYY-MM
 
-  // Aggregate category spending this month (excluding future-dated transactions)
-  const categoryStats = useMemo(() => {
-    const todayStr = getTodayLocalDateString();
-    const expenseMap = new Map<string, number>();
-    const incomeMap = new Map<string, number>();
-
-    const categoryMap = new Map<string, (typeof categories)[number]>();
-    for (const cat of categories) {
-      categoryMap.set(cat.id, cat);
-    }
-
-    let totalExpense = 0;
-    let totalIncome = 0;
-
-    for (const tx of transactions) {
-      if (tx.deletedAt) continue;
-      if (!tx.date.startsWith(currentMonth)) continue;
-      if (tx.date > todayStr) continue;
-
-      const amt = Math.abs(tx.amount);
-      const catKey = tx.categoryId || 'General';
-
-      if (tx.type === 'EXPENSE') {
-        totalExpense += amt;
-        expenseMap.set(catKey, (expenseMap.get(catKey) || 0) + amt);
-      } else if (tx.type === 'INCOME') {
-        totalIncome += amt;
-        incomeMap.set(catKey, (incomeMap.get(catKey) || 0) + amt);
-      }
-    }
-
-    const resolveCategory = (key: string) => {
-      const match = categoryMap.get(key);
-      if (match) {
-        return { name: match.name, color: match.color };
-      }
-      if (key === 'General' || !key) {
-        return { name: 'General', color: undefined };
-      }
-      if (key.startsWith('cat-')) {
-        return { name: key.replace('cat-', '').replace(/-/g, ' '), color: undefined };
-      }
-      return { name: key, color: undefined };
-    };
-
-    const expenseItems: CategoryBreakdownItem[] = Array.from(expenseMap.entries())
-      .map(([cat, amt]) => {
-        const resolved = resolveCategory(cat);
-        return {
-          id: cat,
-          name: resolved.name,
-          color: resolved.color,
-          amount: amt,
-          percentage: totalExpense > 0 ? (amt / totalExpense) * 100 : 0,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-
-    const incomeItems: CategoryBreakdownItem[] = Array.from(incomeMap.entries())
-      .map(([cat, amt]) => {
-        const resolved = resolveCategory(cat);
-        return {
-          id: cat,
-          name: resolved.name,
-          color: resolved.color,
-          amount: amt,
-          percentage: totalIncome > 0 ? (amt / totalIncome) * 100 : 0,
-        };
-      })
-      .sort((a, b) => b.amount - a.amount);
-
-    return {
-      expenseItems,
-      incomeItems,
-      totalExpense,
-      totalIncome,
-    };
-  }, [transactions, categories, currentMonth]);
+  const today = getTodayLocalDateString();
+  const categoryStats = useMemo(
+    () => calculateCategoryAnalytics(transactions, categories, currentMonth, today),
+    [transactions, categories, currentMonth, today]
+  );
 
   const savingsRate =
     categoryStats.totalIncome > 0

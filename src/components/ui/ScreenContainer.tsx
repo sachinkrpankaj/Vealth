@@ -21,7 +21,6 @@ interface ScreenContainerProps {
   withTopInset?: boolean;
   withBottomInset?: boolean;
   hasTabBar?: boolean;
-  extraScrollHeight?: number;
 }
 
 export const ScreenContainer: React.FC<ScreenContainerProps> = ({
@@ -32,7 +31,6 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
   withTopInset = true,
   withBottomInset = true,
   hasTabBar = false,
-  extraScrollHeight = 100,
 }) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -79,7 +77,6 @@ export const ScreenContainer: React.FC<ScreenContainerProps> = ({
             ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            extraScrollHeight={extraScrollHeight}
           >
             {children}
           </KeyboardAwareScrollView>

@@ -12,6 +12,7 @@ import {
 import { X, AlertCircle } from 'lucide-react-native';
 import { ShoppingList } from '../../domain/finance/types';
 import { PrimaryButton } from '../ui/PrimaryButton';
+import { IconButton } from '../ui/IconButton';
 import { useTheme } from '../../theme';
 import * as Haptics from 'expo-haptics';
 
@@ -105,15 +106,15 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
             >
               {initialList ? 'Rename Shopping List' : 'Create Shopping List'}
             </Text>
-            <Pressable
+            <IconButton
               onPress={onClose}
               hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Close"
-              style={[styles.closeBtn, { backgroundColor: colors.borderSubtle }]}
+              size={32}
             >
               <X size={18} color={colors.textPrimary} />
-            </Pressable>
+            </IconButton>
           </View>
 
           {/* List Name Input */}

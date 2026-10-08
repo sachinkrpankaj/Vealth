@@ -4,10 +4,7 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ScrollView,
   TextInput,
-  Alert,
-  Modal,
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
@@ -19,10 +16,7 @@ import {
   ShoppingBag,
   TrendingUp,
   X,
-  Calendar,
   UserPlus,
-  ChevronDown,
-  Check,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AmountInput } from '../../src/components/ui/AmountInput';
@@ -32,11 +26,11 @@ import { useTheme } from '../../src/theme';
 import { createTransaction } from '../../src/database/repositories/transactionRepository';
 import { getAssetById, updateAsset } from '../../src/database/repositories/assetRepository';
 import { TransactionType } from '../../src/domain/finance/types';
-import { validateTransactionRequiredFields, validateRepaymentAmount, validateDueDate, validateTransactionDate } from '../../src/domain/finance/validator';
+import { getSelectableTransactionAccounts, validateTransactionRequiredFields, validateRepaymentAmount, validateDueDate, validateTransactionDate } from '../../src/domain/finance/validator';
 import { formatRupee } from '../../src/domain/finance/currency';
 import { formatDateIso, getTodayLocalDateString } from '../../src/utils/dateUtils';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
-import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
+import { SelectSheetField } from '../../src/components/ui/SelectSheetField';
 import { CategoryPickerField } from '../../src/components/ui/CategoryPickerField';
 import { IconButton } from '../../src/components/ui/IconButton';
 import { generateEntityId } from '../../src/utils/idGenerator';
@@ -148,20 +142,15 @@ export default function AddTransactionScreen() {
   const initialType: TransactionType = (params.defaultType as TransactionType) || 'EXPENSE';
   const [selectedType, setSelectedType] = useState<TransactionType>(initialType);
 
-  const selectableAccounts = React.useMemo(() => {
-    if (selectedType === 'INCOME') {
-      return activeAccounts.filter((a) => a.type !== 'CREDIT_CARD');
-    }
-    return activeAccounts;
-  }, [activeAccounts, selectedType]);
+  const selectableAccounts = React.useMemo(
+    () => getSelectableTransactionAccounts(accounts, selectedType),
+    [accounts, selectedType]
+  );
 
   const [amount, setAmount] = useState<number>(0);
   const [selectedAccount, setSelectedAccount] = useState<string>(() => {
-    if (params.accountId && accounts.some((a) => a.id === params.accountId && !a.isArchived)) {
-      return params.accountId;
-    }
-    const firstActive = accounts.find((a) => !a.isArchived);
-    return firstActive?.id ?? '';
+    const eligible = getSelectableTransactionAccounts(accounts, initialType);
+    return eligible.find((account) => account.id === params.accountId)?.id ?? eligible[0]?.id ?? '';
   });
   const [destinationAccount, setDestinationAccount] = useState<string>('');
   const [selectedPerson, setSelectedPerson] = useState<string>(() => {
@@ -177,29 +166,11 @@ export default function AddTransactionScreen() {
   const [dueDate, setDueDate] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [typeModalVisible, setTypeModalVisible] = useState(false);
-
-  const selectedTypeConfig = TRANSACTION_TYPES.find((t) => t.type === selectedType) || TRANSACTION_TYPES[0];
-  const SelectedTypeIcon = selectedTypeConfig.icon;
-
-  // Set default active accounts, destination account, and assets when loaded
+  // Keep selections eligible after route changes, archiving, or switching to Income.
   useEffect(() => {
-    if (selectedType === 'INCOME') {
-      const currentAcc = activeAccounts.find((a) => a.id === selectedAccount);
-      if (currentAcc && currentAcc.type === 'CREDIT_CARD') {
-        const firstValid = activeAccounts.find((a) => a.type !== 'CREDIT_CARD');
-        setSelectedAccount(firstValid?.id ?? '');
-        return;
-      }
-    }
-
-    const validList = selectedType === 'INCOME'
-      ? activeAccounts.filter((a) => a.type !== 'CREDIT_CARD')
-      : activeAccounts;
-
-    if ((!selectedAccount || !validList.some((a) => a.id === selectedAccount)) && validList.length > 0) {
-      const matchParam = params.accountId && validList.some((a) => a.id === params.accountId);
-      setSelectedAccount(matchParam ? params.accountId! : validList[0].id);
+    if (!selectableAccounts.some((account) => account.id === selectedAccount)) {
+      const preferred = selectableAccounts.find((account) => account.id === params.accountId);
+      setSelectedAccount(preferred?.id ?? selectableAccounts[0]?.id ?? '');
     }
     if (
       selectedType === 'TRANSFER' &&
@@ -216,7 +187,7 @@ export default function AddTransactionScreen() {
     ) {
       setSelectedAsset(activeAssets[0].id);
     }
-  }, [accounts, activeAccounts, selectedType, physicalAssets, activeAssets, selectedAccount, destinationAccount, selectedAsset, params.accountId]);
+  }, [selectableAccounts, activeAccounts, selectedType, activeAssets, selectedAccount, destinationAccount, selectedAsset, params.accountId]);
 
   // Outstanding amount lookup for repayments
   const outstandingInfo = React.useMemo(() => {
@@ -251,11 +222,6 @@ export default function AddTransactionScreen() {
     }
 
     const chosenAccount = activeAccounts.find((a) => a.id === selectedAccount);
-    if (selectedType === 'INCOME' && chosenAccount?.type === 'CREDIT_CARD') {
-      setErrorMessage('Credit cards cannot be used as receiving accounts for Income transactions. Please select a bank account, cash wallet, or investment account.');
-      return;
-    }
-
     const validation = validateTransactionRequiredFields({
       type: selectedType,
       amount,
@@ -349,134 +315,15 @@ export default function AddTransactionScreen() {
         />
       </View>
 
-      {/* Transaction Type Selector Field */}
-      <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>What happened?</Text>
-      <Pressable
-        onPress={() => setTypeModalVisible(true)}
-        accessibilityRole="button"
-        accessibilityLabel={`Transaction type: ${selectedTypeConfig.label}. Tap to change.`}
-        style={({ pressed }) => [
-          styles.typeSelectorCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderRadius: radii.lg,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        <View style={[styles.typeIconBadge, { backgroundColor: selectedTypeConfig.bg }]}>
-          <SelectedTypeIcon size={20} color={selectedTypeConfig.color} />
-        </View>
-        <View style={styles.typeDetailsCol}>
-          <Text style={[styles.typeSelectorTitle, { color: colors.textPrimary }]}>
-            {selectedTypeConfig.label}
-          </Text>
-          <Text style={[styles.typeSelectorDesc, { color: colors.textSecondary }]} numberOfLines={1}>
-            {selectedTypeConfig.description}
-          </Text>
-        </View>
-        <ChevronDown size={18} color={colors.textMuted} />
-      </Pressable>
-
-      {/* Transaction Type Selection Bottom Sheet */}
-      <Modal
-        visible={typeModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setTypeModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={styles.modalBackdrop}
-            onPress={() => setTypeModalVisible(false)}
-            accessibilityLabel="Close sheet"
-          />
-          <View
-            style={[
-              styles.modalSheet,
-              {
-                backgroundColor: colors.surfaceElevated || colors.surface,
-                borderTopLeftRadius: radii.xl,
-                borderTopRightRadius: radii.xl,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                  Transaction Type
-                </Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                  Select how this transaction affects your finances
-                </Text>
-              </View>
-              <IconButton
-                icon={<X size={16} color={colors.textPrimary} />}
-                size={32}
-                onPress={() => setTypeModalVisible(false)}
-                accessibilityLabel="Close selection sheet"
-              />
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 40, paddingTop: 4 }}
-            >
-              {TRANSACTION_TYPES.map((t) => {
-                const isSelected = selectedType === t.type;
-                const TypeIcon = t.icon;
-                return (
-                  <Pressable
-                    key={t.type}
-                    onPress={() => {
-                      setSelectedType(t.type);
-                      setTypeModalVisible(false);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${t.label}: ${t.description}`}
-                    style={({ pressed }) => [
-                      styles.typeOptionRow,
-                      {
-                        backgroundColor: isSelected
-                          ? (colors.accent + '18')
-                          : pressed
-                          ? colors.borderSubtle
-                          : 'transparent',
-                        borderColor: isSelected ? colors.accent : colors.borderSubtle || 'transparent',
-                        borderRadius: radii.md,
-                      },
-                    ]}
-                  >
-                    <View style={[styles.typeOptionIcon, { backgroundColor: t.bg }]}>
-                      <TypeIcon size={18} color={t.color} />
-                    </View>
-                    <View style={styles.typeOptionContent}>
-                      <Text
-                        style={[
-                          styles.typeOptionTitle,
-                          {
-                            color: isSelected ? colors.accent : colors.textPrimary,
-                            fontWeight: isSelected ? '700' : '600',
-                          },
-                        ]}
-                      >
-                        {t.label}
-                      </Text>
-                      <Text style={[styles.typeOptionDesc, { color: colors.textSecondary }]}>
-                        {t.description}
-                      </Text>
-                    </View>
-                    {isSelected && <Check size={18} color={colors.accent} style={{ marginLeft: 8 }} />}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <SelectSheetField<TransactionType>
+        label="Transaction Type"
+        value={selectedType}
+        onSelect={setSelectedType}
+        subtitle="Select how this transaction affects your finances"
+        options={TRANSACTION_TYPES.map(({ type, label, description, icon, color }) => ({
+          value: type, label, description, icon, color,
+        }))}
+      />
 
       {/* Amount Input */}
       <AmountInput
@@ -530,38 +377,15 @@ export default function AddTransactionScreen() {
               </Text>
             </Pressable>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-            >
-              {activePeople.map((p) => {
-                const isSelected = selectedPerson === p.id;
-                return (
-                  <Pressable
-                    key={p.id}
-                    onPress={() => setSelectedPerson(p.id)}
-                    style={[
-                      styles.personPill,
-                      {
-                        backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                        borderColor: isSelected ? colors.textPrimary : colors.border,
-                        borderRadius: radii.full,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.personPillText,
-                        { color: isSelected ? colors.background : colors.textPrimary },
-                      ]}
-                    >
-                      {p.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <SelectSheetField
+              label=""
+              title="Person"
+              subtitle="Choose the person for this transaction"
+              value={selectedPerson}
+              onSelect={setSelectedPerson}
+              options={activePeople.map((person) => ({ value: person.id, label: person.name }))}
+              containerStyle={{ marginBottom: 0 }}
+            />
           )}
 
           {outstandingInfo ? (
@@ -618,38 +442,17 @@ export default function AddTransactionScreen() {
               </Text>
             </Pressable>
           ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-            >
-              {activeAssets.map((ast) => {
-                const isSelected = selectedAsset === ast.id;
-                return (
-                  <Pressable
-                    key={ast.id}
-                    onPress={() => setSelectedAsset(ast.id)}
-                    style={[
-                      styles.personPill,
-                      {
-                        backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                        borderColor: isSelected ? colors.textPrimary : colors.border,
-                        borderRadius: radii.full,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.personPillText,
-                        { color: isSelected ? colors.background : colors.textPrimary },
-                      ]}
-                    >
-                      {ast.name} ({formatRupee(ast.currentValue)})
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <SelectSheetField
+              label=""
+              title={selectedType === 'ASSET_PURCHASE' ? 'Target Asset' : 'Asset to Sell'}
+              subtitle="Choose the asset for this transaction"
+              value={selectedAsset}
+              onSelect={setSelectedAsset}
+              options={activeAssets.map((asset) => ({
+                value: asset.id, label: asset.name, description: formatRupee(asset.currentValue),
+              }))}
+              containerStyle={{ marginBottom: 0 }}
+            />
           )}
         </View>
       ) : null}
@@ -684,79 +487,29 @@ export default function AddTransactionScreen() {
             </Text>
           </View>
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-          >
-            {selectableAccounts.map((acc) => {
-              const isSelected = selectedAccount === acc.id;
-              return (
-                <Pressable
-                  key={acc.id}
-                  onPress={() => setSelectedAccount(acc.id)}
-                  style={[
-                    styles.accountPill,
-                    {
-                      backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                      borderColor: isSelected ? colors.textPrimary : colors.border,
-                      borderRadius: radii.md,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.accountPillText,
-                      { color: isSelected ? colors.background : colors.textPrimary },
-                    ]}
-                  >
-                    {acc.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
+          <SelectSheetField
+            label=""
+            title={selectedType === 'INCOME' ? 'Receiving Account' : 'Account'}
+            subtitle="Choose the account for this transaction"
+            value={selectedAccount}
+            onSelect={setSelectedAccount}
+            options={selectableAccounts.map((account) => ({ value: account.id, label: account.name }))}
+            containerStyle={{ marginBottom: 0 }}
+          />
         )}
       </View>
 
       {/* Destination Account (For TRANSFERS only) */}
       {selectedType === 'TRANSFER' ? (
         <View style={styles.formSection}>
-          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>To Account</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingRight: 16 }}
-          >
-            {activeAccounts
-              .filter((a) => a.id !== selectedAccount)
-              .map((acc) => {
-                const isSelected = destinationAccount === acc.id;
-                return (
-                  <Pressable
-                    key={acc.id}
-                    onPress={() => setDestinationAccount(acc.id)}
-                    style={[
-                      styles.accountPill,
-                      {
-                        backgroundColor: isSelected ? colors.textPrimary : colors.surface,
-                        borderColor: isSelected ? colors.textPrimary : colors.border,
-                        borderRadius: radii.md,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.accountPillText,
-                        { color: isSelected ? colors.background : colors.textPrimary },
-                      ]}
-                    >
-                      {acc.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-          </ScrollView>
+          <SelectSheetField
+            label="To Account"
+            value={destinationAccount}
+            onSelect={setDestinationAccount}
+            options={activeAccounts.filter((account) => account.id !== selectedAccount)
+              .map((account) => ({ value: account.id, label: account.name }))}
+            containerStyle={{ marginBottom: 0 }}
+          />
         </View>
       ) : null}
 
@@ -861,94 +614,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  typeSelectorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    marginBottom: 16,
-    gap: 12,
-  },
-  typeIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeDetailsCol: {
-    flex: 1,
-  },
-  typeSelectorTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  typeSelectorDesc: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-  },
-  modalSheet: {
-    maxHeight: '75%',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(148, 163, 184, 0.4)',
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  sheetSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  typeOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-    gap: 12,
-  },
-  typeOptionIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeOptionContent: {
-    flex: 1,
-  },
-  typeOptionTitle: {
-    fontSize: 14,
-  },
-  typeOptionDesc: {
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
-  },
   formSection: {
     marginTop: 16,
   },
@@ -961,15 +626,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     alignItems: 'center',
-  },
-  personPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderWidth: 1,
-  },
-  personPillText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   outstandingBanner: {
     flexDirection: 'row',
@@ -984,15 +640,6 @@ const styles = StyleSheet.create({
   outstandingAmount: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  accountPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-  },
-  accountPillText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   dateRow: {
     flexDirection: 'row',

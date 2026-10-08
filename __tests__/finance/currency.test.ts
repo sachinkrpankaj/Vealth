@@ -99,7 +99,7 @@ describe('Currency and Minor Unit Arithmetic', () => {
     expect(formatRupeeMasked(0, { spaceAfterSymbol: false })).toBe('₹•');
 
     // Options: showSign
-    expect(formatRupeeMasked(0, { showSign: true, spaceAfterSymbol: false })).toBe('+₹•');
+    expect(formatRupeeMasked(0, { showSign: true, spaceAfterSymbol: false })).toBe('₹•');
     expect(formatRupeeMasked(200000, { showSign: true, spaceAfterSymbol: false })).toBe('+₹••••');
     expect(formatRupeeMasked(-50000, { spaceAfterSymbol: false })).toBe('-₹•••');
 

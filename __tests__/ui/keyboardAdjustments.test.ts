@@ -42,7 +42,7 @@ describe('Shopping Add Item modal layout', () => {
 
     expect(source).toContain('style={[styles.scrollArea, { flex: 0, flexShrink: 1 }]}');
     expect(source).toContain('keyboardShouldPersistTaps="handled"');
-    expect(source).toContain('extraScrollHeight={100}');
+    expect(source).not.toContain('extraScrollHeight=');
     expect(source).toContain("behavior={Platform.OS === 'ios' ? 'padding' : undefined}");
     expect(source).toContain('Product Name *');
     expect(source).toContain('Estimated Price (Optional)');
@@ -75,7 +75,7 @@ describe('modal form and Android back regressions', () => {
       const source = fs.readFileSync(path, 'utf8');
       expect(source).toContain('flex: 0');
       expect(source).toContain('flexShrink: 1');
-      expect(source).toContain('extraScrollHeight={100}');
+      expect(source).not.toContain('extraScrollHeight=');
       expect(source).toContain("behavior={Platform.OS === 'ios' ? 'padding' : undefined}");
     }
   });
@@ -90,7 +90,7 @@ describe('modal form and Android back regressions', () => {
       ],
       'src/components/shopping/PurchaseItemModal.tsx': [
         'Actual Purchase Price *',
-        'Paid From Account *',
+        'Paid From Account',
         'Expense Category',
         'Purchase Date',
         'Transaction Note',
@@ -125,7 +125,7 @@ describe('modal form and Android back regressions', () => {
       billForm.indexOf('</KeyboardAwareScrollView>')
     );
     expect(purchaseForm).toContain('title="Confirm Purchase"');
-    expect(billForm).toContain('extraScrollHeight={100}');
+    expect(billForm).not.toContain('extraScrollHeight=');
   });
 
   it('provides an Android onRequestClose handler for every React Native modal', () => {

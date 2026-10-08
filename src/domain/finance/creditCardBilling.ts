@@ -1,6 +1,11 @@
 import { Account, Transaction } from './types';
 import { addMinor, subMinor } from './currency';
 
+/** Preserve the card's configured limit while subtracting its drawn balance. */
+export function getAvailableCredit(creditLimit: number | null | undefined, balance: number): number {
+  return Math.max(0, Math.max(0, creditLimit ?? 0) - Math.max(0, -balance));
+}
+
 function getActiveTx(transactions: Transaction[]): Transaction[] {
   return transactions.filter((tx) => !tx.deletedAt);
 }
@@ -102,7 +107,7 @@ export function getCreditCardBillingInfo(
   // Current balance of card (starts at 0; expenses make it negative, payments positive)
   const currentBalance = getCardBalance(account, transactions, refDateStr);
   const usedAmount = Math.max(0, -currentBalance);
-  const remainingLimit = Math.max(0, creditLimit - usedAmount);
+  const remainingLimit = getAvailableCredit(creditLimit, currentBalance);
 
   // Billing days beyond the length of a month occur on its final day.
   let lastBillingYear = refYear;

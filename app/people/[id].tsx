@@ -7,6 +7,7 @@ import {
   ScrollView,
   Modal,
   TextInput,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -82,6 +83,12 @@ export default function PersonDetailScreen() {
   const [editAvatarColor, setEditAvatarColor] = useState(COLOR_OPTIONS[0]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const dismissEditor = () => {
+    if (isSavingEdit) return;
+    Keyboard.dismiss();
+    setIsEditModalOpen(false);
+  };
 
   const loadData = async () => {
     if (!id) return;
@@ -374,17 +381,21 @@ export default function PersonDetailScreen() {
         visible={isEditModalOpen}
         animationType="slide"
         transparent
-        onRequestClose={() => setIsEditModalOpen(false)}
+        onRequestClose={dismissEditor}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
+        <View style={styles.modalBackdrop}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => setIsEditModalOpen(false)}
-            accessibilityLabel="Close modal"
+            onPress={dismissEditor}
+            disabled={isSavingEdit}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss person editor"
           />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+            style={[styles.modalPositioner, { paddingTop: insets.top }]}
+          >
           <View
             style={[
               styles.modalSheet,
@@ -402,9 +413,12 @@ export default function PersonDetailScreen() {
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>
                 Edit Person Details
               </Text>
-              <LiquidGlassCard onPress={() => setIsEditModalOpen(false)} accessibilityLabel="Close editor" radius={radii.full} padding={0} style={styles.modalCloseBtn}>
-                <X size={18} color={colors.textPrimary} />
-              </LiquidGlassCard>
+              <IconButton
+                onPress={dismissEditor}
+                disabled={isSavingEdit}
+                accessibilityLabel="Close person editor"
+                icon={<X size={18} color={colors.textPrimary} />}
+              />
             </View>
 
             <KeyboardAwareScrollView
@@ -412,7 +426,6 @@ export default function PersonDetailScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 24 }}
-              extraScrollHeight={100}
             >
               {/* Avatar Preview */}
               <View style={styles.modalAvatarRow}>
@@ -567,7 +580,8 @@ export default function PersonDetailScreen() {
               />
             </KeyboardAwareScrollView>
           </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </ScreenContainer>
   );
@@ -695,6 +709,9 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  modalPositioner: {
+    flex: 1,
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -710,15 +727,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
+    flex: 1,
+    paddingRight: 12,
     fontSize: 18,
     fontWeight: '700',
-  },
-  modalCloseBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
   },
   modalAvatarRow: {
     alignItems: 'center',

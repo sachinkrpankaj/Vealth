@@ -28,12 +28,15 @@ import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { AmountInput } from '../../src/components/ui/AmountInput';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
 import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
+import { IconButton } from '../../src/components/ui/IconButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollView } from '../../src/components/ui/KeyboardAwareScrollView';
-import { Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { Modal, TextInput, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
 import { Trash2, Edit2, X } from 'lucide-react-native';
 
 export default function LiabilitiesListScreen() {
   const { colors, radii, spacing, typography } = useTheme();
+  const insets = useSafeAreaInsets();
   const { standaloneLiabilities, accounts, refresh } = useFinancialData();
 
   const [selectedLiability, setSelectedLiability] = useState<Liability | null>(null);
@@ -42,6 +45,13 @@ export default function LiabilitiesListScreen() {
   const [editAmount, setEditAmount] = useState(0);
   const [editNote, setEditNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  const dismissEditor = () => {
+    if (isSaving) return;
+    Keyboard.dismiss();
+    setEditModalVisible(false);
+    setSelectedLiability(null);
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -233,34 +243,36 @@ export default function LiabilitiesListScreen() {
         visible={editModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setEditModalVisible(false)}
+        onRequestClose={dismissEditor}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => setEditModalVisible(false)}
-            accessibilityLabel="Close modal overlay"
+            onPress={dismissEditor}
+            disabled={isSaving}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss liability editor"
           />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            pointerEvents="box-none"
+            style={[styles.modalPositioner, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}
+          >
           <View style={[styles.modalCard, { backgroundColor: colors.surfaceElevated, borderRadius: radii.lg, borderColor: colors.border }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Manage Liability</Text>
-              <Pressable
-                onPress={() => setEditModalVisible(false)}
-                hitSlop={10}
-                accessibilityLabel="Close"
-              >
-                <X size={20} color={colors.textSecondary} />
-              </Pressable>
+              <IconButton
+                onPress={dismissEditor}
+                disabled={isSaving}
+                accessibilityLabel="Close liability editor"
+                icon={<X size={20} color={colors.textSecondary} />}
+              />
             </View>
 
             <KeyboardAwareScrollView
-              style={{ maxHeight: 420, flex: 0, flexShrink: 1 }}
+              style={{ flex: 0, flexShrink: 1 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              extraScrollHeight={100}
             >
               <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>Liability Name</Text>
               <View
@@ -323,7 +335,8 @@ export default function LiabilitiesListScreen() {
               </View>
             </KeyboardAwareScrollView>
           </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </ScreenContainer>
   );
@@ -390,10 +403,14 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  modalPositioner: {
+    flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   modalCard: {
+    maxHeight: '100%',
     padding: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -405,6 +422,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
+    flex: 1,
+    paddingRight: 12,
     fontSize: 18,
     fontWeight: '700',
   },
