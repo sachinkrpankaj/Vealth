@@ -33,6 +33,7 @@ export const VealthLogo: React.FC<VealthLogoProps> = ({
     >
       <Image
         source={require('../../../assets/logo.png')}
+        accessibilityLabel="Vealth logo"
         style={[
           {
             width: size,
@@ -41,7 +42,7 @@ export const VealthLogo: React.FC<VealthLogoProps> = ({
           },
           imageStyle,
         ]}
-        resizeMode="cover"
+        resizeMode="contain"
       />
     </View>
   );
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
   },
   badgeShadow: {
     borderWidth: 1,
-    borderColor: '#E2DCD5',
+    borderColor: '#60BDF8',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,

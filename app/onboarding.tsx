@@ -208,6 +208,7 @@ export default function OnboardingScreen() {
         <View style={styles.slideContainer}>
           {/* Top Progress & Skip */}
           <View style={styles.topProgressRow}>
+            <VealthLogo size={32} />
             <View style={styles.topProgress}>
               {SLIDES.map((_, i) => (
                 <View
