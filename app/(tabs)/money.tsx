@@ -422,6 +422,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 14,
   },
+  emptyCard: {
+    marginBottom: 16,
+  },
   rowDivider: {
     height: 1,
     marginHorizontal: 16,

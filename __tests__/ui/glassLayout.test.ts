@@ -2,7 +2,12 @@ import React from 'react';
 
 const mockFlatten = (value: any): any => Array.isArray(value)
   ? Object.assign({}, ...value.filter(Boolean).map(mockFlatten)) : value || {};
-jest.mock('react', () => ({ ...jest.requireActual('react'), useMemo: (fn: Function) => fn() }));
+jest.mock('react', () => ({
+  ...jest.requireActual('react'),
+  useMemo: (fn: Function) => fn(),
+  useState: (initial: any) => [typeof initial === 'function' ? initial() : initial, jest.fn()],
+  useCallback: (fn: Function) => fn,
+}));
 jest.mock('react-native', () => ({
   View: 'View', Text: 'Text', Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator',
   StyleSheet: { create: (value: unknown) => value, flatten: (value: unknown) => mockFlatten(value) },
@@ -15,6 +20,7 @@ jest.mock('../../src/theme', () => ({
 
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { PrimaryButton } from '../../src/components/ui/PrimaryButton';
+import { SecondaryButton } from '../../src/components/ui/SecondaryButton';
 import { IconButton } from '../../src/components/ui/IconButton';
 import { EmptyState } from '../../src/components/ui/EmptyState';
 
@@ -65,5 +71,39 @@ describe('glass card layout ownership', () => {
     expect(style).toMatchObject({ width: 36, height: 36, borderRadius: 18, borderWidth: 1,
       elevation: 0, shadowOpacity: 0, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' });
     expect(button.props.children).toBeUndefined();
+  });
+
+  it('guarantees PrimaryButton and SecondaryButton maintain consistent 48px touch targets without flex stretching', () => {
+    const primary = PrimaryButton({ title: 'Primary Action', onPress: jest.fn() }) as any;
+    const secondary = SecondaryButton({ title: 'Secondary Action', onPress: jest.fn() }) as any;
+
+    const { outer: primaryOuter, inner: primaryInner } = renderCard(primary.props.style, true, primary.props);
+    const { outer: secondaryOuter, inner: secondaryInner } = renderCard(secondary.props.style, true, secondary.props);
+
+    // Both buttons have outer minHeight 48 for accessible touch target
+    expect(primaryOuter.minHeight).toBe(48);
+    expect(secondaryOuter.minHeight).toBe(48);
+
+    // Neither button should stretch vertically with flexGrow (must be content-based)
+    expect(primaryInner.flexGrow).toBeUndefined();
+    expect(secondaryInner.flexGrow).toBeUndefined();
+    expect(primaryInner.flexShrink).toBeUndefined();
+    expect(secondaryInner.flexShrink).toBeUndefined();
+
+    // Both inner contents align horizontally across the root
+    expect(primaryInner).toMatchObject({ alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' });
+    expect(secondaryInner).toMatchObject({ alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' });
+  });
+
+  it('passes root container measured layout dimensions to the prism overlay', () => {
+    const card = LiquidGlassCard({ children: 'Measured Card', onPress: jest.fn() }) as any;
+    expect(card.props.onLayout).toBeDefined();
+
+    // Simulating root layout measurement
+    card.props.onLayout({ nativeEvent: { layout: { width: 220, height: 48 } } });
+    const children = React.Children.toArray(card.props.children.props.children) as any[];
+    const overlay = children[0];
+    expect(overlay.props).toHaveProperty('width');
+    expect(overlay.props).toHaveProperty('height');
   });
 });

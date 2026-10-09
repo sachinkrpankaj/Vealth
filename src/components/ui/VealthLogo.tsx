@@ -25,7 +25,7 @@ export const VealthLogo: React.FC<VealthLogoProps> = ({
         {
           width: size,
           height: size,
-          borderRadius: cornerRadius,
+          borderRadius: variant === 'transparent' ? undefined : cornerRadius,
         },
         variant === 'badge' && styles.badgeShadow,
         style,
@@ -33,12 +33,12 @@ export const VealthLogo: React.FC<VealthLogoProps> = ({
     >
       <Image
         source={require('../../../assets/logo.png')}
-        accessibilityLabel="Vealth logo"
+        accessibilityLabel="vealth logo"
         style={[
           {
             width: size,
             height: size,
-            borderRadius: cornerRadius,
+            borderRadius: variant === 'transparent' ? undefined : cornerRadius,
           },
           imageStyle,
         ]}

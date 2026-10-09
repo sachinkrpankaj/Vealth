@@ -15,6 +15,7 @@ import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { Card } from '../../src/components/ui/Card';
 import { LiquidGlassCard } from '../../src/components/ui/LiquidGlassCard';
 import { SectionHeader } from '../../src/components/ui/SectionHeader';
+import { VealthLogo } from '../../src/components/ui/VealthLogo';
 import { useTheme } from '../../src/theme';
 import { typography } from '../../src/theme/typography';
 import { useThemeStore } from '../../src/stores/useThemeStore';
@@ -230,8 +231,8 @@ export default function SettingsIndexScreen() {
       {/* About vealth */}
       <SectionHeader title="About" />
       <Card style={styles.aboutCard}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-          <Info size={18} color={colors.accent} style={{ marginRight: 8 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+          <VealthLogo size={28} style={{ marginRight: 10 }} />
           <Text style={[styles.aboutTitle, { color: colors.textPrimary }]}>vealth v1.0.0</Text>
         </View>
         <Text style={[styles.aboutDesc, { color: colors.textSecondary }]}>

@@ -140,14 +140,21 @@ export const LiquidGlassPrismOverlay: React.FC<{
   isDark: boolean;
   tone?: GlassTone;
   showBorder?: boolean;
-}> = React.memo(({ borderRadius: r, isDark, tone = 'default', showBorder = true }) => {
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  width?: number;
+  height?: number;
+}> = React.memo(({ borderRadius: r, isDark, tone = 'default', showBorder = true, width = 0, height = 0 }) => {
+  const [internalSize, setInternalSize] = useState({ width: 0, height: 0 });
+
+  const effectiveWidth = width > 0 ? width : internalSize.width;
+  const effectiveHeight = height > 0 ? height : internalSize.height;
+
   const onLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setSize((previous) =>
-      previous.width === width && previous.height === height ? previous : { width, height }
+    if (width > 0 && height > 0) return;
+    const { width: w, height: h } = event.nativeEvent.layout;
+    setInternalSize((previous) =>
+      previous.width === w && previous.height === h ? previous : { width: w, height: h }
     );
-  }, []);
+  }, [width, height]);
 
   const idPrefix = useMemo(
     () => `lg_${Math.random().toString(36).substring(2, 9)}`,
@@ -156,16 +163,20 @@ export const LiquidGlassPrismOverlay: React.FC<{
 
   // Measure the actual surface, including pills and flex-driven cards, for Android SVG geometry.
   const radiusValue = typeof r === 'number' ? r
-    : typeof r === 'string' && r.endsWith('%') ? Math.min(size.width, size.height) * parseFloat(r) / 100
+    : typeof r === 'string' && r.endsWith('%') ? Math.min(effectiveWidth, effectiveHeight) * parseFloat(r) / 100
     : 18;
-  const safeRadius = Math.min(radiusValue, size.width / 2, size.height / 2);
+  const safeRadius = Math.min(radiusValue, effectiveWidth / 2, effectiveHeight / 2);
   const tint = tone === 'positive' ? '#059669' : tone === 'negative' ? '#E11D48' : isDark ? '#6366F1' : '#4F46E5';
   const isSemanticTone = tone === 'negative' || tone === 'positive';
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout}>
-      {size.width > 0 && size.height > 0 && (
-        <Svg width={size.width} height={size.height}>
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      onLayout={width > 0 && height > 0 ? undefined : onLayout}
+    >
+      {effectiveWidth > 0 && effectiveHeight > 0 && (
+        <Svg width={effectiveWidth} height={effectiveHeight}>
           <Defs>
             {/* Base frosted glass gradient */}
             <LinearGradient id={`${idPrefix}_baseFillDark`} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -315,8 +326,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
           <Rect
             x="0"
             y="0"
-            width={size.width}
-            height={size.height}
+            width={effectiveWidth}
+            height={effectiveHeight}
             rx={safeRadius}
             ry={safeRadius}
             fill={isDark ? `url(#${idPrefix}_baseFillDark)` : `url(#${idPrefix}_baseFillLight)`}
@@ -326,8 +337,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
           <Rect
             x="0"
             y="0"
-            width={size.width}
-            height={size.height}
+            width={effectiveWidth}
+            height={effectiveHeight}
             rx={safeRadius}
             ry={safeRadius}
             fill={`url(#${idPrefix}_prismSheen)`}
@@ -337,8 +348,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
           <Rect
             x="0"
             y="0"
-            width={size.width}
-            height={size.height}
+            width={effectiveWidth}
+            height={effectiveHeight}
             rx={safeRadius}
             ry={safeRadius}
             fill={`url(#${idPrefix}_topSpec)`}
@@ -348,8 +359,8 @@ export const LiquidGlassPrismOverlay: React.FC<{
           {showBorder && <Rect
             x="0.5"
             y="0.5"
-            width={size.width - 1}
-            height={size.height - 1}
+            width={effectiveWidth - 1}
+            height={effectiveHeight - 1}
             rx={Math.max(0, safeRadius - 0.5)}
             ry={Math.max(0, safeRadius - 0.5)}
             fill="none"
@@ -383,7 +394,7 @@ export interface LiquidGlassCardProps {
   hitSlop?: Insets | number;
   accessibilityRole?: any;
   accessibilityLabel?: string;
-  accessibilityState?: any;
+  onLayout?: (event: LayoutChangeEvent) => void;
 }
 
 export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
@@ -400,8 +411,21 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   accessibilityRole,
   accessibilityLabel,
   accessibilityState,
+  onLayout,
 }) => {
   const { isDark } = useTheme();
+
+  const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 });
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      setLayoutSize((previous) =>
+        previous.width === width && previous.height === height ? previous : { width, height }
+      );
+      onLayout?.(event);
+    },
+    [onLayout]
+  );
 
   const { outer: outerStyles, surface: surfaceStyles, inner: innerStyles } = useMemo(
     () => splitStyles(style),
@@ -438,14 +462,27 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     filter: undefined,
   };
 
+  const isFlexOrFixedHeight =
+    outerStyles.flex !== undefined ||
+    outerStyles.flexGrow !== undefined ||
+    outerStyles.height !== undefined;
+
   const cardContent = (
     <>
       {showPrism && (
-        <LiquidGlassPrismOverlay borderRadius={effectiveRadius} isDark={isDark} tone={tone} showBorder={!hasNativeBorder} />
+        <LiquidGlassPrismOverlay
+          borderRadius={effectiveRadius}
+          isDark={isDark}
+          tone={tone}
+          showBorder={!hasNativeBorder}
+          width={layoutSize.width}
+          height={layoutSize.height}
+        />
       )}
       <View
         style={[
           styles.innerContent,
+          isFlexOrFixedHeight && styles.innerContentFlex,
           resolvedPadding !== undefined ? { padding: resolvedPadding } : undefined,
           innerStyles,
           contentStyle,
@@ -460,6 +497,7 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
     return (
       <Pressable
         onPress={onPress}
+        onLayout={handleLayout}
         disabled={disabled}
         hitSlop={hitSlop}
         accessibilityRole={accessibilityRole ?? 'button'}
@@ -479,7 +517,10 @@ export const LiquidGlassCard: React.FC<LiquidGlassCardProps> = ({
   }
 
   return (
-    <View style={[styles.viewRoot, cardSurfaceStyle, outerStyles]}>
+    <View
+      onLayout={handleLayout}
+      style={[styles.viewRoot, cardSurfaceStyle, outerStyles]}
+    >
       {cardContent}
     </View>
   );
@@ -495,12 +536,13 @@ const styles = StyleSheet.create({
   innerContent: {
     position: 'relative',
     zIndex: 1,
-    // Fill the root's resolved dimensions without reapplying percentage sizes or flex.
-    // This also centers content across a minWidth on an intrinsically sized button.
+    // Fill the root's resolved dimensions without expanding unbounded on intrinsic buttons
     alignSelf: 'stretch',
+    minWidth: 0,
+  },
+  innerContentFlex: {
     flexGrow: 1,
     flexShrink: 1,
-    minWidth: 0,
   },
   pressed: {
     opacity: 0.86,

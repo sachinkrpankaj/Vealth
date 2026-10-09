@@ -25,7 +25,7 @@ export const SecondaryButton: React.FC<SecondaryButtonProps> = ({
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       radius={radii.md}
       padding={0}
-      style={style}
+      style={[{ minHeight: 48 }, style]}
       contentStyle={[styles.button, { paddingVertical: spacing.md - 2, paddingHorizontal: spacing.lg }]}
     >
       {loading ? <ActivityIndicator size="small" color={colors.textPrimary} /> : (

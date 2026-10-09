@@ -6,7 +6,7 @@ const { generateImageAsync, generateImageBackgroundAsync, compositeImagesAsync }
 const projectRoot = path.resolve(__dirname, '..');
 const source = path.join(projectRoot, 'assets/logo.png');
 
-async function exportPng(relativePath, size, padding = 0, backgroundColor = '#FFFFFF') {
+async function exportPng(relativePath, size, padding = 0, backgroundColor = 'transparent') {
   padding = Math.round(padding);
   const artworkSize = size - 2 * padding;
   const { source: png } = await generateImageAsync({ projectRoot }, {
@@ -24,19 +24,19 @@ async function exportPng(relativePath, size, padding = 0, backgroundColor = '#FF
 }
 
 async function main() {
-  await exportPng('assets/icon.png', 1024);
-  await exportPng('assets/favicon.png', 64);
-  await exportPng('assets/splash-icon.png', 512);
-  // The full badge fits inside Android's 66/108 dp safe region. White matches
-  // the supplied artwork's corners, while launchers apply their own outer mask.
+  await exportPng('assets/icon.png', 1024, 0, 'transparent');
+  await exportPng('assets/favicon.png', 64, 0, 'transparent');
+  await exportPng('assets/splash-icon.png', 512, 0, 'transparent');
+  // The full badge fits inside Android's 66/108 dp safe region with transparent
+  // padding and transparent outside corners, while launchers apply their own outer mask.
   await exportPng('assets/android-icon-foreground.png', 1024, 1024 * (1 - 66 / 108) / 2, 'transparent');
 
   for (const [density, scale] of Object.entries({ mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 })) {
     const base = 'android/app/src/main/res';
-    await exportPng(`${base}/mipmap-${density}/ic_launcher.png`, 48 * scale);
-    await exportPng(`${base}/mipmap-${density}/ic_launcher_round.png`, 48 * scale);
+    await exportPng(`${base}/mipmap-${density}/ic_launcher.png`, 48 * scale, 0, 'transparent');
+    await exportPng(`${base}/mipmap-${density}/ic_launcher_round.png`, 48 * scale, 0, 'transparent');
     await exportPng(`${base}/mipmap-${density}/ic_launcher_foreground.png`, 108 * scale, 21 * scale, 'transparent');
-    // A 120 dp logo centered within the system splash's 288 dp canvas.
+    // A 120 dp logo centered within the system splash's 288 dp canvas with transparent background.
     await exportPng(`${base}/drawable-${density}/splashscreen_logo.png`, 288 * scale, 84 * scale, 'transparent');
   }
   console.log('Updated Expo assets and Android launcher/splash densities from assets/logo.png.');
