@@ -12,16 +12,26 @@ export interface KeyboardAwareScrollViewProps extends ScrollViewProps {
 }
 
 export const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwareScrollViewProps>(
-  ({ children, bottomOffset = 0, style, onFocus, onBlur, onScroll, onLayout,
+  ({ children, bottomOffset = 16, style, onFocus, onBlur, onScroll, onScrollBeginDrag, onLayout,
     onContentSizeChange, ...props }, ref) => {
     const scrollRef = useRef<ScrollView | null>(null);
     const focusedRef = useRef<ReturnType<typeof TextInput.State.currentlyFocusedInput>>(null);
     const keyboardTopRef = useRef<number | null>(null);
     const scrollYRef = useRef(0);
     const frameRef = useRef<number | null>(null);
+    const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const revisionRef = useRef(0);
     const mountedRef = useRef(true);
     const [overlap, setOverlap] = useState(0);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+    const cancelReveal = useCallback(() => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      if (retryRef.current !== null) clearTimeout(retryRef.current);
+      frameRef.current = null;
+      retryRef.current = null;
+      ++revisionRef.current;
+    }, []);
 
     const setRef = useCallback((node: ScrollView | null) => {
       scrollRef.current = node;
@@ -68,16 +78,30 @@ export const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwar
       });
     }, [measureAndReveal]);
 
+    const revealAfterTransition = useCallback(() => {
+      scheduleReveal();
+      if (retryRef.current !== null) clearTimeout(retryRef.current);
+      // Native modal/keyboard animations can move the window without a new
+      // React layout event. Measure again once that transition has settled.
+      retryRef.current = setTimeout(() => {
+        retryRef.current = null;
+        scheduleReveal();
+      }, 350);
+    }, [scheduleReveal]);
+
     useEffect(() => {
       mountedRef.current = true;
       keyboardTopRef.current = Keyboard.metrics()?.screenY ?? null;
+      setKeyboardVisible(keyboardTopRef.current !== null);
       const onShow = (event: KeyboardEvent) => {
         keyboardTopRef.current = event.endCoordinates.screenY;
-        scheduleReveal();
+        setKeyboardVisible(true);
+        revealAfterTransition();
       };
       const onHide = () => {
         keyboardTopRef.current = null;
-        ++revisionRef.current;
+        cancelReveal();
+        setKeyboardVisible(false);
         setOverlap(0);
       };
       const subscriptions = [
@@ -87,11 +111,10 @@ export const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwar
       ];
       return () => {
         mountedRef.current = false;
-        ++revisionRef.current;
-        if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+        cancelReveal();
         subscriptions.forEach(subscription => subscription.remove());
       };
-    }, [scheduleReveal]);
+    }, [revealAfterTransition, cancelReveal]);
 
     return (
       <ScrollView
@@ -106,17 +129,21 @@ export const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwar
           event.stopPropagation();
           focusedRef.current = TextInput.State.currentlyFocusedInput();
           onFocus?.(event);
-          scheduleReveal();
+          revealAfterTransition();
         }}
         onBlur={event => {
           event.stopPropagation();
           focusedRef.current = null;
-          ++revisionRef.current;
+          cancelReveal();
           onBlur?.(event);
         }}
         onScroll={event => {
           scrollYRef.current = event.nativeEvent.contentOffset.y;
           onScroll?.(event);
+        }}
+        onScrollBeginDrag={event => {
+          cancelReveal();
+          onScrollBeginDrag?.(event);
         }}
         onLayout={event => {
           onLayout?.(event);
@@ -129,7 +156,7 @@ export const KeyboardAwareScrollView = React.forwardRef<ScrollView, KeyboardAwar
         scrollEventThrottle={props.scrollEventThrottle ?? 16}
       >
         {children}
-        <View pointerEvents="none" style={{ height: overlap + (overlap > 0 ? bottomOffset : 0) }} />
+        <View pointerEvents="none" style={{ height: overlap + (keyboardVisible ? bottomOffset : 0), flexShrink: 0 }} />
       </ScrollView>
     );
   }

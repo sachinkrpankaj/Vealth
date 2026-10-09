@@ -41,8 +41,10 @@ function mount(props: Record<string, unknown> = {}) {
   let inputTop = 620;
   const input = { measureInWindow: (fn: Function) => fn(10, inputTop, 200, 48) };
   const native = { measureInWindow: jest.fn((fn: Function) => fn(0, top, 360, height)) };
+  let scrollY = 0;
   const scrollTo = jest.fn(({ y }: { y: number }) => {
-    inputTop -= y;
+    inputTop -= y - scrollY;
+    scrollY = y;
     tree.props.onScroll({ nativeEvent: { contentOffset: { y } } });
   });
   tree.props.ref({ getNativeScrollRef: () => native, scrollTo });
@@ -61,6 +63,7 @@ function mount(props: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  jest.useFakeTimers();
   mockEffects.length = 0;
   mockFrames.clear();
   mockListeners.clear();
@@ -70,6 +73,8 @@ beforeEach(() => {
   global.cancelAnimationFrame = jest.fn(id => { if (id != null) mockFrames.delete(id); });
 });
 
+afterEach(() => { jest.useRealTimers(); });
+
 describe('keyboard event and scroll integration', () => {
   it('reveals an occluded bottom field and retries from content-size changes', () => {
     const form = mount();
@@ -77,7 +82,7 @@ describe('keyboard event and scroll integration', () => {
     mockListeners.get('keyboardDidShow')!({ endCoordinates: { screenY: 500 } });
     flushFrame();
     expect(mockSetState).toHaveBeenLastCalledWith(200);
-    expect(form.scrollTo).toHaveBeenCalledWith({ y: 168, animated: false });
+    expect(form.scrollTo).toHaveBeenCalledWith({ y: 184, animated: false });
     form.tree.props.onContentSizeChange(360, 1000);
     flushFrame();
     expect(form.scrollTo).toHaveBeenCalledTimes(1);
@@ -129,4 +134,44 @@ describe('keyboard event and scroll integration', () => {
     expect(mockListeners.size).toBe(0);
     expect(form.scrollTo).not.toHaveBeenCalled();
   });
+});
+
+it('rechecks a bottom field after a native transition moves it without a layout event', () => {
+  const form = mount();
+  form.setInputTop(400);
+  form.focus();
+  mockListeners.get('keyboardDidShow')!({ endCoordinates: { screenY: 500 } });
+  flushFrame();
+  expect(form.scrollTo).not.toHaveBeenCalled();
+  form.setInputTop(520);
+  jest.advanceTimersByTime(350);
+  flushFrame();
+  expect(form.scrollTo).toHaveBeenCalledWith({ y: 84, animated: false });
+  form.unmount();
+});
+
+it('reveals a newly focused field while the keyboard is already open', () => {
+  const form = mount();
+  form.setInputTop(120);
+  form.focus();
+  mockListeners.get('keyboardDidShow')!({ endCoordinates: { screenY: 500 } });
+  flushFrame();
+  form.tree.props.onBlur({ stopPropagation: jest.fn() });
+  form.setInputTop(600);
+  form.focus();
+  flushFrame();
+  expect(form.scrollTo).toHaveBeenCalledWith({ y: 164, animated: false });
+  form.unmount();
+});
+
+it('does not undo a manual drag with a pending transition retry', () => {
+  const onScrollBeginDrag = jest.fn();
+  const form = mount({ onScrollBeginDrag });
+  form.focus();
+  form.tree.props.onScrollBeginDrag({});
+  jest.advanceTimersByTime(350);
+  flushFrame();
+  expect(onScrollBeginDrag).toHaveBeenCalledTimes(1);
+  expect(form.scrollTo).not.toHaveBeenCalled();
+  form.unmount();
 });

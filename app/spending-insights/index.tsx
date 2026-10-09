@@ -937,124 +937,126 @@ export default function SpendingInsightsScreen() {
               </Pressable>
             </View>
 
-            {/* Quick Add Form */}
-            <View style={[styles.quickAddCard, { backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.02)' }]}>
-              <Text style={[styles.quickAddTitle, { color: colors.textPrimary }]}>
-                {editingCategory ? 'Rename / Edit Category' : 'Create New Category'}
-              </Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <TextInput
-                  value={newCatName}
-                  onChangeText={setNewCatName}
-                  placeholder="Category Name"
-                  placeholderTextColor={colors.textMuted}
-                  style={[
-                    styles.quickAddInput,
-                    {
-                      color: colors.textPrimary,
-                      borderColor: colors.border,
-                      backgroundColor: colors.surface,
-                      borderRadius: radii.sm,
-                    },
-                  ]}
-                />
-                <Pressable
-                  onPress={handleSaveCategoryInManager}
-                  disabled={isSavingCategory}
-                  style={[
-                    styles.quickAddSaveBtn,
-                    {
-                      backgroundColor: colors.accent,
-                      borderRadius: radii.sm,
-                      opacity: isSavingCategory ? 0.6 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
-                    {isSavingCategory ? 'Saving...' : editingCategory ? 'Update' : 'Add'}
-                  </Text>
-                </Pressable>
-                {editingCategory ? (
-                  <Pressable
-                    onPress={() => {
-                      setEditingCategory(null);
-                      setNewCatName('');
-                    }}
-                    style={[styles.quickAddCancelBtn, { borderColor: colors.border, borderRadius: radii.sm }]}
-                  >
-                    <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-
-            {/* Category List */}
-            <KeyboardAwareScrollView style={{ marginTop: 14, flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
-              <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
-                CUSTOM & GENERAL CATEGORIES
-              </Text>
-
-              {allCategoriesList.map((cat) => {
-                const CatIcon = ICON_MAP[cat.icon] || Tag;
-                const isGeneral = isMonthlyGeneralCategory(cat);
-
-                return (
-                  <View
-                    key={cat.id}
+            <KeyboardAwareScrollView style={{ flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+              {/* Quick Add Form */}
+              <View style={[styles.quickAddCard, { backgroundColor: isDark ? colors.surfaceSubtle : 'rgba(0,0,0,0.02)' }]}>
+                <Text style={[styles.quickAddTitle, { color: colors.textPrimary }]}>
+                  {editingCategory ? 'Rename / Edit Category' : 'Create New Category'}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <TextInput
+                    value={newCatName}
+                    onChangeText={setNewCatName}
+                    placeholder="Category Name"
+                    placeholderTextColor={colors.textMuted}
                     style={[
-                      styles.managerRow,
+                      styles.quickAddInput,
                       {
-                        borderColor: colors.borderSubtle,
-                        opacity: cat.isArchived ? 0.45 : 1,
+                        color: colors.textPrimary,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        borderRadius: radii.sm,
+                      },
+                    ]}
+                  />
+                  <Pressable
+                    onPress={handleSaveCategoryInManager}
+                    disabled={isSavingCategory}
+                    style={[
+                      styles.quickAddSaveBtn,
+                      {
+                        backgroundColor: colors.accent,
+                        borderRadius: radii.sm,
+                        opacity: isSavingCategory ? 0.6 : 1,
                       },
                     ]}
                   >
-                    <View style={styles.managerRowLeft}>
-                      <View style={[styles.catIconMini, { backgroundColor: `${cat.color || colors.accent}20` }]}>
-                        <CatIcon size={14} color={cat.color || colors.accent} />
-                      </View>
-                      <View>
-                        <Text style={[styles.managerCatName, { color: colors.textPrimary }]}>
-                          {cat.name}
-                        </Text>
-                        <Text style={[styles.managerCatMeta, { color: colors.textMuted }]}>
-                          {isGeneral
-                            ? 'Monthly general fallback'
-                            : cat.isArchived
-                            ? 'Archived (hidden from new expenses)'
-                            : 'Active custom category'}
-                        </Text>
-                      </View>
-                    </View>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
+                      {isSavingCategory ? 'Saving...' : editingCategory ? 'Update' : 'Add'}
+                    </Text>
+                  </Pressable>
+                  {editingCategory ? (
+                    <Pressable
+                      onPress={() => {
+                        setEditingCategory(null);
+                        setNewCatName('');
+                      }}
+                      style={[styles.quickAddCancelBtn, { borderColor: colors.border, borderRadius: radii.sm }]}
+                    >
+                      <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
 
-                    {!isGeneral && !cat.isDefault ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Pressable
-                          onPress={() => {
-                            setEditingCategory(cat);
-                            setNewCatName(cat.name);
-                            setNewCatColor(cat.color || COLOR_PALETTE[0]);
-                          }}
-                          hitSlop={8}
-                          style={styles.actionIconBtn}
-                        >
-                          <Edit2 size={15} color={colors.textSecondary} />
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleToggleArchiveInManager(cat)}
-                          hitSlop={8}
-                          style={styles.actionIconBtn}
-                        >
-                          <Archive
-                            size={15}
-                            color={cat.isArchived ? colors.accent : '#EF4444'}
-                          />
-                        </Pressable>
+              {/* Category List */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+                  CUSTOM & GENERAL CATEGORIES
+                </Text>
+
+                {allCategoriesList.map((cat) => {
+                  const CatIcon = ICON_MAP[cat.icon] || Tag;
+                  const isGeneral = isMonthlyGeneralCategory(cat);
+
+                  return (
+                    <View
+                      key={cat.id}
+                      style={[
+                        styles.managerRow,
+                        {
+                          borderColor: colors.borderSubtle,
+                          opacity: cat.isArchived ? 0.45 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.managerRowLeft}>
+                        <View style={[styles.catIconMini, { backgroundColor: `${cat.color || colors.accent}20` }]}>
+                          <CatIcon size={14} color={cat.color || colors.accent} />
+                        </View>
+                        <View>
+                          <Text style={[styles.managerCatName, { color: colors.textPrimary }]}>
+                            {cat.name}
+                          </Text>
+                          <Text style={[styles.managerCatMeta, { color: colors.textMuted }]}>
+                            {isGeneral
+                              ? 'Monthly general fallback'
+                              : cat.isArchived
+                              ? 'Archived (hidden from new expenses)'
+                              : 'Active custom category'}
+                          </Text>
+                        </View>
                       </View>
-                    ) : null}
-                  </View>
-                );
-              })}
+
+                      {!isGeneral && !cat.isDefault ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Pressable
+                            onPress={() => {
+                              setEditingCategory(cat);
+                              setNewCatName(cat.name);
+                              setNewCatColor(cat.color || COLOR_PALETTE[0]);
+                            }}
+                            hitSlop={8}
+                            style={styles.actionIconBtn}
+                          >
+                            <Edit2 size={15} color={colors.textSecondary} />
+                          </Pressable>
+                          <Pressable
+                            onPress={() => handleToggleArchiveInManager(cat)}
+                            hitSlop={8}
+                            style={styles.actionIconBtn}
+                          >
+                            <Archive
+                              size={15}
+                              color={cat.isArchived ? colors.accent : '#EF4444'}
+                            />
+                          </Pressable>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
             </KeyboardAwareScrollView>
           </View>
         </KeyboardAvoidingView>

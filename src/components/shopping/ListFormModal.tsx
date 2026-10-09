@@ -13,6 +13,7 @@ import { X, AlertCircle } from 'lucide-react-native';
 import { ShoppingList } from '../../domain/finance/types';
 import { PrimaryButton } from '../ui/PrimaryButton';
 import { IconButton } from '../ui/IconButton';
+import { KeyboardAwareScrollView } from '../ui/KeyboardAwareScrollView';
 import { useTheme } from '../../theme';
 import * as Haptics from 'expo-haptics';
 
@@ -117,60 +118,63 @@ export const ListFormModal: React.FC<ListFormModalProps> = ({
             </IconButton>
           </View>
 
-          {/* List Name Input */}
-          <Text
-            style={[
-              styles.fieldLabel,
-              {
-                color: colors.textSecondary,
-                fontFamily: typography.fontFamilies.semibold,
-              },
-            ]}
-          >
-            List Name *
-          </Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Groceries, Needs, Electronics"
-            placeholderTextColor={colors.textMuted}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-            style={[
-              styles.textInput,
-              {
-                color: colors.textPrimary,
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderRadius: radii.md,
-                fontFamily: typography.fontFamilies.regular,
-              },
-            ]}
-          />
-
-          {/* Error Message */}
-          {errorMessage ? (
-            <View
+          <KeyboardAwareScrollView style={{ flex: 0, flexShrink: 1 }} showsVerticalScrollIndicator={false}>
+            {/* List Name Input */}
+            <Text
               style={[
-                styles.errorBox,
-                { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
+                styles.fieldLabel,
+                {
+                  color: colors.textSecondary,
+                  fontFamily: typography.fontFamilies.semibold,
+                },
               ]}
             >
-              <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
-              <Text
+              List Name *
+            </Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Groceries, Needs, Electronics"
+              placeholderTextColor={colors.textMuted}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSubmit}
+              style={[
+                styles.textInput,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderRadius: radii.md,
+                  fontFamily: typography.fontFamilies.regular,
+                },
+              ]}
+            />
+
+            {/* Error Message */}
+            {errorMessage ? (
+              <View
                 style={[
-                  styles.errorText,
-                  {
-                    color: colors.negative,
-                    fontFamily: typography.fontFamilies.medium,
-                  },
+                  styles.errorBox,
+                  { backgroundColor: colors.negativeBg, borderRadius: radii.sm },
                 ]}
               >
-                {errorMessage}
-              </Text>
-            </View>
-          ) : null}
+                <AlertCircle size={15} color={colors.negative} style={{ marginRight: 6 }} />
+                <Text
+                  style={[
+                    styles.errorText,
+                    {
+                      color: colors.negative,
+                      fontFamily: typography.fontFamilies.medium,
+                    },
+                  ]}
+                >
+                  {errorMessage}
+                </Text>
+              </View>
+            ) : null}
+
+          </KeyboardAwareScrollView>
 
           {/* Submit Button */}
           <View style={styles.actionsContainer}>
@@ -201,6 +205,7 @@ const styles = StyleSheet.create({
   },
   modalSheet: {
     width: '100%',
+    maxHeight: '100%',
     padding: 20,
     elevation: 20,
     zIndex: 1,
