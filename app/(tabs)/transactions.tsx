@@ -165,6 +165,7 @@ export default function TransactionsScreen() {
       <AppHeader
         title="activity"
         onProfilePress={() => router.push('/profile')}
+        onCardWalletPress={() => router.push('/cards')}
         onRightPress={() => router.push('/transaction/add')}
         rightAccessibilityLabel="Add transaction"
         rightIcon={<Plus size={18} color={colors.textPrimary} />}

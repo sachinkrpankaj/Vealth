@@ -32,6 +32,8 @@ import {
   ShoppingList,
   ShoppingItem,
 } from '../domain/finance/types';
+import { SavedCard } from '../domain/cards/types';
+import { getAllCards } from '../database/repositories/cardRepository';
 import { formatDateIso, parseLocalDate } from './dateUtils';
 import { generateEntityId } from './idGenerator';
 
@@ -50,6 +52,7 @@ export interface VealthBackupData {
     settings: Record<string, string>;
     shoppingLists?: ShoppingList[];
     shoppingItems?: ShoppingItem[];
+    cards?: SavedCard[];
   };
 }
 
@@ -78,6 +81,7 @@ export async function createBackupData(): Promise<VealthBackupData> {
   const allSettings = await getSettingsMap();
   const shoppingLists = await getAllShoppingLists(true);
   const shoppingItems = await getAllShoppingItems();
+  const cards = await getAllCards({ includeArchived: true });
 
   // Strip all sensitive security / PIN / auth keys from exported settings
   const sanitizedSettings: Record<string, string> = {};
@@ -102,6 +106,7 @@ export async function createBackupData(): Promise<VealthBackupData> {
       settings: sanitizedSettings,
       shoppingLists,
       shoppingItems,
+      cards,
     },
   };
 }
@@ -465,6 +470,30 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     return { isValid: false, error: 'Backup contains shopping items with multiple active transactions.' };
   }
 
+  // Validate cards if present
+  if (data.cards) {
+    if (
+      !Array.isArray(data.cards) ||
+      !data.cards.every(
+        (c: any) =>
+          c &&
+          typeof c === 'object' &&
+          validId(c.id) &&
+          validId(c.cardholderName) &&
+          (c.cardType === 'CREDIT' || c.cardType === 'DEBIT') &&
+          typeof c.network === 'string' &&
+          typeof c.encryptedCardNumber === 'string' &&
+          typeof c.lastFour === 'string' &&
+          typeof c.expiryMonth === 'number' &&
+          typeof c.expiryYear === 'number' &&
+          (c.linkedAccountId == null || exists(c.linkedAccountId, accountIds))
+      ) ||
+      !hasUniqueIds(data.cards)
+    ) {
+      return { isValid: false, error: 'Backup contains invalid or corrupted card wallet records.' };
+    }
+  }
+
   return { isValid: true };
 }
 
@@ -479,6 +508,7 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     await db.execAsync(`
       DELETE FROM shopping_items;
       DELETE FROM shopping_lists;
+      DELETE FROM cards;
       DELETE FROM transactions;
       DELETE FROM liabilities;
       DELETE FROM assets;
@@ -732,6 +762,37 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
             item.purchaseAccountId ?? null,
             item.transactionId ?? null,
             item.categoryId ?? null,
+          ]
+        );
+      }
+    }
+
+    // 11. Restore cards (strictly encrypted; no plain numbers or CVV)
+    if (backup.data.cards && Array.isArray(backup.data.cards)) {
+      for (const card of backup.data.cards) {
+        if (!card.encryptedCardNumber || !card.lastFour) continue;
+        await db.runAsync(
+          `INSERT INTO cards (
+             id, cardholderName, cardType, network, encryptedCardNumber, lastFour,
+             expiryMonth, expiryYear, cardNickname, linkedAccountId, colorTheme,
+             issuer, isArchived, createdAt, updatedAt
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          [
+            card.id,
+            card.cardholderName,
+            card.cardType,
+            card.network,
+            card.encryptedCardNumber,
+            card.lastFour,
+            card.expiryMonth,
+            card.expiryYear,
+            card.cardNickname ?? null,
+            card.linkedAccountId ?? null,
+            card.colorTheme ?? 'midnight',
+            card.issuer ?? null,
+            card.isArchived ? 1 : 0,
+            card.createdAt,
+            card.updatedAt,
           ]
         );
       }

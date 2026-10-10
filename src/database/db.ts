@@ -147,6 +147,45 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     'create shopping tables'
   );
 
+  // Card wallet tables migration
+  await runSafeMigration(
+    db,
+    `
+      CREATE TABLE IF NOT EXISTS cards (
+        id TEXT PRIMARY KEY,
+        cardholderName TEXT NOT NULL,
+        cardType TEXT NOT NULL,
+        network TEXT NOT NULL,
+        encryptedCardNumber TEXT NOT NULL,
+        lastFour TEXT NOT NULL,
+        expiryMonth INTEGER NOT NULL,
+        expiryYear INTEGER NOT NULL,
+        cardNickname TEXT,
+        linkedAccountId TEXT,
+        colorTheme TEXT,
+        issuer TEXT,
+        isArchived INTEGER NOT NULL DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (linkedAccountId) REFERENCES accounts(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_cards_cardType ON cards(cardType);
+      CREATE INDEX IF NOT EXISTS idx_cards_linkedAccountId ON cards(linkedAccountId);
+      CREATE INDEX IF NOT EXISTS idx_cards_isArchived ON cards(isArchived);
+    `,
+    'create cards table'
+  );
+
+  // Migration to add issuer column to cards if missing from existing database
+  try {
+    const cardColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(cards);');
+    if (cardColumns.length > 0 && !cardColumns.some((c) => c.name === 'issuer')) {
+      await db.execAsync('ALTER TABLE cards ADD COLUMN issuer TEXT;');
+    }
+  } catch (err: any) {
+    console.warn('[Migration Warning] Failed checking/adding issuer column to cards:', err);
+  }
+
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
   let fkRows: Array<{ table: string }> = [];
   try {

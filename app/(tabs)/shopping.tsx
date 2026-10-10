@@ -53,6 +53,7 @@ export default function ShoppingScreen() {
       <AppHeader
         title="shopping"
         onProfilePress={() => router.push('/profile')}
+        onCardWalletPress={() => router.push('/cards')}
         onRightPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           setIsCreateModalOpen(true);

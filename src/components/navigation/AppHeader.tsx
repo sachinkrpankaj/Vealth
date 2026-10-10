@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { User, Bell } from 'lucide-react-native';
+import { User, Bell, CreditCard } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '../../theme';
 import { typography } from '../../theme/typography';
 import * as Haptics from 'expo-haptics';
@@ -9,6 +10,8 @@ import { IconButton } from '../ui/IconButton';
 interface AppHeaderProps {
   title: string;
   onProfilePress?: () => void;
+  onCardWalletPress?: () => void;
+  showCardWallet?: boolean;
   onRightPress?: () => void;
   rightIcon?: React.ReactNode;
   rightAccessibilityLabel?: string;
@@ -22,6 +25,8 @@ interface AppHeaderProps {
 export function AppHeader({
   title,
   onProfilePress,
+  onCardWalletPress,
+  showCardWallet = true,
   onRightPress,
   rightIcon,
   rightAccessibilityLabel,
@@ -32,6 +37,16 @@ export function AppHeader({
   rightComponent,
 }: AppHeaderProps) {
   const { colors } = useTheme();
+  const router = useRouter();
+
+  const handleCardWalletPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (onCardWalletPress) {
+      onCardWalletPress();
+    } else {
+      router.push('/cards');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -51,7 +66,7 @@ export function AppHeader({
         </Text>
       </View>
 
-      {/* Profile Button */}
+      {/* Profile & Card Wallet Buttons */}
       <View style={styles.leftActionsRow}>
         <IconButton
           size={38}
@@ -63,6 +78,15 @@ export function AppHeader({
           accessibilityLabel="User profile"
           icon={<User size={18} color={colors.textPrimary} strokeWidth={2.2} />}
         />
+        {showCardWallet && (
+          <IconButton
+            size={38}
+            variant="default"
+            onPress={handleCardWalletPress}
+            accessibilityLabel="Card Wallet"
+            icon={<CreditCard size={18} color={colors.textPrimary} strokeWidth={2.2} />}
+          />
+        )}
       </View>
 
       {/* Right Actions */}
@@ -145,6 +169,7 @@ const styles = StyleSheet.create({
   leftActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     zIndex: 2,
   },
   iconButton: {

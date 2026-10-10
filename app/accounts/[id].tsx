@@ -16,10 +16,15 @@ import { useTheme } from '../../src/theme';
 import { getAccountById, getAllAccounts, archiveAccount } from '../../src/database/repositories/accountRepository';
 import { getAllTransactions } from '../../src/database/repositories/transactionRepository';
 import { getAllPeople } from '../../src/database/repositories/personRepository';
+import { getAllCards } from '../../src/database/repositories/cardRepository';
 import { calculateAccountBalance, calculateAllAccountBalances } from '../../src/domain/finance/financialEngine';
 import { getCreditCardBillingInfo, formatDayOrdinal } from '../../src/domain/finance/creditCardBilling';
 import { formatRupee } from '../../src/domain/finance/currency';
 import { Account, Transaction, Person } from '../../src/domain/finance/types';
+import { SavedCard } from '../../src/domain/cards/types';
+import { CardPreview } from '../../src/components/cards/CardPreview';
+import { CardDetailModal } from '../../src/components/cards/CardDetailModal';
+import { CardFormModal } from '../../src/components/cards/CardFormModal';
 import * as Haptics from 'expo-haptics';
 
 export default function AccountDetailScreen() {
@@ -32,6 +37,11 @@ export default function AccountDetailScreen() {
   const [people, setPeople] = useState<Person[]>([]);
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const [allAccountBalances, setAllAccountBalances] = useState<Map<string, number>>(new Map());
+  const [linkedCards, setLinkedCards] = useState<SavedCard[]>([]);
+  const [selectedCard, setSelectedCard] = useState<SavedCard | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [formModalVisible, setFormModalVisible] = useState(false);
+  const [editingCard, setEditingCard] = useState<SavedCard | null>(null);
   const [isPayModalVisible, setIsPayModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -45,6 +55,12 @@ export default function AccountDetailScreen() {
       // Archived accounts still identify the source/destination of historical transfers.
       const accs = await getAllAccounts(true);
       const rawAllTx = await getAllTransactions();
+      let cCards: SavedCard[] = [];
+      try {
+        cCards = await getAllCards({ linkedAccountId: id });
+      } catch {
+        cCards = [];
+      }
 
       if (acc) {
         setAccount(acc);
@@ -54,6 +70,7 @@ export default function AccountDetailScreen() {
       setPeople(ppl);
       setAllAccounts(accs);
       setAllAccountBalances(calculateAllAccountBalances(accs, rawAllTx));
+      setLinkedCards(cCards);
     } catch (e) {
       console.error('Failed to load account details:', e);
     } finally {
@@ -271,6 +288,93 @@ export default function AccountDetailScreen() {
         </Card>
       )}
 
+      {/* Linked Cards Section */}
+      {(account.type === 'BANK' || account.type === 'CREDIT_CARD') && (
+        <View style={{ marginBottom: 16 }}>
+          <View style={[styles.cardSectionHeaderRow, { marginBottom: 10 }]}>
+            <SectionHeader
+              title={account.type === 'BANK' ? 'Linked Debit Cards' : 'Linked Card Details'}
+            />
+            <LiquidGlassCard
+              onPress={() => {
+                setEditingCard(null);
+                setFormModalVisible(true);
+              }}
+              accessibilityLabel={account.type === 'BANK' ? 'Add Debit Card' : 'Link Card'}
+              radius={radii.full}
+              padding={0}
+              style={styles.addCardMiniBtn}
+            >
+              <View style={styles.addCardMiniContent}>
+                <Plus size={14} color={colors.accent} />
+                <Text
+                  style={[
+                    styles.addCardMiniText,
+                    { color: colors.accent, fontFamily: typography.fontFamilies.semibold },
+                  ]}
+                >
+                  {account.type === 'BANK' ? 'Add Debit Card' : 'Link Card'}
+                </Text>
+              </View>
+            </LiquidGlassCard>
+          </View>
+
+          {linkedCards.length === 0 ? (
+            <LiquidGlassCard
+              radius={radii.md}
+              padding={14}
+              style={styles.noCardBanner}
+              onPress={() => {
+                setEditingCard(null);
+                setFormModalVisible(true);
+              }}
+              accessibilityLabel="Add card for this account"
+            >
+              <CreditCard size={18} color={colors.textMuted} style={{ marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.noCardTitle,
+                    { color: colors.textPrimary, fontFamily: typography.fontFamilies.semibold },
+                  ]}
+                >
+                  {account.type === 'BANK' ? 'No debit cards linked' : 'No card details saved'}
+                </Text>
+                <Text style={[styles.noCardSub, { color: colors.textSecondary }]}>
+                  {account.type === 'BANK'
+                    ? 'Optionally save ATM / debit cards for fast copying of numbers.'
+                    : 'Save card details for easy copying of number, holder, and expiry.'}
+                </Text>
+              </View>
+              <Plus size={16} color={colors.accent} />
+            </LiquidGlassCard>
+          ) : (
+            <View>
+              {linkedCards.map((c) => (
+                <View key={c.id} style={{ marginBottom: 12 }}>
+                  <CardPreview
+                    cardholderName={c.cardholderName}
+                    lastFour={c.lastFour}
+                    network={c.network}
+                    cardType={c.cardType}
+                    issuer={c.issuer}
+                    expiryMonth={c.expiryMonth}
+                    expiryYear={c.expiryYear}
+                    cardNickname={c.cardNickname}
+                    linkedAccountName={account.name}
+                    colorTheme={c.colorTheme}
+                    onPress={() => {
+                      setSelectedCard(c);
+                      setDetailModalVisible(true);
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      )}
+
       {/* Transactions in this Account */}
       <SectionHeader title="Account Activity" />
       {transactions.length === 0 ? (
@@ -324,6 +428,43 @@ export default function AccountDetailScreen() {
           }}
         />
       )}
+
+      {/* Card Detail Modal */}
+      <CardDetailModal
+        visible={detailModalVisible}
+        card={selectedCard}
+        linkedAccount={account}
+        onClose={() => {
+          setDetailModalVisible(false);
+          setSelectedCard(null);
+        }}
+        onEdit={(c) => {
+          setDetailModalVisible(false);
+          setSelectedCard(null);
+          setEditingCard(c);
+          setTimeout(() => {
+            setFormModalVisible(true);
+          }, 120);
+        }}
+        onCardDeleted={() => {
+          loadData(true);
+        }}
+      />
+
+      {/* Card Form Modal */}
+      <CardFormModal
+        visible={formModalVisible}
+        initialCard={editingCard}
+        preselectedAccountId={account.id}
+        accounts={allAccounts}
+        onClose={() => {
+          setFormModalVisible(false);
+          setEditingCard(null);
+        }}
+        onSuccess={() => {
+          loadData(true);
+        }}
+      />
     </ScreenContainer>
   );
 }
@@ -415,5 +556,38 @@ const styles = StyleSheet.create({
   },
   ccPayBtnText: {
     fontSize: 12,
+  },
+  cardSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  addCardMiniBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addCardMiniContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addCardMiniText: {
+    fontSize: 12,
+  },
+  noCardBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  noCardTitle: {
+    fontSize: 13,
+  },
+  noCardSub: {
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
   },
 });

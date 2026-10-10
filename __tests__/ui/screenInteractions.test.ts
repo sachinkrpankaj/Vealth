@@ -53,6 +53,7 @@ jest.mock('../../src/database/repositories/assetRepository', () => ({ updateAsse
 jest.mock('../../src/database/repositories/liabilityRepository', () => ({ updateLiability: jest.fn(), deleteLiability: jest.fn() }));
 jest.mock('../../src/database/repositories/personRepository', () => ({ getPersonById: jest.fn(), getAllPeople: jest.fn(), updatePerson: jest.fn(), archivePerson: jest.fn() }));
 jest.mock('../../src/database/repositories/transactionRepository', () => ({ getAllTransactions: jest.fn() }));
+jest.mock('../../src/database/repositories/cardRepository', () => ({ getAllCards: jest.fn().mockResolvedValue([]), getCardById: jest.fn().mockResolvedValue(null), createCard: jest.fn(), updateCard: jest.fn(), deleteCard: jest.fn() }));
 jest.mock('../../src/components/ui/ThemedDialog', () => ({ showThemedAlert: jest.fn() }));
 jest.mock('../../src/utils/idGenerator', () => ({ generateEntityId: jest.fn((prefix: string) => `${prefix}-test`) }));
 
@@ -61,6 +62,9 @@ for (const name of ['ScreenContainer', 'PrimaryButton', 'SecondaryButton', 'Amou
 }
 jest.doMock('../../src/components/navigation/AppHeader', () => ({ AppHeader: 'AppHeader' }));
 jest.doMock('../../src/components/ui/PayCreditCardBillModal', () => ({ PayCreditCardBillModal: 'PayCreditCardBillModal' }));
+jest.doMock('../../src/components/cards/CardPreview', () => ({ CardPreview: 'CardPreview' }));
+jest.doMock('../../src/components/cards/CardDetailModal', () => ({ CardDetailModal: 'CardDetailModal' }));
+jest.doMock('../../src/components/cards/CardFormModal', () => ({ CardFormModal: 'CardFormModal' }));
 
 const Onboarding = require('../../app/onboarding').default;
 const Assets = require('../../app/assets/index').default;

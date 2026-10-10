@@ -14,6 +14,8 @@ module.exports = {
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.ts',
     '^expo-crypto$': '<rootDir>/__mocks__/expo-crypto.ts',
     '^expo-local-authentication$': '<rootDir>/__mocks__/expo-local-authentication.ts',
+    '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.ts',
+    '^react-native-svg$': '<rootDir>/__mocks__/react-native-svg.ts',
     '^react-native$': '<rootDir>/__mocks__/react-native.ts',
   },
   transform: {

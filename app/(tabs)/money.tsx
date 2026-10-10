@@ -42,6 +42,7 @@ export default function MoneyScreen() {
       <AppHeader
         title="credit & debt"
         onProfilePress={() => router.push('/profile')}
+        onCardWalletPress={() => router.push('/cards')}
         onRightPress={() => router.push('/people/add')}
         rightAccessibilityLabel="Add person"
         rightIcon={<UserPlus size={18} color={colors.textPrimary} />}
@@ -421,9 +422,6 @@ const styles = StyleSheet.create({
   peopleListCard: {
     overflow: 'hidden',
     marginBottom: 14,
-  },
-  emptyCard: {
-    marginBottom: 16,
   },
   rowDivider: {
     height: 1,

@@ -394,6 +394,7 @@ export interface LiquidGlassCardProps {
   hitSlop?: Insets | number;
   accessibilityRole?: any;
   accessibilityLabel?: string;
+  accessibilityState?: any;
   onLayout?: (event: LayoutChangeEvent) => void;
 }
 

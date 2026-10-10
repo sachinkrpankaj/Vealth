@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   User,
   Layers,
+  CreditCard,
 } from 'lucide-react-native';
 import { ScreenContainer } from '../../src/components/ui/ScreenContainer';
 import { AppHeader } from '../../src/components/navigation/AppHeader';
@@ -32,6 +33,13 @@ export default function MoreScreen() {
       icon: Wallet,
       color: '#3B82F6',
       route: '/accounts',
+    },
+    {
+      title: 'Card Wallet',
+      subtitle: 'Encrypted Credit & Debit cards, fast copying',
+      icon: CreditCard,
+      color: '#6366F1',
+      route: '/cards',
     },
     {
       title: 'Assets',
@@ -172,6 +180,7 @@ export default function MoreScreen() {
       <AppHeader
         title="more"
         onProfilePress={() => router.push('/profile')}
+        onCardWalletPress={() => router.push('/cards')}
         onRightPress={() => router.push('/settings/security')}
         rightAccessibilityLabel="Security settings"
         rightIcon={<ShieldCheck size={18} color={colors.textPrimary} strokeWidth={2.2} />}

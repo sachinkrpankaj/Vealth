@@ -153,6 +153,7 @@ export default function HomeScreen() {
       <AppHeader
         title="vealth"
         onProfilePress={() => router.push('/profile')}
+        onCardWalletPress={() => router.push('/cards')}
         actionIcon={<Plus size={18} color={colors.textPrimary} strokeWidth={2.4} />}
         actionAccessibilityLabel="Add transaction"
         onActionPress={() => {

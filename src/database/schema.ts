@@ -192,4 +192,27 @@ CREATE INDEX IF NOT EXISTS idx_shopping_items_listId ON shopping_items(listId);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_status ON shopping_items(status);
 CREATE INDEX IF NOT EXISTS idx_shopping_items_transactionId ON shopping_items(transactionId);
 CREATE INDEX IF NOT EXISTS idx_shopping_lists_isArchived ON shopping_lists(isArchived);
+
+CREATE TABLE IF NOT EXISTS cards (
+  id TEXT PRIMARY KEY,
+  cardholderName TEXT NOT NULL,
+  cardType TEXT NOT NULL, -- 'CREDIT' | 'DEBIT'
+  network TEXT NOT NULL, -- 'VISA' | 'MASTERCARD' | 'RUPAY' | 'AMEX' | 'DISCOVER' | 'DINERS' | 'JCB' | 'OTHER'
+  encryptedCardNumber TEXT NOT NULL,
+  lastFour TEXT NOT NULL,
+  expiryMonth INTEGER NOT NULL,
+  expiryYear INTEGER NOT NULL,
+  cardNickname TEXT,
+  linkedAccountId TEXT,
+  colorTheme TEXT,
+  issuer TEXT,
+  isArchived INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  FOREIGN KEY (linkedAccountId) REFERENCES accounts(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cards_cardType ON cards(cardType);
+CREATE INDEX IF NOT EXISTS idx_cards_linkedAccountId ON cards(linkedAccountId);
+CREATE INDEX IF NOT EXISTS idx_cards_isArchived ON cards(isArchived);
 `;
