@@ -1269,5 +1269,156 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
       const itemInDb = realAdapter.raw.prepare("SELECT * FROM shopping_items WHERE id = 'item-survivor';").get();
       expect(itemInDb).toBeDefined();
     });
+
+    it('fails closed and aborts before destructive operations when reading retained cards query fails', async () => {
+      realAdapter.raw.exec(`
+        INSERT INTO accounts (id, name, type, openingBalance, currency, isArchived, createdAt, updatedAt)
+        VALUES ('acc-fail-test', 'Local Bank', 'BANK', 10000, 'INR', 0, '2026-01-01', '2026-01-01');
+
+        INSERT INTO cards (
+          id, cardholderName, cardType, network, encryptedCardNumber, lastFour,
+          expiryMonth, expiryYear, linkedAccountId, isArchived, createdAt, updatedAt
+        ) VALUES (
+          'card-fail-test', 'John Doe', 'DEBIT', 'VISA', 'aes-gcm:v1:0123456789abcdef01234567:0123456789abcdef0123456789abcdef', '1234',
+          12, 2028, 'acc-fail-test', 0, '2026-01-01', '2026-01-01'
+        );
+      `);
+
+      const originalGetAllAsync = realAdapter.getAllAsync;
+      realAdapter.getAllAsync = jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('FROM cards')) {
+          throw new Error('Simulated SQLite disk read error for cards');
+        }
+        return originalGetAllAsync(sql, params);
+      });
+
+      const incomingBackup: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2026-05-15T12:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          // cards omitted: requires reading retained cards
+        },
+      };
+
+      await expect(restoreBackup(incomingBackup)).rejects.toThrow(
+        /failed to read retained cards from local database.*Simulated SQLite disk read error for cards/i
+      );
+
+      // Verify NO destructive operations occurred: account and card are untouched in real SQLite!
+      const cardInDb = realAdapter.raw.prepare("SELECT * FROM cards WHERE id = 'card-fail-test';").get();
+      expect(cardInDb).toBeDefined();
+
+      const accInDb = realAdapter.raw.prepare("SELECT * FROM accounts WHERE id = 'acc-fail-test';").get();
+      expect(accInDb).toBeDefined();
+    });
+
+    it('fails closed and aborts before destructive operations when reading retained shopping lists query fails', async () => {
+      realAdapter.raw.exec(`
+        INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
+        VALUES ('list-fail-test', 'Important List', 0, '2026-01-01', '2026-01-01');
+
+        INSERT INTO shopping_items (id, listId, name, status, createdAt, updatedAt)
+        VALUES ('item-fail-test', 'list-fail-test', 'Important Item', 'PENDING', '2026-01-01', '2026-01-01');
+      `);
+
+      const originalGetAllAsync = realAdapter.getAllAsync;
+      realAdapter.getAllAsync = jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('FROM shopping_lists')) {
+          throw new Error('Simulated SQLite disk read error for shopping lists');
+        }
+        return originalGetAllAsync(sql, params);
+      });
+
+      const incomingBackup: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2026-05-15T12:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+        },
+      };
+
+      await expect(restoreBackup(incomingBackup)).rejects.toThrow(
+        /failed to read retained shopping lists from local database.*Simulated SQLite disk read error for shopping lists/i
+      );
+
+      // Verify NO destructive operations occurred: list and item are untouched in real SQLite!
+      const listInDb = realAdapter.raw.prepare("SELECT * FROM shopping_lists WHERE id = 'list-fail-test';").get();
+      expect(listInDb).toBeDefined();
+
+      const itemInDb = realAdapter.raw.prepare("SELECT * FROM shopping_items WHERE id = 'item-fail-test';").get();
+      expect(itemInDb).toBeDefined();
+    });
+
+    it('fails closed and aborts before destructive operations when reading retained shopping items query fails', async () => {
+      realAdapter.raw.exec(`
+        INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
+        VALUES ('list-items-fail', 'Groceries', 0, '2026-01-01', '2026-01-01');
+
+        INSERT INTO shopping_items (id, listId, name, status, createdAt, updatedAt)
+        VALUES ('item-items-fail', 'list-items-fail', 'Apples', 'PENDING', '2026-01-01', '2026-01-01');
+      `);
+
+      const originalGetAllAsync = realAdapter.getAllAsync;
+      realAdapter.getAllAsync = jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('FROM shopping_items')) {
+          throw new Error('Simulated SQLite disk read error for shopping items');
+        }
+        return originalGetAllAsync(sql, params);
+      });
+
+      const incomingBackup: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2026-05-15T12:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          shoppingLists: [
+            {
+              id: 'list-items-fail',
+              name: 'Groceries Updated',
+              isArchived: false,
+              createdAt: '2026-01-01',
+              updatedAt: '2026-05-15',
+            },
+          ],
+          // shoppingItems omitted
+        },
+      };
+
+      await expect(restoreBackup(incomingBackup)).rejects.toThrow(
+        /failed to read retained shopping items from local database.*Simulated SQLite disk read error for shopping items/i
+      );
+
+      // Verify NO destructive operations occurred: list still has original name, item still exists!
+      const listInDb = realAdapter.raw.prepare("SELECT * FROM shopping_lists WHERE id = 'list-items-fail';").get() as any;
+      expect(listInDb.name).toBe('Groceries');
+
+      const itemInDb = realAdapter.raw.prepare("SELECT * FROM shopping_items WHERE id = 'item-items-fail';").get();
+      expect(itemInDb).toBeDefined();
+    });
   });
 });

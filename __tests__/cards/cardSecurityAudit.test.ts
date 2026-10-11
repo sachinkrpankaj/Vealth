@@ -429,6 +429,18 @@ describe('Card Wallet Security & Authentication Audit Regression Tests', () => {
       setItemSpy.mockRestore();
     });
 
+    it('treats an existing empty key in SecureStore as corrupted and never overwrites it', async () => {
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue('');
+      const setItemSpy = jest.spyOn(SecureStore, 'setItemAsync');
+
+      await expect(getMasterEncryptionKeyHex()).rejects.toThrow(
+        /corrupted or unreadable master encryption key/i
+      );
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
+    });
+
     it('fails closed and never replaces key when SecureStore read fails', async () => {
       (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
       (SecureStore.getItemAsync as jest.Mock).mockRejectedValue(

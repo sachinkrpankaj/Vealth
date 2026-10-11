@@ -142,6 +142,25 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
           'Cannot switch account between Credit Card and asset account because transactions are recorded for it.'
         );
       }
+
+      const currentOpeningBalance = Math.round(current.openingBalance ?? 0);
+      const requestedOpeningBalance =
+        updates.openingBalance !== undefined ? Math.round(updates.openingBalance) : currentOpeningBalance;
+      if (currentOpeningBalance !== 0 || requestedOpeningBalance !== 0) {
+        throw new Error(
+          'Cannot switch account between Credit Card and asset account because it has a nonzero opening balance.'
+        );
+      }
+
+      const linkedLiabilities = await db.getAllAsync<{ id: string; name: string }>(
+        'SELECT id, name FROM liabilities WHERE accountId = ?;',
+        [id]
+      );
+      if (linkedLiabilities && linkedLiabilities.length > 0) {
+        throw new Error(
+          `Cannot switch account between Credit Card and asset account: linked liability "${linkedLiabilities[0].name}" references this account. Reassign or unlink the liability first.`
+        );
+      }
     }
   }
 
@@ -192,6 +211,17 @@ export async function deleteAccount(id: string): Promise<void> {
   if ((shoppingRef?.count ?? 0) > 0) {
     throw new Error(
       'Cannot delete account because it is referenced by one or more purchases in Shopping List. Reassign or remove shopping items first.'
+    );
+  }
+
+  // Prevent account deletion if liabilities reference this account - fail closed on any error
+  const liabRef = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM liabilities WHERE accountId = ?;',
+    [id]
+  );
+  if ((liabRef?.count ?? 0) > 0) {
+    throw new Error(
+      'Cannot delete account because it is referenced by one or more liabilities. Reassign or remove linked liabilities first.'
     );
   }
 

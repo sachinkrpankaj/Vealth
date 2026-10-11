@@ -97,8 +97,8 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
         );
       }
 
-      // Check if key is genuinely absent: null, undefined, or empty string
-      if (existingKey == null || existingKey === '') {
+      // Only generate a new master key when SecureStore confirms the key is genuinely absent (null/undefined)
+      if (existingKey === null || existingKey === undefined) {
         // Genuinely absent: generate a new 256-bit key
         const newKeyBytes = getSecureRandomBytes(32);
         const newKey = bytesToHex(newKeyBytes);
@@ -114,13 +114,12 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
         return newKey;
       }
 
-      // Key exists and is non-empty: validate format
+      // Key exists: validate format (must be 64-character hex string)
       if (existingKey.length === 64 && /^[0-9a-f]{64}$/i.test(existingKey)) {
         return existingKey;
       }
 
-      // Key exists but is malformed / corrupted:
-      // THROW RECOVERY ERROR, DO NOT OVERWRITE!
+      // Key exists but is empty or malformed: treat as corruption, NEVER overwrite!
       throw new Error(
         'OS secure storage contains a corrupted or unreadable master encryption key. Cannot initialize or overwrite existing key material.'
       );
@@ -131,10 +130,11 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
   if (isTest) {
     if (fallbackKeyMemory.has(MASTER_CARD_KEY_NAME)) {
       const key = fallbackKeyMemory.get(MASTER_CARD_KEY_NAME);
-      if (key != null && key !== '') {
-        if (key.length === 64 && /^[0-9a-f]{64}$/i.test(key)) {
-          return key;
-        }
+      if (key === null || key === undefined) {
+        // genuinely absent
+      } else if (key.length === 64 && /^[0-9a-f]{64}$/i.test(key)) {
+        return key;
+      } else {
         throw new Error(
           'OS secure storage contains a corrupted or unreadable master encryption key. Cannot initialize or overwrite existing key material.'
         );

@@ -687,7 +687,11 @@ export async function restoreBackup(
     let localCards: SavedCard[] = [];
     try {
       localCards = await db.getAllAsync<SavedCard>('SELECT * FROM cards;');
-    } catch {}
+    } catch (err: any) {
+      throw new Error(
+        `Cannot restore backup: failed to read retained cards from local database: ${err?.message || 'query error'}`
+      );
+    }
 
     for (const card of localCards) {
       if (card.linkedAccountId != null) {
@@ -716,12 +720,20 @@ export async function restoreBackup(
   let localShoppingLists: ShoppingList[] = [];
   try {
     localShoppingLists = await db.getAllAsync<ShoppingList>('SELECT * FROM shopping_lists;');
-  } catch {}
+  } catch (err: any) {
+    throw new Error(
+      `Cannot restore backup: failed to read retained shopping lists from local database: ${err?.message || 'query error'}`
+    );
+  }
 
   let localShoppingItems: ShoppingItem[] = [];
   try {
     localShoppingItems = await db.getAllAsync<ShoppingItem>('SELECT * FROM shopping_items;');
-  } catch {}
+  } catch (err: any) {
+    throw new Error(
+      `Cannot restore backup: failed to read retained shopping items from local database: ${err?.message || 'query error'}`
+    );
+  }
 
   if (!hasIncomingShoppingLists && hasIncomingShoppingItems) {
     const localListIds = new Set(localShoppingLists.map((l) => l.id));
