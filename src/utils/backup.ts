@@ -664,6 +664,7 @@ export async function restoreBackup(
 
   // Staging for references of retained local collections
   const stagedCardLinks = new Map<string, string>();
+  const stagedRetainedShoppingItems: ShoppingItem[] = [];
   const stagedShoppingPurchases = new Map<
     string,
     { purchaseAccountId: string; transactionId: string; categoryId: string | null }
@@ -745,6 +746,11 @@ export async function restoreBackup(
   }
 
   if (!hasIncomingShoppingItems) {
+    // Stage complete retained shopping items to guarantee full restoration after destructive operations
+    for (const item of localShoppingItems) {
+      stagedRetainedShoppingItems.push({ ...item });
+    }
+
     for (const item of localShoppingItems) {
       if (item.status === 'PURCHASED') {
         if (!item.purchaseAccountId || !incomingAccountsById.has(item.purchaseAccountId)) {
@@ -824,7 +830,24 @@ export async function restoreBackup(
       await db.execAsync('DELETE FROM shopping_items;');
     }
     if (hasIncomingShoppingLists) {
-      await db.execAsync('DELETE FROM shopping_lists;');
+      if (!hasIncomingShoppingItems) {
+        // Safe list replacement strategy:
+        // Do not blanket DELETE FROM shopping_lists, which triggers SQLite ON DELETE CASCADE
+        // on retained shopping items. Instead, delete only lists not in the incoming backup,
+        // and safely update incoming lists using ON CONFLICT DO UPDATE.
+        const incomingListIds = (backup.data.shoppingLists || []).map((l) => l.id);
+        if (incomingListIds.length > 0) {
+          const placeholders = incomingListIds.map(() => '?').join(', ');
+          await db.runAsync(
+            `DELETE FROM shopping_lists WHERE id NOT IN (${placeholders});`,
+            incomingListIds
+          );
+        } else {
+          await db.execAsync('DELETE FROM shopping_lists;');
+        }
+      } else {
+        await db.execAsync('DELETE FROM shopping_lists;');
+      }
     }
     if (hasIncomingCards) {
       await db.execAsync('DELETE FROM cards;');
@@ -1056,7 +1079,12 @@ export async function restoreBackup(
       for (const list of backup.data.shoppingLists) {
         await db.runAsync(
           `INSERT INTO shopping_lists (id, name, isArchived, createdAt, updatedAt)
-           VALUES (?, ?, ?, ?, ?);`,
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             isArchived = excluded.isArchived,
+             createdAt = excluded.createdAt,
+             updatedAt = excluded.updatedAt;`,
           [list.id, list.name, list.isArchived ? 1 : 0, list.createdAt, list.updatedAt]
         );
       }
@@ -1086,6 +1114,54 @@ export async function restoreBackup(
             item.purchaseAccountId ?? null,
             item.transactionId ?? null,
             item.categoryId ?? null,
+          ]
+        );
+      }
+    } else if (!hasIncomingShoppingItems && stagedRetainedShoppingItems.length > 0) {
+      // Re-insert or ensure all retained shopping items exist with their staged data and foreign keys
+      // after referenced lists (step 9), accounts (step 1), categories (step 2), and transactions (step 6)
+      // have all been recreated!
+      for (const item of stagedRetainedShoppingItems) {
+        const purchaseRefs = stagedShoppingPurchases.get(item.id);
+        const purchaseAccountId = purchaseRefs ? purchaseRefs.purchaseAccountId : (item.purchaseAccountId ?? null);
+        const transactionId = purchaseRefs ? purchaseRefs.transactionId : (item.transactionId ?? null);
+        const categoryId = purchaseRefs ? purchaseRefs.categoryId : (item.categoryId ?? null);
+
+        await db.runAsync(
+          `INSERT INTO shopping_items (
+             id, listId, name, note, productUrl, estimatedPrice, status,
+             createdAt, updatedAt, purchasedAt, purchasePrice, purchaseAccountId,
+             transactionId, categoryId
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             listId = excluded.listId,
+             name = excluded.name,
+             note = excluded.note,
+             productUrl = excluded.productUrl,
+             estimatedPrice = excluded.estimatedPrice,
+             status = excluded.status,
+             createdAt = excluded.createdAt,
+             updatedAt = excluded.updatedAt,
+             purchasedAt = excluded.purchasedAt,
+             purchasePrice = excluded.purchasePrice,
+             purchaseAccountId = excluded.purchaseAccountId,
+             transactionId = excluded.transactionId,
+             categoryId = excluded.categoryId;`,
+          [
+            item.id,
+            item.listId,
+            item.name,
+            item.note ?? null,
+            item.productUrl ?? null,
+            item.estimatedPrice != null ? Math.round(item.estimatedPrice) : null,
+            item.status,
+            item.createdAt,
+            item.updatedAt,
+            item.purchasedAt ?? null,
+            item.purchasePrice != null ? Math.round(item.purchasePrice) : null,
+            purchaseAccountId,
+            transactionId,
+            categoryId,
           ]
         );
       }
