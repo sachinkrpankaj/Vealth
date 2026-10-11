@@ -138,26 +138,45 @@ export function formatExpiryString(month: number, year: number): string {
 }
 
 /**
- * Parses user input for expiry date (e.g. "08/28", "8/2028", "0828").
+ * Parses user input for expiry date (e.g. "08/28", "8/2028", "0828", "8/28", "08/2028").
  */
 export function parseExpiryString(input: string): { month: number; year: number } | null {
   if (!input) return null;
-  const clean = input.replace(/\D/g, '');
+  const trimmed = input.trim();
+
+  // Check structured delimiter format first (e.g., "08/28", "8/2028", "8/28", "08-28")
+  const delimiterMatch = trimmed.match(/^(\d{1,2})\s*[\/\-\.]\s*(\d{2}|\d{4})$/);
+  if (delimiterMatch) {
+    const month = parseInt(delimiterMatch[1], 10);
+    const rawYear = delimiterMatch[2];
+    const year = rawYear.length === 2 ? 2000 + parseInt(rawYear, 10) : parseInt(rawYear, 10);
+    if (month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
+      return { month, year };
+    }
+    return null;
+  }
+
+  // Fallback to numeric clean string (e.g., "828", "0828", "82028", "082028")
+  const clean = trimmed.replace(/\D/g, '');
   if (clean.length < 3 || clean.length > 6) return null;
 
   let month = 0;
   let year = 0;
 
   if (clean.length === 3) {
-    // e.g. 828 -> 08/28
+    // e.g. 828 -> month 8, year 2028
     month = parseInt(clean.substring(0, 1), 10);
     year = 2000 + parseInt(clean.substring(1, 3), 10);
   } else if (clean.length === 4) {
-    // e.g. 0828 -> 08/28
+    // e.g. 0828 -> month 8, year 2028
     month = parseInt(clean.substring(0, 2), 10);
     year = 2000 + parseInt(clean.substring(2, 4), 10);
+  } else if (clean.length === 5) {
+    // e.g. 82028 -> month 8, year 2028
+    month = parseInt(clean.substring(0, 1), 10);
+    year = parseInt(clean.substring(1, 5), 10);
   } else if (clean.length === 6) {
-    // e.g. 082028
+    // e.g. 082028 -> month 8, year 2028
     month = parseInt(clean.substring(0, 2), 10);
     year = parseInt(clean.substring(2, 6), 10);
   }

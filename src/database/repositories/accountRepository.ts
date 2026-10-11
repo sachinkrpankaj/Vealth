@@ -109,8 +109,33 @@ export async function updateAccount(id: string, updates: Partial<Account>): Prom
     throw new Error(`Invalid account type: ${updates.type}`);
   }
 
-  // Restrict unsafe account type changes if transactions exist
+  // Restrict unsafe account type changes if transactions exist or linked cards are incompatible
   if (updates.type && updates.type !== current.type) {
+    try {
+      const linkedCards = await db.getAllAsync<{ id: string; cardType: string; cardholderName: string }>(
+        'SELECT id, cardType, cardholderName FROM cards WHERE linkedAccountId = ?;',
+        [id]
+      );
+      if (linkedCards && linkedCards.length > 0) {
+        for (const card of linkedCards) {
+          if (card.cardType === 'DEBIT' && updates.type !== 'BANK') {
+            throw new Error(
+              `Cannot change account type to ${updates.type}: linked debit card requires a BANK account. Reassign or unlink the card first.`
+            );
+          }
+          if (card.cardType === 'CREDIT' && updates.type !== 'CREDIT_CARD') {
+            throw new Error(
+              `Cannot change account type to ${updates.type}: linked credit card requires a CREDIT_CARD account. Reassign or unlink the card first.`
+            );
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.message && err.message.startsWith('Cannot change account type')) {
+        throw err;
+      }
+    }
+
     const isCurrentCC = current.type === 'CREDIT_CARD';
     const isNewCC = updates.type === 'CREDIT_CARD';
     if (isCurrentCC !== isNewCC) {
@@ -153,6 +178,24 @@ export async function archiveAccount(id: string): Promise<void> {
 
 export async function deleteAccount(id: string): Promise<void> {
   const db = await getDatabase();
+
+  // Prevent account deletion if cards in Card Wallet are linked to this account
+  try {
+    const cardRef = await db.getFirstAsync<{ count: number }>(
+      'SELECT COUNT(*) as count FROM cards WHERE linkedAccountId = ?;',
+      [id]
+    );
+    if ((cardRef?.count ?? 0) > 0) {
+      throw new Error(
+        'Cannot delete account because it is linked to one or more cards in Card Wallet. Reassign or remove linked cards first.'
+      );
+    }
+  } catch (err: any) {
+    if (err.message && err.message.startsWith('Cannot delete account')) {
+      throw err;
+    }
+  }
+
   const txRef = await db.getFirstAsync<{ count: number }>(
     'SELECT COUNT(*) as count FROM transactions WHERE accountId = ? OR destinationAccountId = ?;',
     [id, id]

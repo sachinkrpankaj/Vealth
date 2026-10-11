@@ -41,6 +41,11 @@ export const Badge: React.FC<BadgeProps> = ({
         bgColor = colors.warningBg;
         textColor = colors.warning;
         break;
+      case 'UPCOMING':
+        resolvedLabel = 'Upcoming';
+        bgColor = colors.accentBg;
+        textColor = colors.accent;
+        break;
       case 'SETTLED':
         resolvedLabel = 'Settled';
         bgColor = colors.positiveBg;

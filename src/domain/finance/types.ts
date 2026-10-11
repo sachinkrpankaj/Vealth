@@ -146,7 +146,7 @@ export interface LiabilityArchiveState {
   createdAt?: string;
 }
 
-export type DueDateStatus = 'DUE_TODAY' | 'DUE_SOON' | 'OVERDUE' | 'NO_DUE_DATE' | 'SETTLED';
+export type DueDateStatus = 'DUE_TODAY' | 'DUE_SOON' | 'OVERDUE' | 'UPCOMING' | 'NO_DUE_DATE' | 'SETTLED';
 
 export interface PersonDebtSummary {
   person: Person;

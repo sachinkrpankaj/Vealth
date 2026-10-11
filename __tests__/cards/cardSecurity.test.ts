@@ -29,7 +29,8 @@ describe('Card Wallet — Cryptography & Security Architecture', () => {
     const encrypted = await encryptCardNumber(testCardNumber);
 
     expect(encrypted).toBeDefined();
-    expect(encrypted.startsWith('aes-gcm:v1:') || encrypted.startsWith('fallback:v1:')).toBe(true);
+    expect(encrypted.startsWith('aes-gcm:v1:')).toBe(true);
+    expect(encrypted.startsWith('fallback:v1:')).toBe(false);
 
     // CRITICAL: Plaintext card number must NEVER appear in ciphertext
     expect(encrypted).not.toContain(testCardNumber);

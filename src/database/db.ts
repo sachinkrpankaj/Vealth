@@ -177,14 +177,11 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
   );
 
   // Migration to add issuer column to cards if missing from existing database
-  try {
-    const cardColumns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(cards);');
-    if (cardColumns.length > 0 && !cardColumns.some((c) => c.name === 'issuer')) {
-      await db.execAsync('ALTER TABLE cards ADD COLUMN issuer TEXT;');
-    }
-  } catch (err: any) {
-    console.warn('[Migration Warning] Failed checking/adding issuer column to cards:', err);
-  }
+  await runSafeMigration(
+    db,
+    'ALTER TABLE cards ADD COLUMN issuer TEXT;',
+    'add issuer to cards'
+  );
 
   // 2. Migration for foreign keys on transactions: assetId -> assets(id), liabilityId -> liabilities(id)
   let fkRows: Array<{ table: string }> = [];

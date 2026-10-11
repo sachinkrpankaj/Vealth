@@ -13,6 +13,7 @@ try {
 import { getSetting, setSetting } from '../database/repositories/settingsRepository';
 
 const SECURE_PIN_HASH_KEY = 'vaelth_security_pin_hash';
+const SECURE_LOCKOUT_KEY = 'vaelth_security_pin_lockout';
 const LEGACY_PIN_SALT = 'vaelth_salt_sec_v1_';
 const PBKDF2_ITERATIONS = 10000;
 const SECURITY_CONFIG_ERROR =
@@ -20,6 +21,30 @@ const SECURITY_CONFIG_ERROR =
 
 // In-memory fallback for environments where SecureStore is unavailable (e.g. unit tests or unlinked builds)
 const fallbackSecureMemory = new Map<string, string>();
+let isBiometricAuthInProgress = false;
+
+async function loadPersistedLockout(): Promise<{ failedAttempts: number; lockoutUntil: number | null }> {
+  try {
+    const raw = await getSecureItem(SECURE_LOCKOUT_KEY);
+    if (!raw) return { failedAttempts: 0, lockoutUntil: null };
+    const [attemptsStr, untilStr] = raw.split(':');
+    const failedAttempts = parseInt(attemptsStr, 10) || 0;
+    const lockoutUntil = parseInt(untilStr, 10) || null;
+    return { failedAttempts, lockoutUntil };
+  } catch {
+    return { failedAttempts: 0, lockoutUntil: null };
+  }
+}
+
+async function persistLockoutState(failedAttempts: number, lockoutUntil: number | null): Promise<void> {
+  try {
+    await setSecureItem(SECURE_LOCKOUT_KEY, `${failedAttempts}:${lockoutUntil || 0}`);
+  } catch (e) {
+    if (!isTestEnvironment()) {
+      throw new Error('Failed to record security lockout state securely.');
+    }
+  }
+}
 
 /**
  * Constant-time string comparison to prevent timing side-channel attacks.
@@ -389,8 +414,9 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
     return Math.max(0, diff);
   },
 
-  resetLockout: () => {
+  resetLockout: async () => {
     set({ failedAttempts: 0, lockoutUntil: null });
+    await persistLockoutState(0, null);
   },
 
   checkSecurityConfig: async () => {
@@ -443,12 +469,18 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         }
       }
 
+      // 4. Load persisted lockout state across app restarts
+      const { failedAttempts, lockoutUntil } = await loadPersistedLockout();
+      const isCurrentlyLockedOut = Boolean(lockoutUntil && Date.now() < lockoutUntil);
+
       set({
         isPinEnabled,
         isBiometricEnabled,
         isLocked: isPinEnabled,
         hasCheckedAuth: true,
         securityConfigError: null,
+        failedAttempts,
+        lockoutUntil: isCurrentlyLockedOut ? lockoutUntil : null,
       });
     } catch {
       set({ hasCheckedAuth: true, isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
@@ -470,9 +502,10 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       set({ isPinEnabled: true });
     } else {
       await deleteSecureItem(SECURE_PIN_HASH_KEY);
+      await deleteSecureItem(SECURE_LOCKOUT_KEY).catch(() => {});
       await setSetting('security_pin', '');
       await setSetting('security_biometric', 'false');
-      set({ isPinEnabled: false, isBiometricEnabled: false, isLocked: false });
+      set({ isPinEnabled: false, isBiometricEnabled: false, isLocked: false, failedAttempts: 0, lockoutUntil: null });
     }
   },
 
@@ -544,6 +577,7 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         failedAttempts: 0,
         lockoutUntil: null,
       });
+      await persistLockoutState(0, null);
       return true;
     } else {
       const nextFailed = failedAttempts + 1;
@@ -559,17 +593,20 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         failedAttempts: nextFailed,
         lockoutUntil: newLockoutUntil,
       });
+      await persistLockoutState(nextFailed, newLockoutUntil);
       return false;
     }
   },
 
   authenticateWithBiometrics: async () => {
+    if (isBiometricAuthInProgress) return false;
     try {
       if (!get().isBiometricEnabled || !get().isPinEnabled) return false;
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return false;
 
+      isBiometricAuthInProgress = true;
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Unlock vealth',
         fallbackLabel: 'Use PIN',
@@ -582,6 +619,8 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
       return false;
     } catch {
       return false;
+    } finally {
+      isBiometricAuthInProgress = false;
     }
   },
 

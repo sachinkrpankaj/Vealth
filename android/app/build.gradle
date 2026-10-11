@@ -163,12 +163,8 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Use release signing if valid credentials were provided; fallback to debug signing for local test release builds.
-            if (signingConfigs.release.storeFile != null && signingConfigs.release.storeFile.exists()) {
-                signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
-            }
+            // Strictly enforce release signing without silent fallback to debug keystore.
+            signingConfig signingConfigs.release
             debuggable false
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
@@ -263,5 +259,16 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def isReleaseTask = taskGraph.allTasks.any { task ->
+        task.name.containsIgnoreCase("Release") && (task.name.startsWith("assemble") || task.name.startsWith("bundle") || task.name.startsWith("package"))
+    }
+    if (isReleaseTask) {
+        if (android.signingConfigs.release.storeFile == null || !android.signingConfigs.release.storeFile.exists()) {
+            throw new GradleException("Production release build failed: Release keystore file is not configured or does not exist. Debug keystore fallback is strictly disabled.")
+        }
     }
 }

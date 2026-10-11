@@ -193,6 +193,7 @@ describe('Card Wallet — Database Repository & Data Isolation Tests', () => {
       network: 'VISA',
       expiryMonth: 8,
       expiryYear: 2029,
+      issuer: 'HDFC Bank',
     });
 
     const stored = cardsTable.get(card.id);
@@ -240,6 +241,7 @@ describe('Card Wallet — Database Repository & Data Isolation Tests', () => {
       network: 'VISA',
       expiryMonth: 6,
       expiryYear: 2027,
+      issuer: 'HDFC Bank',
     });
 
     expect(cardsTable.size).toBe(1);
@@ -297,6 +299,7 @@ describe('Card Wallet — Database Repository & Data Isolation Tests', () => {
       network: 'VISA',
       expiryMonth: 8,
       expiryYear: 2029,
+      issuer: 'HDFC Bank',
     });
 
     const revealed = await revealCardNumber(card);
@@ -311,6 +314,7 @@ describe('Card Wallet — Database Repository & Data Isolation Tests', () => {
       network: 'VISA',
       expiryMonth: 8,
       expiryYear: 2029,
+      issuer: 'HDFC Bank',
     });
 
     await archiveCard(card.id);

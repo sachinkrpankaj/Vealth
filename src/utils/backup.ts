@@ -33,6 +33,11 @@ import {
   ShoppingItem,
 } from '../domain/finance/types';
 import { SavedCard } from '../domain/cards/types';
+import {
+  createCardKeyEnvelope,
+  restoreCardKeyFromEnvelope,
+  CardKeyEnvelope,
+} from '../domain/cards/cardSecurity';
 import { getAllCards } from '../database/repositories/cardRepository';
 import { formatDateIso, parseLocalDate } from './dateUtils';
 import { generateEntityId } from './idGenerator';
@@ -53,6 +58,7 @@ export interface VealthBackupData {
     shoppingLists?: ShoppingList[];
     shoppingItems?: ShoppingItem[];
     cards?: SavedCard[];
+    cardKeyEnvelope?: CardKeyEnvelope;
   };
 }
 
@@ -91,6 +97,13 @@ export async function createBackupData(): Promise<VealthBackupData> {
     }
   }
 
+  let cardKeyEnvelope: CardKeyEnvelope | undefined = undefined;
+  if (cards.length > 0) {
+    try {
+      cardKeyEnvelope = await createCardKeyEnvelope();
+    } catch {}
+  }
+
   return {
     appName: 'vealth',
     schemaVersion: 1,
@@ -107,6 +120,7 @@ export async function createBackupData(): Promise<VealthBackupData> {
       shoppingLists,
       shoppingItems,
       cards,
+      cardKeyEnvelope,
     },
   };
 }
@@ -470,24 +484,66 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     return { isValid: false, error: 'Backup contains shopping items with multiple active transactions.' };
   }
 
+  const VALID_PAYMENT_NETWORKS = new Set([
+    'VISA',
+    'MASTERCARD',
+    'RUPAY',
+    'AMEX',
+    'DISCOVER',
+    'DINERS',
+    'JCB',
+    'OTHER',
+  ]);
+
   // Validate cards if present
   if (data.cards) {
+    const accountsById = new Map<string, any>(data.accounts.map((a: any) => [a.id, a]));
     if (
       !Array.isArray(data.cards) ||
-      !data.cards.every(
-        (c: any) =>
-          c &&
-          typeof c === 'object' &&
-          validId(c.id) &&
-          validId(c.cardholderName) &&
-          (c.cardType === 'CREDIT' || c.cardType === 'DEBIT') &&
-          typeof c.network === 'string' &&
-          typeof c.encryptedCardNumber === 'string' &&
-          typeof c.lastFour === 'string' &&
-          typeof c.expiryMonth === 'number' &&
-          typeof c.expiryYear === 'number' &&
-          (c.linkedAccountId == null || exists(c.linkedAccountId, accountIds))
-      ) ||
+      !data.cards.every((c: any) => {
+        if (
+          !validRecord(c) ||
+          !validId(c.cardholderName) ||
+          (c.cardType !== 'CREDIT' && c.cardType !== 'DEBIT') ||
+          !VALID_PAYMENT_NETWORKS.has(c.network) ||
+          typeof c.encryptedCardNumber !== 'string' ||
+          !(
+            c.encryptedCardNumber.startsWith('aes-gcm:v1:') ||
+            c.encryptedCardNumber.startsWith('fallback:v1:')
+          ) ||
+          typeof c.lastFour !== 'string' ||
+          !/^\d{4}$/.test(c.lastFour) ||
+          typeof c.expiryMonth !== 'number' ||
+          c.expiryMonth < 1 ||
+          c.expiryMonth > 12 ||
+          typeof c.expiryYear !== 'number' ||
+          c.expiryYear < 2000 ||
+          c.expiryYear > 2100
+        ) {
+          return false;
+        }
+
+        // Validate linked account compatibility
+        if (c.linkedAccountId != null) {
+          const linkedAcc = accountsById.get(c.linkedAccountId);
+          if (!linkedAcc) return false;
+          if (c.cardType === 'DEBIT' && linkedAcc.type !== 'BANK') return false;
+          if (c.cardType === 'CREDIT' && linkedAcc.type !== 'CREDIT_CARD') return false;
+        } else if (c.cardType === 'DEBIT') {
+          // Debit card must be linked to a Bank account
+          return false;
+        }
+
+        // Validate credit card issuer
+        if (c.cardType === 'CREDIT') {
+          const hasIssuer = typeof c.issuer === 'string' && c.issuer.trim().length > 0;
+          const hasLinkedAccName =
+            c.linkedAccountId != null && Boolean(accountsById.get(c.linkedAccountId)?.name);
+          if (!hasIssuer && !hasLinkedAccName) return false;
+        }
+
+        return true;
+      }) ||
       !hasUniqueIds(data.cards)
     ) {
       return { isValid: false, error: 'Backup contains invalid or corrupted card wallet records.' };
@@ -503,12 +559,31 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     throw new Error(validation.error);
   }
 
+  // If backup contains a secure master key envelope, restore the master key
+  if (backup.data.cardKeyEnvelope) {
+    try {
+      await restoreCardKeyFromEnvelope(backup.data.cardKeyEnvelope);
+    } catch (err: any) {
+      throw new Error(`Failed to restore card wallet encryption key: ${err?.message || 'invalid key'}`);
+    }
+  }
+
   await executeInTransaction(async (db) => {
-    // Clear existing data safely inside transaction respecting foreign keys
+    // Only delete feature records if the backup explicitly contains them!
+    // Restoring a legacy backup without cards or shopping must NOT delete current data.
+    const hasShopping =
+      backup.data.shoppingLists !== undefined || backup.data.shoppingItems !== undefined;
+    const hasCards = backup.data.cards !== undefined;
+
+    if (hasShopping) {
+      await db.execAsync('DELETE FROM shopping_items; DELETE FROM shopping_lists;');
+    }
+    if (hasCards) {
+      await db.execAsync('DELETE FROM cards;');
+    }
+
+    // Clear core data safely inside transaction respecting foreign keys
     await db.execAsync(`
-      DELETE FROM shopping_items;
-      DELETE FROM shopping_lists;
-      DELETE FROM cards;
       DELETE FROM transactions;
       DELETE FROM liabilities;
       DELETE FROM assets;

@@ -276,7 +276,7 @@ export function calculatePersonDebt(
         if (diffDays <= 7) {
           dueStatus = 'DUE_SOON';
         } else {
-          dueStatus = 'NO_DUE_DATE';
+          dueStatus = 'UPCOMING';
         }
       }
     }
@@ -527,15 +527,13 @@ export function calculateTotalStandaloneLiabilities(
         const hasExplicitLink = accounts.some(
           (a) =>
             a.id === (l as any).accountId ||
+            a.id === (l as any).linkedAccountId ||
             (a as any).liabilityId === l.id ||
-            a.id === l.id
+            a.id === l.id ||
+            (l.note && (l.note.trim() === a.id || l.note.trim().toLowerCase() === a.name.trim().toLowerCase())) ||
+            l.name.trim().toLowerCase() === a.name.trim().toLowerCase()
         );
         if (hasExplicitLink) return false;
-        // Credit card debt is already modeled by credit card accounts.
-        // If the user has any credit card accounts, standalone credit card liabilities
-        // must not double-count in net worth.
-        const hasCreditCardAccount = accounts.some((a) => a.type === 'CREDIT_CARD');
-        if (hasCreditCardAccount) return false;
         return true;
       }
       return true;
@@ -691,20 +689,34 @@ export function calculateNetWorth(
     accounts.filter((a) => a.type === 'CREDIT_CARD').map((a) => a.id)
   );
 
+  let grossExpenses = 0;
+  let grossIncome = 0;
+  let ccRefunds = 0;
+
   const activeTx = getActiveTransactions(transactions).filter((tx) => tx.date <= asOfDateStr);
   for (const tx of activeTx) {
     if (tx.date.startsWith(targetMonth)) {
       if (tx.type === 'INCOME') {
         if (tx.accountId && ccAccountIds.has(tx.accountId)) {
-          // Refunds and statement credits on credit cards reduce card spending rather than inflating income
-          expenseMonth = Math.max(0, subMinor(expenseMonth, Math.abs(tx.amount)));
+          ccRefunds = addMinor(ccRefunds, Math.abs(tx.amount));
         } else {
-          incomeMonth = addMinor(incomeMonth, Math.abs(tx.amount));
+          grossIncome = addMinor(grossIncome, Math.abs(tx.amount));
         }
       } else if (tx.type === 'EXPENSE') {
-        expenseMonth = addMinor(expenseMonth, Math.abs(tx.amount));
+        grossExpenses = addMinor(grossExpenses, Math.abs(tx.amount));
       }
     }
+  }
+
+  // Refunds and statement credits on credit cards offset card spending deterministically
+  // independent of transaction ordering within the month
+  if (ccRefunds <= grossExpenses) {
+    expenseMonth = subMinor(grossExpenses, ccRefunds);
+    incomeMonth = grossIncome;
+  } else {
+    expenseMonth = 0;
+    const excessRefund = subMinor(ccRefunds, grossExpenses);
+    incomeMonth = addMinor(grossIncome, excessRefund);
   }
 
   let startNetWorth = explicitStartingNetWorth;

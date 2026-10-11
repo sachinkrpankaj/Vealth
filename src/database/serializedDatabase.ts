@@ -41,7 +41,8 @@ function wrapMethod<T extends (...args: any[]) => Promise<any>>(
   target: any,
   methodName: string,
   queue: DatabaseOperationQueue,
-  customWrapper?: (originalMethod: T, ...args: Parameters<T>) => Promise<any>
+  customWrapper?: (originalMethod: T, ...args: Parameters<T>) => Promise<any>,
+  getIsInsideTransaction?: () => boolean
 ): void {
   const original = target[methodName];
   if (typeof original !== 'function') {
@@ -58,8 +59,14 @@ function wrapMethod<T extends (...args: any[]) => Promise<any>>(
     const mockFn = original as jest.Mock;
     const originalImpl = mockFn.getMockImplementation() || (() => Promise.resolve());
     mockFn.mockImplementation((...args: any[]) => {
+      if (getIsInsideTransaction && getIsInsideTransaction()) {
+        if (customWrapper) {
+          return customWrapper(originalImpl as any, ...(args as any));
+        }
+        return Promise.resolve(originalImpl(...args));
+      }
       if (customWrapper) {
-        return customWrapper(originalImpl as any, ...(args as any));
+        return queue.enqueue(() => Promise.resolve(customWrapper(originalImpl as any, ...(args as any))));
       }
       return queue.enqueue(() => Promise.resolve(originalImpl(...args)));
     });
@@ -69,8 +76,14 @@ function wrapMethod<T extends (...args: any[]) => Promise<any>>(
 
   const boundOriginal = original.bind(target);
   const wrapped = (...args: any[]) => {
+    if (getIsInsideTransaction && getIsInsideTransaction()) {
+      if (customWrapper) {
+        return customWrapper(boundOriginal as any, ...(args as any));
+      }
+      return boundOriginal(...args);
+    }
     if (customWrapper) {
-      return customWrapper(boundOriginal as any, ...(args as any));
+      return queue.enqueue(() => customWrapper(boundOriginal as any, ...(args as any)));
     }
     return queue.enqueue(() => boundOriginal(...args));
   };
@@ -99,13 +112,15 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
   });
 
   const queue = new DatabaseOperationQueue();
+  let activeTransactionDepth = 0;
+  const isInsideTxn = () => activeTransactionDepth > 0;
 
   // 1. Serialize standard query execution methods on this handle
-  wrapMethod(db, 'runAsync', queue);
-  wrapMethod(db, 'getFirstAsync', queue);
-  wrapMethod(db, 'getAllAsync', queue);
-  wrapMethod(db, 'execAsync', queue);
-  wrapMethod(db, 'closeAsync', queue);
+  wrapMethod(db, 'runAsync', queue, undefined, isInsideTxn);
+  wrapMethod(db, 'getFirstAsync', queue, undefined, isInsideTxn);
+  wrapMethod(db, 'getAllAsync', queue, undefined, isInsideTxn);
+  wrapMethod(db, 'execAsync', queue, undefined, isInsideTxn);
+  wrapMethod(db, 'closeAsync', queue, undefined, isInsideTxn);
 
   // 2. Intercept withExclusiveTransactionAsync to wrap the newly spawned txn handle with its own serializer
   wrapMethod(
@@ -113,29 +128,47 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
     'withExclusiveTransactionAsync',
     queue,
     async (originalMethod, task: (txn: any) => Promise<void>) => {
-      return originalMethod(async (txn: any) => {
-        const serializedTxn = serializeDatabase(txn);
-        (serializedTxn as any).withExclusiveTransactionAsync = async (nestedTask: (child: any) => Promise<void>) => {
-          return nestedTask(serializedTxn);
-        };
-        (serializedTxn as any).withTransactionAsync = async (nestedTask: () => Promise<void>) => {
-          return nestedTask();
-        };
-        await task(serializedTxn);
-      });
-    }
+      if (activeTransactionDepth > 0) {
+        return task(db);
+      }
+      activeTransactionDepth++;
+      try {
+        return await originalMethod(async (txn: any) => {
+          const serializedTxn = serializeDatabase(txn);
+          (serializedTxn as any).withExclusiveTransactionAsync = async (nestedTask: (child: any) => Promise<void>) => {
+            return nestedTask(serializedTxn);
+          };
+          (serializedTxn as any).withTransactionAsync = async (nestedTask: () => Promise<void>) => {
+            return nestedTask();
+          };
+          await task(serializedTxn);
+        });
+      } finally {
+        activeTransactionDepth--;
+      }
+    },
+    isInsideTxn
   );
 
-  // 3. Intercept withTransactionAsync to ensure child txn handle is serialized
+  // 3. Intercept withTransactionAsync to prevent nested transaction errors and deadlocks
   wrapMethod(
     db,
     'withTransactionAsync',
     queue,
     async (originalMethod, task: () => Promise<any>) => {
-      return originalMethod(async () => {
+      if (activeTransactionDepth > 0) {
         return task();
-      });
-    }
+      }
+      activeTransactionDepth++;
+      try {
+        return await originalMethod(async () => {
+          return task();
+        });
+      } finally {
+        activeTransactionDepth--;
+      }
+    },
+    isInsideTxn
   );
 
   return db;

@@ -76,6 +76,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
             cardNickname,
             linkedAccountId,
             colorTheme,
+            issuer,
             createdAt,
             updatedAt,
           ] = params;
@@ -92,6 +93,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
             cardNickname,
             linkedAccountId,
             colorTheme,
+            issuer,
             isArchived: 0,
             createdAt,
             updatedAt,
@@ -131,6 +133,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
       network: 'VISA',
       expiryMonth: 8,
       expiryYear: 2029,
+      issuer: 'HDFC Bank',
       cardNickname: 'Personal Visa Card',
     });
 

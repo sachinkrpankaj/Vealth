@@ -42,21 +42,6 @@ if (NativeModulesProxy) {
       SealedData: class {},
     };
   }
-  if (!NativeModulesProxy.ExpoSecureStore) {
-    const memoryStore = new Map();
-    NativeModulesProxy.ExpoSecureStore = {
-      AFTER_FIRST_UNLOCK: 0,
-      AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
-      ALWAYS: 2,
-      WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 3,
-      ALWAYS_THIS_DEVICE_ONLY: 4,
-      WHEN_UNLOCKED: 5,
-      WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
-      getValueWithKeyAsync: async (key) => memoryStore.get(key) ?? null,
-      setValueWithKeyAsync: async (value, key) => { memoryStore.set(key, value); },
-      deleteValueWithKeyAsync: async (key) => { memoryStore.delete(key); },
-    };
-  }
 }
 
 import 'expo-router/entry';

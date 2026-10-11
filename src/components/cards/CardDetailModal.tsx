@@ -8,6 +8,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  AppState,
 } from 'react-native';
 import {
   Eye,
@@ -77,6 +78,8 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   const [isRevealed, setIsRevealed] = useState(false);
   const [decryptedNumber, setDecryptedNumber] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [authAction, setAuthAction] = useState<'reveal' | 'copy' | null>(null);
+  const isAuthenticatingRef = useRef(false);
   const [pinPromptVisible, setPinPromptVisible] = useState(false);
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -85,7 +88,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const feedbackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Clear memory whenever modal closes or active card changes
+  // Clear memory whenever modal closes, active card changes, or on unmount
   useEffect(() => {
     if (!visible) {
       setIsRevealed(false);
@@ -95,8 +98,32 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
       setPinPromptVisible(false);
       setCopiedField(null);
       setFeedbackMessage(null);
+      setAuthAction(null);
+      isAuthenticatingRef.current = false;
+      setIsAuthenticating(false);
     }
   }, [visible, card?.id]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        // App backgrounded: immediately clear plaintext card numbers
+        setIsRevealed(false);
+        setDecryptedNumber(null);
+        setPinPromptVisible(false);
+        setEnteredPin('');
+        setAuthAction(null);
+        isAuthenticatingRef.current = false;
+        setIsAuthenticating(false);
+      }
+    });
+    return () => {
+      sub.remove();
+      setIsRevealed(false);
+      setDecryptedNumber(null);
+      setEnteredPin('');
+    };
+  }, []);
 
   const showSafeFeedback = (label: string, message: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -112,38 +139,6 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
     }, 2800);
   };
 
-  const handleRevealToggle = async () => {
-    if (isRevealed) {
-      // Re-mask and purge decrypted number from memory
-      setIsRevealed(false);
-      setDecryptedNumber(null);
-      return;
-    }
-
-    if (!card) return;
-
-    // Check if authentication is required
-    if (isBiometricEnabled) {
-      setIsAuthenticating(true);
-      const success = await authenticateWithBiometrics();
-      setIsAuthenticating(false);
-      if (success) {
-        await decryptAndShowNumber();
-        return;
-      }
-    }
-
-    if (isPinEnabled) {
-      setEnteredPin('');
-      setPinError(null);
-      setPinPromptVisible(true);
-      return;
-    }
-
-    // If app security PIN/biometric is not configured, reveal with gentle confirmation
-    await decryptAndShowNumber();
-  };
-
   const decryptAndShowNumber = async () => {
     if (!card) return;
     try {
@@ -156,47 +151,152 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
     }
   };
 
+  const copyNumberSecurely = async () => {
+    if (!card) return;
+    try {
+      const numberToCopy = decryptedNumber || (await revealCardNumber(card));
+      const copied = await copySensitiveTextToClipboard(numberToCopy);
+      if (copied) {
+        showSafeFeedback('number', 'Card number copied to clipboard');
+      } else {
+        Alert.alert('Copy Failed', 'Failed to copy card number to clipboard.');
+      }
+    } catch (e: any) {
+      Alert.alert('Copy Error', e?.message || 'Failed to retrieve card number.');
+    }
+  };
+
+  const handleRevealToggle = async () => {
+    if (isRevealed) {
+      // Re-mask and purge decrypted number from memory
+      setIsRevealed(false);
+      setDecryptedNumber(null);
+      return;
+    }
+
+    if (!card || isAuthenticatingRef.current) return;
+
+    // Check if authentication is required
+    if (isBiometricEnabled) {
+      isAuthenticatingRef.current = true;
+      setIsAuthenticating(true);
+      let success = false;
+      try {
+        success = await authenticateWithBiometrics();
+      } finally {
+        isAuthenticatingRef.current = false;
+        setIsAuthenticating(false);
+      }
+      if (success) {
+        await decryptAndShowNumber();
+        return;
+      }
+    }
+
+    if (isPinEnabled) {
+      setAuthAction('reveal');
+      setEnteredPin('');
+      setPinError(null);
+      setPinPromptVisible(true);
+      return;
+    }
+
+    // If app security PIN/biometric is not configured, reveal directly
+    await decryptAndShowNumber();
+  };
+
+  const handleCopyCardNumber = async () => {
+    if (!card || isAuthenticatingRef.current) return;
+
+    // If already revealed through authorized authentication, copy directly
+    if (isRevealed && decryptedNumber) {
+      const copied = await copySensitiveTextToClipboard(decryptedNumber);
+      if (copied) {
+        showSafeFeedback('number', 'Card number copied to clipboard');
+      } else {
+        Alert.alert('Copy Failed', 'Failed to copy card number to clipboard.');
+      }
+      return;
+    }
+
+    // Otherwise, copying full card number MUST follow the exact same PIN/biometric authorization policy
+    if (isBiometricEnabled) {
+      isAuthenticatingRef.current = true;
+      setIsAuthenticating(true);
+      let success = false;
+      try {
+        success = await authenticateWithBiometrics();
+      } finally {
+        isAuthenticatingRef.current = false;
+        setIsAuthenticating(false);
+      }
+      if (success) {
+        await copyNumberSecurely();
+        return;
+      }
+    }
+
+    if (isPinEnabled) {
+      setAuthAction('copy');
+      setEnteredPin('');
+      setPinError(null);
+      setPinPromptVisible(true);
+      return;
+    }
+
+    // No PIN configured
+    await copyNumberSecurely();
+  };
+
   const handlePinSubmit = async () => {
-    if (!enteredPin) return;
-    const isValid = await verifyPin(enteredPin);
+    if (!enteredPin || isAuthenticatingRef.current) return;
+    isAuthenticatingRef.current = true;
+    setIsAuthenticating(true);
+    let isValid = false;
+    try {
+      isValid = await verifyPin(enteredPin);
+    } finally {
+      isAuthenticatingRef.current = false;
+      setIsAuthenticating(false);
+    }
+
     if (isValid) {
       setPinPromptVisible(false);
       setEnteredPin('');
       setPinError(null);
-      await decryptAndShowNumber();
+      const action = authAction;
+      setAuthAction(null);
+
+      if (action === 'copy') {
+        await copyNumberSecurely();
+      } else {
+        await decryptAndShowNumber();
+      }
     } else {
       setPinError('Incorrect PIN. Please try again.');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
     }
   };
 
-  const handleCopyCardNumber = async () => {
-    if (!card) return;
-    let numberToCopy = decryptedNumber;
-    if (!numberToCopy) {
-      try {
-        numberToCopy = await revealCardNumber(card);
-      } catch {
-        Alert.alert('Copy Error', 'Failed to retrieve card number.');
-        return;
-      }
-    }
-
-    await copySensitiveTextToClipboard(numberToCopy);
-    showSafeFeedback('number', 'Card number copied to clipboard');
-  };
-
   const handleCopyHolderName = async () => {
     if (!card) return;
-    await copySensitiveTextToClipboard(card.cardholderName);
-    showSafeFeedback('name', 'Cardholder name copied to clipboard');
+    const copied = await copySensitiveTextToClipboard(card.cardholderName);
+    if (copied) {
+      showSafeFeedback('name', 'Cardholder name copied to clipboard');
+    } else {
+      Alert.alert('Copy Failed', 'Could not copy cardholder name.');
+    }
   };
 
   const handleCopyExpiry = async () => {
     if (!card) return;
     const expiry = formatExpiryString(card.expiryMonth, card.expiryYear);
-    await copySensitiveTextToClipboard(expiry);
-    showSafeFeedback('expiry', `Expiry date (${expiry}) copied`);
+    const copied = await copySensitiveTextToClipboard(expiry);
+    if (copied) {
+      showSafeFeedback('expiry', `Expiry date (${expiry}) copied`);
+    } else {
+      Alert.alert('Copy Failed', 'Could not copy expiry date.');
+    }
   };
 
 

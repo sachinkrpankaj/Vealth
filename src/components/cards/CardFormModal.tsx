@@ -129,8 +129,21 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({
         }
       }
       setErrors({});
+    } else {
+      setCardNumber('');
+      setErrors({});
     }
+
+    return () => {
+      setCardNumber('');
+    };
   }, [visible, initialCard?.id, preselectedAccountId]);
+
+  const handleClose = () => {
+    setCardNumber('');
+    setErrors({});
+    onClose();
+  };
 
   // Auto-detect network when card number changes
   const handleCardNumberChange = (raw: string) => {
@@ -282,7 +295,7 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.modalOverlay}>
         <View
@@ -332,7 +345,7 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({
             </View>
 
             <IconButton
-              onPress={onClose}
+              onPress={handleClose}
               accessibilityLabel="Cancel"
               size={34}
               icon={<X size={18} color={colors.textSecondary} />}

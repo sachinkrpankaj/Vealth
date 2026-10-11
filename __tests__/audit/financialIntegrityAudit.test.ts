@@ -608,6 +608,7 @@ describe('Financial Integrity & Bug-Fix Audit Regression Suite', () => {
         name: 'Credit Card',
         type: 'CREDIT_CARD',
         amount: 5000000,
+        note: 'acc-cc',
         isArchived: false,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',

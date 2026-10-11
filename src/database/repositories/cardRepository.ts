@@ -9,7 +9,11 @@ import {
 } from '../../domain/cards/types';
 import { PaymentNetwork } from '../../components/cards/PaymentNetworkLogo';
 import { cleanCardNumber, validateCardDetails } from '../../domain/cards/cardValidation';
-import { encryptCardNumber, decryptCardNumber } from '../../domain/cards/cardSecurity';
+import {
+  encryptCardNumber,
+  decryptCardNumber,
+  isLegacyEncryptedCard,
+} from '../../domain/cards/cardSecurity';
 import { generateEntityId } from '../../utils/idGenerator';
 import { getAccountById } from './accountRepository';
 
@@ -114,6 +118,8 @@ export async function createCard(
     expiryMonth: input.expiryMonth,
     expiryYear: input.expiryYear,
     cardType: input.cardType,
+    issuer: input.issuer ?? linkedAccount?.name,
+    requireIssuer: input.cardType === 'CREDIT',
     linkedAccount,
   });
 
@@ -200,6 +206,8 @@ export async function updateCard(
     expiryMonth: updates.expiryMonth ?? current.expiryMonth,
     expiryYear: updates.expiryYear ?? current.expiryYear,
     cardType: nextType,
+    issuer: updates.issuer ?? current.issuer ?? linkedAccount?.name,
+    requireIssuer: nextType === 'CREDIT',
     linkedAccount,
     isEditing: true,
   });
@@ -297,15 +305,63 @@ export async function deleteCard(id: string, executor?: SQLiteDatabase): Promise
 
 /**
  * Decrypts and reveals the full card number using the hardware master key.
+ * Safely migrates legacy fallback:v1 records to authenticated aes-gcm:v1 on read.
  */
-export async function revealCardNumber(cardOrId: SavedCard | string): Promise<string> {
+export async function revealCardNumber(
+  cardOrId: SavedCard | string,
+  executor?: SQLiteDatabase
+): Promise<string> {
+  const db = executor ?? (await getDatabase());
   let card: SavedCard | null = null;
   if (typeof cardOrId === 'string') {
-    card = await getCardById(cardOrId);
+    card = await getCardById(cardOrId, db);
     if (!card) throw new Error('Card not found.');
   } else {
     card = cardOrId;
   }
 
-  return await decryptCardNumber(card.encryptedCardNumber);
+  const decrypted = await decryptCardNumber(card.encryptedCardNumber);
+
+  // If card was stored with legacy fallback:v1 encryption, migrate to authenticated aes-gcm:v1
+  if (isLegacyEncryptedCard(card.encryptedCardNumber)) {
+    try {
+      const reEncrypted = await encryptCardNumber(decrypted);
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
+        reEncrypted,
+        now,
+        card.id,
+      ]);
+      card.encryptedCardNumber = reEncrypted;
+      card.updatedAt = now;
+    } catch {}
+  }
+
+  return decrypted;
+}
+
+/**
+ * Proactively migrates any legacy fallback:v1 cards in the database to authenticated aes-gcm:v1.
+ */
+export async function migrateLegacyCards(executor?: SQLiteDatabase): Promise<number> {
+  const db = executor ?? (await getDatabase());
+  const legacyRows = await db.getAllAsync<{ id: string; encryptedCardNumber: string }>(
+    "SELECT id, encryptedCardNumber FROM cards WHERE encryptedCardNumber LIKE 'fallback:v1:%';"
+  );
+
+  let migratedCount = 0;
+  for (const row of legacyRows) {
+    try {
+      const decrypted = await decryptCardNumber(row.encryptedCardNumber);
+      const reEncrypted = await encryptCardNumber(decrypted);
+      const now = new Date().toISOString();
+      await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
+        reEncrypted,
+        now,
+        row.id,
+      ]);
+      migratedCount++;
+    } catch {}
+  }
+  return migratedCount;
 }
