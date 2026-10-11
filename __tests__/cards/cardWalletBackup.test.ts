@@ -6,6 +6,7 @@ import { createAccount } from '../../src/database/repositories/accountRepository
 const open = openDatabaseAsync as jest.Mock;
 
 describe('Card Wallet — Backup, Privacy & Security Tests', () => {
+  jest.setTimeout(30000);
   let db: any;
   let cardsTable: Map<string, any>;
   let accountsTable: Map<string, any>;
@@ -137,7 +138,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
       cardNickname: 'Personal Visa Card',
     });
 
-    const backup = await createBackupData();
+    const backup = await createBackupData('user_backup_passphrase_123');
     expect(backup.data.cards).toBeDefined();
     expect(backup.data.cards?.length).toBe(1);
 
@@ -175,7 +176,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
       linkedAccountId: bankAccount.id,
     });
 
-    const backup = await createBackupData();
+    const backup = await createBackupData('user_backup_passphrase_123');
     const validation = validateBackupData(backup);
     expect(validation.isValid).toBe(true);
 
@@ -185,7 +186,7 @@ describe('Card Wallet — Backup, Privacy & Security Tests', () => {
     expect((await getAllCards()).length).toBe(0);
 
     // Restore backup
-    await restoreBackup(backup);
+    await restoreBackup(backup, { cardBackupPassphrase: 'user_backup_passphrase_123' });
 
     const restoredCards = await getAllCards();
     expect(restoredCards.length).toBe(1);

@@ -37,6 +37,9 @@ import {
   createCardKeyEnvelope,
   restoreCardKeyFromEnvelope,
   CardKeyEnvelope,
+  encryptCardNumber,
+  decryptCardNumber,
+  getMasterEncryptionKeyHex,
 } from '../domain/cards/cardSecurity';
 import { getAllCards } from '../database/repositories/cardRepository';
 import { formatDateIso, parseLocalDate } from './dateUtils';
@@ -76,7 +79,12 @@ export function isSecurityKey(key: string): boolean {
   );
 }
 
-export async function createBackupData(): Promise<VealthBackupData> {
+export async function createBackupData(
+  options?: string | {
+    cardBackupPassphrase?: string;
+  }
+): Promise<VealthBackupData> {
+  const passphrase = typeof options === 'string' ? options : options?.cardBackupPassphrase;
   const accounts = await getAllAccounts(true);
   const people = await getAllPeople(true);
   const categories = await getAllCategories(true);
@@ -99,9 +107,18 @@ export async function createBackupData(): Promise<VealthBackupData> {
 
   let cardKeyEnvelope: CardKeyEnvelope | undefined = undefined;
   if (cards.length > 0) {
+    if (!passphrase || !passphrase.trim()) {
+      throw new Error(
+        'A backup passphrase is required to export encrypted Card Wallet records.'
+      );
+    }
     try {
-      cardKeyEnvelope = await createCardKeyEnvelope();
-    } catch {}
+      cardKeyEnvelope = await createCardKeyEnvelope(passphrase.trim());
+    } catch (err: any) {
+      throw new Error(
+        `Failed to create secure Card Wallet backup envelope: ${err?.message || 'crypto error'}`
+      );
+    }
   }
 
   return {
@@ -125,8 +142,10 @@ export async function createBackupData(): Promise<VealthBackupData> {
   };
 }
 
-export async function exportBackupToFile(): Promise<string> {
-  const backup = await createBackupData();
+export async function exportBackupToFile(options?: {
+  cardBackupPassphrase?: string;
+}): Promise<string> {
+  const backup = await createBackupData(options);
   const jsonStr = JSON.stringify(backup, null, 2);
   const dateStr = formatDateIso(new Date());
   const fileName = `vealth_backup_${dateStr}.json`;
@@ -267,6 +286,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
         validRecord(l) &&
         validId(l.name) &&
         VALID_LIABILITY_TYPES.has(l.type) &&
+        (l.accountId == null || (typeof l.accountId === 'string' && l.accountId.length > 0)) &&
         validMoney(l.amount) &&
         l.amount >= 0 &&
         (!l.dueDate || isValidCalendarDate(l.dueDate)) &&
@@ -372,7 +392,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
   const exists = (id: any, known: Set<string>) => id == null || known.has(id);
 
   if (
-    !data.liabilities.every((l: any) => exists(l.personId, personIds)) ||
+    !data.liabilities.every((l: any) => exists(l.personId, personIds) && exists(l.accountId, accountIds)) ||
     !data.transactions.every(
       (t: any) =>
         exists(t.accountId, accountIds) &&
@@ -548,23 +568,93 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     ) {
       return { isValid: false, error: 'Backup contains invalid or corrupted card wallet records.' };
     }
+
+    if (data.cards.length > 0) {
+      if (!data.cardKeyEnvelope || typeof data.cardKeyEnvelope !== 'object') {
+        return {
+          isValid: false,
+          error: 'Backup contains encrypted cards but is missing the required card key envelope in card wallet records.',
+        };
+      }
+      const envelopeValidation = validateCardKeyEnvelope(data.cardKeyEnvelope);
+      if (!envelopeValidation.isValid) {
+        return envelopeValidation;
+      }
+    }
   }
 
   return { isValid: true };
 }
 
-export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
+export function validateCardKeyEnvelope(env: any): { isValid: boolean; error?: string } {
+  if (!env || typeof env !== 'object') {
+    return {
+      isValid: false,
+      error: 'Card key envelope is missing or invalid in card wallet records.',
+    };
+  }
+  if (
+    env.algorithm !== 'AES-GCM-256' ||
+    env.kdf !== 'PBKDF2-SHA256' ||
+    typeof env.iterations !== 'number' ||
+    env.iterations < 10000 ||
+    env.iterations > 1000000 ||
+    typeof env.saltHex !== 'string' ||
+    env.saltHex.length !== 32 ||
+    !/^[0-9a-f]{32}$/i.test(env.saltHex) ||
+    typeof env.ivHex !== 'string' ||
+    env.ivHex.length !== 24 ||
+    !/^[0-9a-f]{24}$/i.test(env.ivHex) ||
+    typeof env.ciphertextHex !== 'string' ||
+    env.ciphertextHex.length < 32 ||
+    !/^[0-9a-f]+$/i.test(env.ciphertextHex)
+  ) {
+    return {
+      isValid: false,
+      error: 'Backup contains an invalid, tampered, or unsupported card key envelope in card wallet records.',
+    };
+  }
+  return { isValid: true };
+}
+
+export async function restoreBackup(
+  backup: VaelthBackupData,
+  options?: { cardBackupPassphrase?: string }
+): Promise<void> {
   const validation = validateBackupData(backup);
   if (!validation.isValid) {
     throw new Error(validation.error);
   }
 
-  // If backup contains a secure master key envelope, restore the master key
-  if (backup.data.cardKeyEnvelope) {
-    try {
-      await restoreCardKeyFromEnvelope(backup.data.cardKeyEnvelope);
-    } catch (err: any) {
-      throw new Error(`Failed to restore card wallet encryption key: ${err?.message || 'invalid key'}`);
+  let preparedCards: SavedCard[] | undefined = undefined;
+
+  // If backup contains cards, unwrap incoming key, decrypt incoming cards, and re-encrypt with local device master key
+  if (backup.data.cards && backup.data.cards.length > 0) {
+    if (!backup.data.cardKeyEnvelope) {
+      throw new Error('Backup contains cards but lacks required key envelope.');
+    }
+    if (!options?.cardBackupPassphrase || !options.cardBackupPassphrase.trim()) {
+      throw new Error('A backup passphrase is required to restore encrypted Card Wallet records.');
+    }
+
+    // 1. Unwrap incoming backup master key
+    const incomingMasterKeyHex = await restoreCardKeyFromEnvelope(
+      backup.data.cardKeyEnvelope,
+      options.cardBackupPassphrase.trim()
+    );
+
+    // 2. Retrieve destination device's existing master key (never overwrite destination master key!)
+    const localMasterKeyHex = await getMasterEncryptionKeyHex();
+
+    // 3. Staging: Decrypt with incoming backup key, re-encrypt with local destination key
+    preparedCards = [];
+    for (const card of backup.data.cards) {
+      const plainCardNum = await decryptCardNumber(card.encryptedCardNumber, incomingMasterKeyHex);
+      const localCiphertext = await encryptCardNumber(plainCardNum, localMasterKeyHex);
+      preparedCards.push({
+        ...card,
+        encryptedCardNumber: localCiphertext,
+      });
     }
   }
 
@@ -708,13 +798,14 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     // 5. Restore liabilities
     for (const l of liabilities) {
       await db.runAsync(
-        `INSERT INTO liabilities (id, name, amount, type, personId, dueDate, note, isArchived, createdAt, updatedAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        `INSERT INTO liabilities (id, name, amount, type, accountId, personId, dueDate, note, isArchived, createdAt, updatedAt)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           l.id,
           l.name,
           Math.round(l.amount),
           l.type,
+          l.accountId ?? null,
           l.personId ?? null,
           l.dueDate ?? null,
           l.note ?? null,
@@ -843,8 +934,8 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
     }
 
     // 11. Restore cards (strictly encrypted; no plain numbers or CVV)
-    if (backup.data.cards && Array.isArray(backup.data.cards)) {
-      for (const card of backup.data.cards) {
+    if (hasCards && preparedCards && Array.isArray(preparedCards)) {
+      for (const card of preparedCards) {
         if (!card.encryptedCardNumber || !card.lastFour) continue;
         await db.runAsync(
           `INSERT INTO cards (
@@ -870,6 +961,41 @@ export async function restoreBackup(backup: VaelthBackupData): Promise<void> {
             card.updatedAt,
           ]
         );
+      }
+    } else if (!hasCards) {
+      // Legacy backup missing cards: protect retained local cards' foreign keys
+      const incomingAccountIds = new Set(backup.data.accounts.map((a) => a.id));
+      const accountsById = new Map(backup.data.accounts.map((a) => [a.id, a]));
+      const retainedCards = await db.getAllAsync<{ id: string; cardType: string; linkedAccountId: string | null }>(
+        'SELECT id, cardType, linkedAccountId FROM cards WHERE linkedAccountId IS NOT NULL;'
+      );
+      for (const c of retainedCards) {
+        if (c.linkedAccountId) {
+          const acc = accountsById.get(c.linkedAccountId);
+          const isValidLink = acc && ((c.cardType === 'DEBIT' && acc.type === 'BANK') || (c.cardType === 'CREDIT' && acc.type === 'CREDIT_CARD'));
+          if (!isValidLink) {
+            await db.runAsync('UPDATE cards SET linkedAccountId = NULL WHERE id = ?;', [c.id]);
+          }
+        }
+      }
+    }
+
+    // If legacy backup missing shopping, protect retained local shopping items' foreign keys
+    if (!hasShopping) {
+      const incomingAccountIds = new Set(backup.data.accounts.map((a) => a.id));
+      const incomingCategoryIds = new Set(backup.data.categories.map((c) => c.id));
+      const retainedShopping = await db.getAllAsync<{
+        id: string;
+        purchaseAccountId: string | null;
+        categoryId: string | null;
+      }>('SELECT id, purchaseAccountId, categoryId FROM shopping_items;');
+      for (const item of retainedShopping) {
+        if (item.purchaseAccountId && !incomingAccountIds.has(item.purchaseAccountId)) {
+          await db.runAsync('UPDATE shopping_items SET purchaseAccountId = NULL WHERE id = ?;', [item.id]);
+        }
+        if (item.categoryId && !incomingCategoryIds.has(item.categoryId)) {
+          await db.runAsync('UPDATE shopping_items SET categoryId = NULL WHERE id = ?;', [item.id]);
+        }
       }
     }
   });

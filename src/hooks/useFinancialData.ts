@@ -53,14 +53,15 @@ export async function fetchFinancialSnapshot(): Promise<FinancialSnapshotData> {
     try {
       const db = await getDatabase();
       let snapshot!: FinancialSnapshotData;
-      await db.withTransactionAsync(async () => {
-        const accs = await getAllAccounts(true, db);
-        const ppl = await getAllPeople(true, db);
-        const txs = await getAllTransactions(undefined, db);
-        const asts = await getAllAssets(true, db);
-        const libs = await getAllLiabilities(true, db);
-        const cats = await getAllCategories(true, db);
-        const storedName = await getSetting('user_name', db);
+      await db.withTransactionAsync(async (txn?: any) => {
+        const executor = txn || db;
+        const accs = await getAllAccounts(true, executor as any);
+        const ppl = await getAllPeople(true, executor as any);
+        const txs = await getAllTransactions(undefined, executor as any);
+        const asts = await getAllAssets(true, executor as any);
+        const libs = await getAllLiabilities(true, executor as any);
+        const cats = await getAllCategories(true, executor as any);
+        const storedName = await getSetting('user_name', executor as any);
         snapshot = {
           accounts: accs,
           people: ppl,

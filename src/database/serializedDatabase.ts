@@ -36,59 +36,143 @@ export class DatabaseOperationQueue {
 }
 
 const SERIALIZED_FLAG = '__vaelth_serialized__';
+const TRANSACTION_HANDLE_FLAG = '__vaelth_txn_serialized__';
+const UNWRAPPED_METHODS_KEY = '__vaelth_unwrapped__';
+
+let transactionStorage: any = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { AsyncLocalStorage } = require('async_hooks');
+  transactionStorage = new AsyncLocalStorage();
+} catch {
+  // Not available in this runtime (e.g. mobile environments without async_hooks)
+}
 
 function wrapMethod<T extends (...args: any[]) => Promise<any>>(
   target: any,
   methodName: string,
   queue: DatabaseOperationQueue,
-  customWrapper?: (originalMethod: T, ...args: Parameters<T>) => Promise<any>,
-  getIsInsideTransaction?: () => boolean
+  customWrapper?: (originalMethod: T, ...args: Parameters<T>) => Promise<any>
 ): void {
   const original = target[methodName];
   if (typeof original !== 'function') {
     return;
   }
 
-  // If already wrapped on this object, skip
   if ((original as any).__isWrapped) {
     return;
   }
 
-  // Check if it's a Jest mock function in test environments
+  if (!target[UNWRAPPED_METHODS_KEY]) {
+    target[UNWRAPPED_METHODS_KEY] = {};
+  }
+
   if ((original as any)._isMockFunction) {
     const mockFn = original as jest.Mock;
     const originalImpl = mockFn.getMockImplementation() || (() => Promise.resolve());
+    target[UNWRAPPED_METHODS_KEY][methodName] = originalImpl.bind(target);
+
     mockFn.mockImplementation((...args: any[]) => {
-      if (getIsInsideTransaction && getIsInsideTransaction()) {
+      const currentTxn = transactionStorage?.getStore();
+      if (currentTxn && currentTxn.db === target) {
         if (customWrapper) {
           return customWrapper(originalImpl as any, ...(args as any));
         }
-        return Promise.resolve(originalImpl(...args));
+        return originalImpl(...args);
       }
+
       if (customWrapper) {
-        return queue.enqueue(() => Promise.resolve(customWrapper(originalImpl as any, ...(args as any))));
+        return queue.enqueue(() => customWrapper(originalImpl as any, ...(args as any)));
       }
-      return queue.enqueue(() => Promise.resolve(originalImpl(...args)));
+      return queue.enqueue(() => originalImpl(...args));
     });
     (mockFn as any).__isWrapped = true;
     return;
   }
 
   const boundOriginal = original.bind(target);
-  const wrapped = (...args: any[]) => {
-    if (getIsInsideTransaction && getIsInsideTransaction()) {
+  target[UNWRAPPED_METHODS_KEY][methodName] = boundOriginal;
+
+  const handler = (...args: any[]) => {
+    const currentTxn = transactionStorage?.getStore();
+    if (currentTxn && currentTxn.db === target) {
       if (customWrapper) {
         return customWrapper(boundOriginal as any, ...(args as any));
       }
       return boundOriginal(...args);
     }
+
     if (customWrapper) {
       return queue.enqueue(() => customWrapper(boundOriginal as any, ...(args as any)));
     }
     return queue.enqueue(() => boundOriginal(...args));
   };
-  (wrapped as any).__isWrapped = true;
-  target[methodName] = wrapped;
+
+  (handler as any).__isWrapped = true;
+  target[methodName] = handler;
+}
+
+/**
+ * Wraps a transaction-scoped database handle so that operations executed within
+ * the transaction callback run directly against the native transaction handle
+ * with their own FIFO serializer, preventing native prepare collisions without
+ * deadlocking behind the parent database queue.
+ */
+export function serializeTransactionHandle(rawTxn: any, rootDb?: any): any {
+  if (!rawTxn || typeof rawTxn !== 'object') {
+    return rawTxn;
+  }
+
+  if (rawTxn[TRANSACTION_HANDLE_FLAG]) {
+    return rawTxn;
+  }
+
+  const txnQueue = new DatabaseOperationQueue();
+  const serializedTxn = Object.create(rawTxn);
+
+  Object.defineProperty(serializedTxn, TRANSACTION_HANDLE_FLAG, {
+    value: true,
+    configurable: true,
+    writable: false,
+    enumerable: false,
+  });
+
+  const methods = ['runAsync', 'getFirstAsync', 'getAllAsync', 'execAsync'];
+  const unwrapped = rawTxn[UNWRAPPED_METHODS_KEY] || {};
+  const rootUnwrapped = rootDb?.[UNWRAPPED_METHODS_KEY] || {};
+
+  for (const method of methods) {
+    const rawMethod = rawTxn[method];
+    const isMock =
+      typeof rawMethod === 'function' &&
+      Boolean(
+        (rawMethod as any)._isMockFunction ||
+          (typeof jest !== 'undefined' && typeof jest.isMockFunction === 'function' && jest.isMockFunction(rawMethod))
+      );
+
+    const targetMethod = isMock
+      ? rawMethod.bind(rawTxn)
+      : unwrapped[method] ||
+        (typeof rawTxn[method] === 'function' ? rawTxn[method].bind(rawTxn) : undefined) ||
+        rootUnwrapped[method] ||
+        (rootDb && typeof rootDb[method] === 'function' ? rootDb[method].bind(rootDb) : undefined);
+
+    if (targetMethod) {
+      serializedTxn[method] = (...args: any[]) => {
+        return txnQueue.enqueue(() => targetMethod(...args));
+      };
+    }
+  }
+
+  // Nested transaction calls pass through cleanly within this transaction scope
+  serializedTxn.withExclusiveTransactionAsync = async (nestedTask: (child: any) => Promise<any>) => {
+    return await nestedTask(serializedTxn);
+  };
+  serializedTxn.withTransactionAsync = async (nestedTask: () => Promise<any>) => {
+    return await nestedTask();
+  };
+
+  return serializedTxn;
 }
 
 /**
@@ -112,64 +196,73 @@ export function serializeDatabase(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatab
   });
 
   const queue = new DatabaseOperationQueue();
-  let activeTransactionDepth = 0;
-  const isInsideTxn = () => activeTransactionDepth > 0;
 
   // 1. Serialize standard query execution methods on this handle
-  wrapMethod(db, 'runAsync', queue, undefined, isInsideTxn);
-  wrapMethod(db, 'getFirstAsync', queue, undefined, isInsideTxn);
-  wrapMethod(db, 'getAllAsync', queue, undefined, isInsideTxn);
-  wrapMethod(db, 'execAsync', queue, undefined, isInsideTxn);
-  wrapMethod(db, 'closeAsync', queue, undefined, isInsideTxn);
+  wrapMethod(db, 'runAsync', queue);
+  wrapMethod(db, 'getFirstAsync', queue);
+  wrapMethod(db, 'getAllAsync', queue);
+  wrapMethod(db, 'execAsync', queue);
+  wrapMethod(db, 'closeAsync', queue);
 
-  // 2. Intercept withExclusiveTransactionAsync to wrap the newly spawned txn handle with its own serializer
-  wrapMethod(
-    db,
-    'withExclusiveTransactionAsync',
-    queue,
-    async (originalMethod, task: (txn: any) => Promise<void>) => {
-      if (activeTransactionDepth > 0) {
-        return task(db);
-      }
-      activeTransactionDepth++;
-      try {
+  const rawWithTx = (db as any).withTransactionAsync;
+  const hasExclusive = typeof (db as any).withExclusiveTransactionAsync === 'function';
+
+  // 2. Intercept withExclusiveTransactionAsync to wrap the spawned txn handle with its own transaction serializer
+  if (hasExclusive) {
+    wrapMethod(
+      db,
+      'withExclusiveTransactionAsync',
+      queue,
+      async (originalMethod, task: (txn: any) => Promise<any>) => {
+        const currentTxn = transactionStorage?.getStore();
+        if (currentTxn && currentTxn.db === db) {
+          return await task(currentTxn.txnHandle);
+        }
+
         return await originalMethod(async (txn: any) => {
-          const serializedTxn = serializeDatabase(txn);
-          (serializedTxn as any).withExclusiveTransactionAsync = async (nestedTask: (child: any) => Promise<void>) => {
-            return nestedTask(serializedTxn);
-          };
-          (serializedTxn as any).withTransactionAsync = async (nestedTask: () => Promise<void>) => {
-            return nestedTask();
-          };
-          await task(serializedTxn);
+          const serializedTxn = serializeTransactionHandle(txn || db, db);
+          if (transactionStorage) {
+            return await transactionStorage.run(
+              { db, txnHandle: serializedTxn },
+              async () => task(serializedTxn)
+            );
+          }
+          return await task(serializedTxn);
         });
-      } finally {
-        activeTransactionDepth--;
       }
-    },
-    isInsideTxn
-  );
+    );
+  }
 
-  // 3. Intercept withTransactionAsync to prevent nested transaction errors and deadlocks
-  wrapMethod(
-    db,
-    'withTransactionAsync',
-    queue,
-    async (originalMethod, task: () => Promise<any>) => {
-      if (activeTransactionDepth > 0) {
-        return task();
+  // 3. Intercept withTransactionAsync
+  if (typeof rawWithTx === 'function') {
+    wrapMethod(
+      db,
+      'withTransactionAsync',
+      queue,
+      async (originalMethod, task: (txn?: any) => Promise<any>) => {
+        const currentTxn = transactionStorage?.getStore();
+        if (currentTxn && currentTxn.db === db) {
+          return await task(currentTxn.txnHandle);
+        }
+
+        const serializedTxn = serializeTransactionHandle(db, db);
+        const executeTask = async () => {
+          return await originalMethod(async () => {
+            return await task(serializedTxn);
+          });
+        };
+
+        if (transactionStorage) {
+          return await transactionStorage.run(
+            { db, txnHandle: serializedTxn },
+            executeTask
+          );
+        }
+        return await executeTask();
       }
-      activeTransactionDepth++;
-      try {
-        return await originalMethod(async () => {
-          return task();
-        });
-      } finally {
-        activeTransactionDepth--;
-      }
-    },
-    isInsideTxn
-  );
+    );
+  }
 
   return db;
 }
+

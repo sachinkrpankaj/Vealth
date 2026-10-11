@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { cleanCardNumber } from './cardValidation';
+import { pbkdf2HmacSha256 } from '../../stores/useSecurityStore';
 
 let SecureStore: typeof import('expo-secure-store') | null = null;
 try {
@@ -17,6 +18,9 @@ const fallbackKeyMemory = new Map<string, string>();
 
 let activeClipboardTimer: NodeJS.Timeout | null = null;
 let lastCopiedSensitiveText: string | null = null;
+
+const AES_GCM_V1_REGEX = /^aes-gcm:v1:([0-9a-f]{24}):([0-9a-f]{32,})$/i;
+const FALLBACK_V1_REGEX = /^fallback:v1:([0-9a-f]{24}):([0-9a-f]+)$/i;
 
 function isTestEnvironment(): boolean {
   return typeof process !== 'undefined' && process.env?.NODE_ENV === 'test';
@@ -58,11 +62,18 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 /**
- * Retrieves or initializes the hardware-backed 256-bit AES master key.
+ * Retrieves or initializes the 256-bit AES master key in OS-protected secure storage.
  * Never silently regenerates an existing key if storage fails.
+ * On web, explicitly fails closed with clear user explanation.
  */
 export async function getMasterEncryptionKeyHex(): Promise<string> {
   const isTest = isTestEnvironment();
+
+  if (Platform.OS === 'web') {
+    throw new Error(
+      'Card number storage and decryption are disabled on web platforms for security. Sensitive card management requires OS-protected secure storage available on iOS and Android.'
+    );
+  }
 
   // 1. Try reading existing key from SecureStore
   if (SecureStore) {
@@ -70,7 +81,9 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
       const isAvailable = await SecureStore.isAvailableAsync();
       if (isAvailable) {
         let key = await SecureStore.getItemAsync(MASTER_CARD_KEY_NAME);
-        if (key) return key;
+        if (key && key.length === 64 && /^[0-9a-f]{64}$/i.test(key)) {
+          return key;
+        }
 
         // Generate a new 256-bit key
         const newKeyBytes = getSecureRandomBytes(32);
@@ -83,14 +96,14 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
     } catch (e: any) {
       if (!isTest) {
         throw new Error(
-          `Hardware keystore unavailable: could not securely initialize encryption key (${e?.message || 'storage error'}).`
+          `OS secure storage unavailable: could not securely initialize encryption key (${e?.message || 'storage error'}).`
         );
       }
     }
   }
 
-  // Fallback for tests or web environments without native secure store
-  if (isTest || Platform.OS === 'web') {
+  // Fallback ONLY for unit tests with mocked/stubbed secure store
+  if (isTest) {
     let key = fallbackKeyMemory.get(MASTER_CARD_KEY_NAME);
     if (!key) {
       key = bytesToHex(getSecureRandomBytes(32));
@@ -99,16 +112,23 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
     return key;
   }
 
-  throw new Error('Secure keystore is unavailable on this device.');
+  throw new Error('OS secure storage is unavailable on this device.');
 }
 
 /**
- * Safely sets the master encryption key (e.g. during cross-device restore).
+ * Safely sets the master encryption key in OS-protected secure storage.
  */
 export async function setMasterEncryptionKeyHex(keyHex: string): Promise<void> {
-  if (!keyHex || keyHex.length !== 64) {
+  if (!keyHex || keyHex.length !== 64 || !/^[0-9a-f]{64}$/i.test(keyHex)) {
     throw new Error('Invalid master encryption key: must be a 64-character hex string (256 bits).');
   }
+
+  if (Platform.OS === 'web') {
+    throw new Error(
+      'Card encryption key management is disabled on web platforms for security. Secure storage is only supported on iOS and Android.'
+    );
+  }
+
   if (SecureStore) {
     try {
       const isAvailable = await SecureStore.isAvailableAsync();
@@ -120,17 +140,17 @@ export async function setMasterEncryptionKeyHex(keyHex: string): Promise<void> {
       }
     } catch (e: any) {
       if (!isTestEnvironment()) {
-        throw new Error(`Failed to store master key into hardware keystore: ${e?.message || 'error'}`);
+        throw new Error(`Failed to store master key into OS secure storage: ${e?.message || 'error'}`);
       }
     }
   }
 
-  if (isTestEnvironment() || Platform.OS === 'web') {
+  if (isTestEnvironment()) {
     fallbackKeyMemory.set(MASTER_CARD_KEY_NAME, keyHex);
     return;
   }
 
-  throw new Error('Secure keystore is unavailable on this device.');
+  throw new Error('OS secure storage is unavailable on this device.');
 }
 
 /**
@@ -146,20 +166,24 @@ function legacyXorBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
 }
 
 /**
- * Encrypts a card number using AES-GCM (256-bit) with a unique 96-bit IV.
- * Format: aes-gcm:v1:<ivHex>:<ciphertextHex>
+ * Encrypts a card number using authenticated AES-GCM (256-bit) with a unique 96-bit IV.
+ * Format: aes-gcm:v1:<ivHex>:<ciphertextAndTagHex>
  * Fails closed if secure authenticated encryption is unavailable.
  */
-export async function encryptCardNumber(cardNumber: string): Promise<string> {
+export async function encryptCardNumber(cardNumber: string, explicitKeyHex?: string): Promise<string> {
   const clean = cleanCardNumber(cardNumber);
   if (!clean) throw new Error('Card number cannot be blank for encryption.');
 
-  const keyHex = await getMasterEncryptionKeyHex();
+  const keyHex = explicitKeyHex || (await getMasterEncryptionKeyHex());
+  if (!keyHex || keyHex.length !== 64 || !/^[0-9a-f]{64}$/i.test(keyHex)) {
+    throw new Error('Invalid master encryption key: must be a 64-character hex string (256 bits).');
+  }
+
   const keyBytes = hexToBytes(keyHex);
   const iv = getSecureRandomBytes(12); // 96-bit IV recommended for AES-GCM
   const plainBytes = new TextEncoder().encode(clean);
 
-  // Authenticated encryption via WebCrypto SubtleCrypto AES-GCM
+  // 1. WebCrypto SubtleCrypto AES-GCM (standard in Hermes 0.76+ and Node.js)
   if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle?.importKey) {
     try {
       const cryptoKey = await globalThis.crypto.subtle.importKey(
@@ -183,6 +207,20 @@ export async function encryptCardNumber(cardNumber: string): Promise<string> {
     }
   }
 
+  // 2. Native ExpoCrypto AES fallback if subtle is unavailable
+  if (Crypto?.aesEncryptAsync && Crypto?.AESEncryptionKey) {
+    try {
+      const aesKey = await Crypto.AESEncryptionKey.import(keyBytes);
+      const sealed = await Crypto.aesEncryptAsync(plainBytes, aesKey, {
+        nonce: { bytes: iv } as any,
+      });
+      const cipherWithTag = await sealed.ciphertext({ includeTag: true, encoding: 'bytes' });
+      return `aes-gcm:v1:${bytesToHex(iv)}:${bytesToHex(cipherWithTag as Uint8Array)}`;
+    } catch (e: any) {
+      throw new Error(`Failed to encrypt card number with authenticated AES-GCM: ${e?.message || 'crypto error'}`);
+    }
+  }
+
   // Fail-closed when secure authenticated encryption is unavailable
   throw new Error('Authenticated cryptographic encryption (AES-GCM) is unavailable on this device.');
 }
@@ -191,55 +229,96 @@ export async function encryptCardNumber(cardNumber: string): Promise<string> {
  * Checks whether an encrypted payload is in the legacy fallback:v1 format.
  */
 export function isLegacyEncryptedCard(encryptedPayload: string): boolean {
-  if (!encryptedPayload) return false;
-  return encryptedPayload.startsWith('fallback:v1:');
+  if (!encryptedPayload || typeof encryptedPayload !== 'string') return false;
+  return FALLBACK_V1_REGEX.test(encryptedPayload);
 }
 
 /**
  * Decrypts an encrypted card number payload.
  * Supports modern authenticated AES-GCM and safe legacy fallback:v1 migration.
+ * Validates ciphertext format strictly, including IV length and auth tag presence.
  */
-export async function decryptCardNumber(encryptedPayload: string): Promise<string> {
-  if (!encryptedPayload) throw new Error('Encrypted payload is empty.');
-
-  const parts = encryptedPayload.split(':');
-  if (parts.length < 4) {
-    throw new Error('Invalid encrypted card format.');
+export async function decryptCardNumber(
+  encryptedPayload: string,
+  explicitKeyHex?: string
+): Promise<string> {
+  if (!encryptedPayload || typeof encryptedPayload !== 'string') {
+    throw new Error('Encrypted payload is empty or invalid.');
   }
 
-  const [scheme, version, ivHex, cipherHex] = parts;
-  const keyHex = await getMasterEncryptionKeyHex();
+  const keyHex = explicitKeyHex || (await getMasterEncryptionKeyHex());
+  if (!keyHex || keyHex.length !== 64 || !/^[0-9a-f]{64}$/i.test(keyHex)) {
+    throw new Error('Invalid master encryption key: must be a 64-character hex string (256 bits).');
+  }
   const keyBytes = hexToBytes(keyHex);
-  const iv = hexToBytes(ivHex);
-  const cipherBytes = hexToBytes(cipherHex);
 
-  if (scheme === 'aes-gcm' && version === 'v1') {
+  // 1. Modern authenticated AES-GCM
+  const gcmMatch = encryptedPayload.match(AES_GCM_V1_REGEX);
+  if (gcmMatch) {
+    const ivHex = gcmMatch[1];
+    const cipherHex = gcmMatch[2];
+    const iv = hexToBytes(ivHex);
+    const cipherBytes = hexToBytes(cipherHex);
+
+    // Try WebCrypto SubtleCrypto AES-GCM first (standard in Hermes and Node)
     if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle?.importKey) {
-      const cryptoKey = await globalThis.crypto.subtle.importKey(
-        'raw',
-        keyBytes as unknown as BufferSource,
-        { name: 'AES-GCM' },
-        false,
-        ['decrypt']
-      );
+      try {
+        const cryptoKey = await globalThis.crypto.subtle.importKey(
+          'raw',
+          keyBytes as unknown as BufferSource,
+          { name: 'AES-GCM' },
+          false,
+          ['decrypt']
+        );
 
-      const decryptedBuffer = await globalThis.crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-        cryptoKey,
-        cipherBytes as unknown as BufferSource
-      );
+        const decryptedBuffer = await globalThis.crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+          cryptoKey,
+          cipherBytes as unknown as BufferSource
+        );
 
-      return new TextDecoder().decode(decryptedBuffer);
+        return new TextDecoder().decode(decryptedBuffer);
+      } catch (err: any) {
+        throw new Error(`Failed to decrypt card number with authenticated AES-GCM: ${err?.message || 'authentication failed'}`);
+      }
     }
-    throw new Error('WebCrypto subtle is unavailable for AES-GCM decryption.');
+
+    // Try native ExpoCrypto AES fallback if subtle is unavailable
+    if (Crypto?.aesDecryptAsync && Crypto?.AESEncryptionKey && Crypto?.AESSealedData) {
+      try {
+        const aesKey = await Crypto.AESEncryptionKey.import(keyBytes);
+        const sealed = Crypto.AESSealedData.fromParts(iv, cipherBytes, 16);
+        const decrypted = await Crypto.aesDecryptAsync(sealed, aesKey, { output: 'bytes' });
+        return new TextDecoder().decode(decrypted as Uint8Array);
+      } catch (err: any) {
+        throw new Error(`Failed to decrypt card number with authenticated AES-GCM: ${err?.message || 'authentication failed'}`);
+      }
+    }
+
+    throw new Error('Authenticated cryptographic encryption (AES-GCM) is unavailable on this device.');
   }
 
-  // Safe migration support: decrypt existing fallback:v1 records so data is never destroyed
-  if (scheme === 'fallback' && version === 'v1') {
+  // 2. Safe migration support: decrypt existing fallback:v1 records so data is never destroyed
+  const fallbackMatch = encryptedPayload.match(FALLBACK_V1_REGEX);
+  if (fallbackMatch) {
+    const ivHex = fallbackMatch[1];
+    const cipherHex = fallbackMatch[2];
+    const iv = hexToBytes(ivHex);
+    const cipherBytes = hexToBytes(cipherHex);
     const plainBytes = legacyXorBytes(cipherBytes, legacyXorBytes(keyBytes, iv));
     return new TextDecoder().decode(plainBytes);
   }
 
+  if (!encryptedPayload.includes(':')) {
+    throw new Error('Invalid encrypted card format: missing scheme delimiter.');
+  }
+
+  // Reject malformed or truncated payloads with descriptive errors
+  if (encryptedPayload.startsWith('aes-gcm:') || encryptedPayload.startsWith('fallback:')) {
+    throw new Error('Invalid or corrupted encrypted card payload format.');
+  }
+
+  const scheme = encryptedPayload.split(':')[0] || 'unknown';
   throw new Error(`Unsupported encryption scheme: ${scheme}`);
 }
 
@@ -268,15 +347,19 @@ export async function copySensitiveTextToClipboard(
 
   // Safe timer: only clear if clipboard still matches the copied sensitive text
   if (clearDelayMs > 0) {
+    const expectedText = text;
     activeClipboardTimer = setTimeout(async () => {
       try {
         const current = await Clipboard.getStringAsync();
-        if (current === text) {
+        if (current === expectedText) {
           await Clipboard.setStringAsync('');
         }
       } catch {}
       activeClipboardTimer = null;
     }, clearDelayMs);
+    if (typeof (activeClipboardTimer as any)?.unref === 'function') {
+      (activeClipboardTimer as any).unref();
+    }
   }
 
   return true;
@@ -307,102 +390,148 @@ export interface CardKeyEnvelope {
 /**
  * Creates an encrypted envelope containing the master card encryption key.
  * Master key is never stored or exported in plaintext.
+ * Requires user-supplied passphrase; never uses hardcoded or default credentials.
  */
-export async function createCardKeyEnvelope(passphrase?: string): Promise<CardKeyEnvelope> {
+export async function createCardKeyEnvelope(passphrase: string): Promise<CardKeyEnvelope> {
+  if (!passphrase || typeof passphrase !== 'string' || !passphrase.trim()) {
+    throw new Error('A backup passphrase is required to securely encrypt Card Wallet keys.');
+  }
+
   const masterKeyHex = await getMasterEncryptionKeyHex();
   const salt = getSecureRandomBytes(16);
   const iv = getSecureRandomBytes(12);
+  const iterations = 100000;
 
-  const pw = passphrase || 'vaelth_default_card_envelope_v1';
   const enc = new TextEncoder();
-  const importedPw = await globalThis.crypto.subtle.importKey(
-    'raw',
-    enc.encode(pw),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits', 'deriveKey']
-  );
+  const derivedHex = pbkdf2HmacSha256(enc.encode(passphrase.trim()), salt, iterations);
+  const wrappingKeyBytes = hexToBytes(derivedHex);
+  const plainBytes = enc.encode(masterKeyHex);
 
-  const wrappingKey = await globalThis.crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt as unknown as BufferSource,
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    importedPw,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt']
-  );
+  let cipherHex: string;
 
-  const cipherBuffer = await globalThis.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-    wrappingKey,
-    enc.encode(masterKeyHex)
-  );
+  if (Crypto?.aesEncryptAsync && Crypto?.AESEncryptionKey) {
+    const aesKey = await Crypto.AESEncryptionKey.import(wrappingKeyBytes);
+    const sealed = await Crypto.aesEncryptAsync(plainBytes, aesKey, {
+      nonce: { bytes: iv } as any,
+    });
+    const cipherWithTag = await sealed.ciphertext({ includeTag: true, encoding: 'bytes' });
+    cipherHex = bytesToHex(cipherWithTag as Uint8Array);
+  } else if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle?.importKey) {
+    const cryptoKey = await globalThis.crypto.subtle.importKey(
+      'raw',
+      wrappingKeyBytes as unknown as BufferSource,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt']
+    );
+
+    const cipherBuffer = await globalThis.crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+      cryptoKey,
+      plainBytes as unknown as BufferSource
+    );
+    cipherHex = bytesToHex(new Uint8Array(cipherBuffer));
+  } else {
+    throw new Error('Authenticated cryptographic encryption (AES-GCM) is unavailable to create key envelope.');
+  }
 
   return {
     algorithm: 'AES-GCM-256',
     kdf: 'PBKDF2-SHA256',
-    iterations: 100000,
+    iterations,
     saltHex: bytesToHex(salt),
     ivHex: bytesToHex(iv),
-    ciphertextHex: bytesToHex(new Uint8Array(cipherBuffer)),
+    ciphertextHex: cipherHex,
   };
 }
 
 /**
- * Restores the master card encryption key from an encrypted envelope.
+ * Restores and returns the master card encryption key from an encrypted envelope.
+ * Validates envelope algorithm, KDF, iteration count, salt, and IV before executing operations.
+ * Returns the unwrapped key; does NOT silently mutate the device's current master key.
  */
 export async function restoreCardKeyFromEnvelope(
   envelope: CardKeyEnvelope,
-  passphrase?: string
+  passphrase: string
 ): Promise<string> {
-  if (!envelope || !envelope.saltHex || !envelope.ivHex || !envelope.ciphertextHex) {
+  if (!passphrase || typeof passphrase !== 'string' || !passphrase.trim()) {
+    throw new Error('A backup passphrase is required to decrypt Card Wallet keys.');
+  }
+
+  if (!envelope || typeof envelope !== 'object') {
     throw new Error('Invalid or corrupted card key envelope.');
+  }
+
+  // Pre-validate envelope parameters before performing expensive operations
+  if (envelope.algorithm !== 'AES-GCM-256') {
+    throw new Error(`Unsupported envelope algorithm: ${envelope.algorithm || 'unknown'}`);
+  }
+  if (envelope.kdf !== 'PBKDF2-SHA256') {
+    throw new Error(`Unsupported envelope KDF: ${envelope.kdf || 'unknown'}`);
+  }
+  if (
+    typeof envelope.iterations !== 'number' ||
+    envelope.iterations < 10000 ||
+    envelope.iterations > 1000000
+  ) {
+    throw new Error(`Unsafe or invalid envelope iteration count: ${envelope.iterations}`);
+  }
+  if (!envelope.saltHex || envelope.saltHex.length !== 32 || !/^[0-9a-f]{32}$/i.test(envelope.saltHex)) {
+    throw new Error('Invalid or corrupted envelope salt.');
+  }
+  if (!envelope.ivHex || envelope.ivHex.length !== 24 || !/^[0-9a-f]{24}$/i.test(envelope.ivHex)) {
+    throw new Error('Invalid or corrupted envelope IV.');
+  }
+  if (
+    !envelope.ciphertextHex ||
+    envelope.ciphertextHex.length < 32 ||
+    !/^[0-9a-f]+$/i.test(envelope.ciphertextHex)
+  ) {
+    throw new Error('Invalid or corrupted envelope ciphertext.');
   }
 
   const salt = hexToBytes(envelope.saltHex);
   const iv = hexToBytes(envelope.ivHex);
-  const ciphertext = hexToBytes(envelope.ciphertextHex);
+  const cipherBytes = hexToBytes(envelope.ciphertextHex);
 
-  const pw = passphrase || 'vaelth_default_card_envelope_v1';
   const enc = new TextEncoder();
-  const importedPw = await globalThis.crypto.subtle.importKey(
-    'raw',
-    enc.encode(pw),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits', 'deriveKey']
-  );
+  const derivedHex = pbkdf2HmacSha256(enc.encode(passphrase.trim()), salt, envelope.iterations);
+  const wrappingKeyBytes = hexToBytes(derivedHex);
 
-  const wrappingKey = await globalThis.crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt as unknown as BufferSource,
-      iterations: envelope.iterations || 100000,
-      hash: 'SHA-256',
-    },
-    importedPw,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['decrypt']
-  );
-
-  let decryptedBuffer: ArrayBuffer;
+  let decryptedBytes: Uint8Array;
   try {
-    decryptedBuffer = await globalThis.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: iv as unknown as BufferSource },
-      wrappingKey,
-      ciphertext as unknown as BufferSource
-    );
+    if (Crypto?.aesDecryptAsync && Crypto?.AESEncryptionKey && Crypto?.AESSealedData) {
+      const aesKey = await Crypto.AESEncryptionKey.import(wrappingKeyBytes);
+      const sealed = Crypto.AESSealedData.fromParts(iv, cipherBytes, 16);
+      const dec = await Crypto.aesDecryptAsync(sealed, aesKey, { output: 'bytes' });
+      decryptedBytes = dec as Uint8Array;
+    } else if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle?.importKey) {
+      const cryptoKey = await globalThis.crypto.subtle.importKey(
+        'raw',
+        wrappingKeyBytes as unknown as BufferSource,
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+      );
+
+      const buf = await globalThis.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+        cryptoKey,
+        cipherBytes as unknown as BufferSource
+      );
+      decryptedBytes = new Uint8Array(buf);
+    } else {
+      throw new Error('Authenticated cryptographic decryption (AES-GCM) is unavailable on this device.');
+    }
   } catch (err: any) {
     throw new Error('Failed to decrypt card key envelope. Incorrect password or corrupted envelope.');
   }
 
-  const masterKeyHex = new TextDecoder().decode(decryptedBuffer);
-  await setMasterEncryptionKeyHex(masterKeyHex);
+  const masterKeyHex = new TextDecoder().decode(decryptedBytes);
+  if (!masterKeyHex || masterKeyHex.length !== 64 || !/^[0-9a-f]{64}$/i.test(masterKeyHex)) {
+    throw new Error('Decrypted card master key is malformed or invalid.');
+  }
+
   return masterKeyHex;
 }
 

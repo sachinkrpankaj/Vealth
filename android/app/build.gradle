@@ -195,20 +195,35 @@ gradle.taskGraph.whenReady { taskGraph ->
     def isReleaseBuild = taskGraph.allTasks.any { task ->
         task.name.equalsIgnoreCase("assembleRelease") ||
         task.name.equalsIgnoreCase("bundleRelease") ||
-        task.name.equalsIgnoreCase("packageRelease")
+        task.name.equalsIgnoreCase("packageRelease") ||
+        (task.name.containsIgnoreCase("Release") && (task.name.startsWith("assemble") || task.name.startsWith("bundle") || task.name.startsWith("package")))
     }
     if (isReleaseBuild) {
-        def releaseSigning = project.android.signingConfigs.findByName("release")
-        if (releaseSigning?.storeFile != null && !releaseSigning.storeFile.exists()) {
-            throw new GradleException("Production release build failed: Configured release keystore does not exist at '${releaseSigning.storeFile.absolutePath}'.")
-        }
-
         def effectiveSigning = project.android.buildTypes.release.signingConfig
         if (effectiveSigning == null) {
             throw new GradleException("Production release build failed: Release build type does not have a signing configuration assigned.")
         }
-        if (effectiveSigning.storeFile != null && !effectiveSigning.storeFile.exists()) {
-            throw new GradleException("Production release build failed: Effective keystore does not exist at '${effectiveSigning.storeFile.absolutePath}'.")
+        if (effectiveSigning == project.android.signingConfigs.findByName("debug")) {
+            throw new GradleException("Production release build failed: Release build must never fall back to the debug signing configuration.")
+        }
+
+        def isEasManaged = (System.getenv("EAS_BUILD") != null && System.getenv("EAS_BUILD").equalsIgnoreCase("true")) || file("eas-build.gradle").exists()
+        if (!isEasManaged) {
+            if (effectiveSigning.storeFile == null) {
+                throw new GradleException("Production release build failed: Release keystore path is not configured. Debug keystore fallback is strictly disabled.")
+            }
+            if (!effectiveSigning.storeFile.exists()) {
+                throw new GradleException("Production release build failed: Configured release keystore file does not exist at '${effectiveSigning.storeFile.absolutePath}'.")
+            }
+            if (!effectiveSigning.keyAlias) {
+                throw new GradleException("Production release build failed: Release key alias is not configured.")
+            }
+            if (!effectiveSigning.storePassword) {
+                throw new GradleException("Production release build failed: Release keystore password is not configured.")
+            }
+            if (!effectiveSigning.keyPassword) {
+                throw new GradleException("Production release build failed: Release key password is not configured.")
+            }
         }
     }
 }
@@ -259,16 +274,5 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
-    }
-}
-
-gradle.taskGraph.whenReady { taskGraph ->
-    def isReleaseTask = taskGraph.allTasks.any { task ->
-        task.name.containsIgnoreCase("Release") && (task.name.startsWith("assemble") || task.name.startsWith("bundle") || task.name.startsWith("package"))
-    }
-    if (isReleaseTask) {
-        if (android.signingConfigs.release.storeFile == null || !android.signingConfigs.release.storeFile.exists()) {
-            throw new GradleException("Production release build failed: Release keystore file is not configured or does not exist. Debug keystore fallback is strictly disabled.")
-        }
     }
 }

@@ -35,13 +35,6 @@ if (NativeModulesProxy) {
         throw new Error('Secure digest unavailable.');
       },
     };
-  }
-  if (!NativeModulesProxy.ExpoCryptoAES) {
-    NativeModulesProxy.ExpoCryptoAES = {
-      EncryptionKey: class {},
-      SealedData: class {},
-    };
-  }
 }
 
 import 'expo-router/entry';

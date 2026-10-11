@@ -77,6 +77,11 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     'ALTER TABLE transactions ADD COLUMN metadata TEXT;',
     'add metadata to transactions'
   );
+  await runSafeMigration(
+    db,
+    'ALTER TABLE liabilities ADD COLUMN accountId TEXT;',
+    'add accountId to liabilities'
+  );
 
   // Preserve only values that can still be observed in a legacy database.
   // The purchase amount/date is a known starting point; the existing mutable
@@ -198,9 +203,14 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
   if (!hasAssetFk || !hasLiabilityFk) {
     await db.execAsync('PRAGMA foreign_keys = OFF;');
     try {
-      await db.withTransactionAsync(async () => {
-      // Preserve historical category references by creating archived categories for any orphaned category IDs
-      await db.execAsync(`
+      const runTxn = typeof (db as any).withExclusiveTransactionAsync === 'function'
+        ? (cb: (txn: any) => Promise<any>) => (db as any).withExclusiveTransactionAsync(cb)
+        : (cb: (txn: any) => Promise<any>) => (db as any).withTransactionAsync(async () => cb(db));
+
+      await runTxn(async (txn: any) => {
+        const executor = typeof txn?.execAsync === 'function' ? txn : db;
+        // Preserve historical category references by creating archived categories for any orphaned category IDs
+        await executor.execAsync(`
         INSERT OR IGNORE INTO categories (id, name, type, icon, color, isDefault, isArchived, createdAt)
         SELECT DISTINCT categoryId, 'Archived Category', 'EXPENSE', 'Folder', '#94A3B8', 0, 1, datetime('now')
         FROM transactions
@@ -214,7 +224,7 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
       `);
 
       // Create new table with complete foreign keys and safe ON DELETE RESTRICT behavior
-      await db.execAsync(`
+      await executor.execAsync(`
         CREATE TABLE IF NOT EXISTS transactions_new (
           id TEXT PRIMARY KEY,
           type TEXT NOT NULL,
@@ -320,9 +330,15 @@ export async function executeInTransaction<T>(
   const db = await getDatabase();
   let result: T;
 
-  await db.withTransactionAsync(async () => {
-    result = await action(db);
-  });
+  if (typeof (db as any).withExclusiveTransactionAsync === 'function') {
+    await db.withExclusiveTransactionAsync(async (txn) => {
+      result = await action(txn as unknown as SQLite.SQLiteDatabase);
+    });
+  } else {
+    await (db as any).withTransactionAsync(async () => {
+      result = await action(db);
+    });
+  }
 
   return result!;
 }

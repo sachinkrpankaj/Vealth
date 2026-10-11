@@ -196,7 +196,7 @@ export default function CardWalletScreen() {
               },
             ]}
           >
-            Hardware keystore encryption. Adding cards is optional and has zero impact on financial records.
+            OS-protected secure storage encryption. Adding cards is optional and has zero impact on financial records.
           </Text>
         </View>
       </View>
@@ -253,7 +253,7 @@ export default function CardWalletScreen() {
           }
           description={
             cards.length === 0
-              ? 'Securely store and copy your Credit and Debit card details with hardware encryption.'
+              ? 'Securely store and copy your Credit and Debit card details with authenticated AES-GCM encryption.'
               : 'Try selecting a different filter or adding a new card.'
           }
           actionTitle="Add Card to Wallet"

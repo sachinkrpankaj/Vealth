@@ -304,8 +304,9 @@ export async function deleteCard(id: string, executor?: SQLiteDatabase): Promise
 }
 
 /**
- * Decrypts and reveals the full card number using the hardware master key.
+ * Decrypts and reveals the full card number using the master key in OS-protected secure storage.
  * Safely migrates legacy fallback:v1 records to authenticated aes-gcm:v1 on read.
+ * Never overwrites legacy ciphertext unless decryption and re-encryption succeeded.
  */
 export async function revealCardNumber(
   cardOrId: SavedCard | string,
@@ -322,19 +323,23 @@ export async function revealCardNumber(
 
   const decrypted = await decryptCardNumber(card.encryptedCardNumber);
 
-  // If card was stored with legacy fallback:v1 encryption, migrate to authenticated aes-gcm:v1
+  // If card was stored with legacy fallback:v1 encryption, safely migrate to authenticated aes-gcm:v1
   if (isLegacyEncryptedCard(card.encryptedCardNumber)) {
     try {
       const reEncrypted = await encryptCardNumber(decrypted);
-      const now = new Date().toISOString();
-      await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
-        reEncrypted,
-        now,
-        card.id,
-      ]);
-      card.encryptedCardNumber = reEncrypted;
-      card.updatedAt = now;
-    } catch {}
+      if (reEncrypted && reEncrypted.startsWith('aes-gcm:v1:')) {
+        const now = new Date().toISOString();
+        await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
+          reEncrypted,
+          now,
+          card.id,
+        ]);
+        card.encryptedCardNumber = reEncrypted;
+        card.updatedAt = now;
+      }
+    } catch {
+      // Recoverable: preserve original legacy ciphertext if re-encryption or persistence fails
+    }
   }
 
   return decrypted;
@@ -342,6 +347,7 @@ export async function revealCardNumber(
 
 /**
  * Proactively migrates any legacy fallback:v1 cards in the database to authenticated aes-gcm:v1.
+ * Preserves legacy records untouched if decryption or re-encryption encounters any error.
  */
 export async function migrateLegacyCards(executor?: SQLiteDatabase): Promise<number> {
   const db = executor ?? (await getDatabase());
@@ -354,14 +360,18 @@ export async function migrateLegacyCards(executor?: SQLiteDatabase): Promise<num
     try {
       const decrypted = await decryptCardNumber(row.encryptedCardNumber);
       const reEncrypted = await encryptCardNumber(decrypted);
-      const now = new Date().toISOString();
-      await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
-        reEncrypted,
-        now,
-        row.id,
-      ]);
-      migratedCount++;
-    } catch {}
+      if (reEncrypted && reEncrypted.startsWith('aes-gcm:v1:')) {
+        const now = new Date().toISOString();
+        await db.runAsync('UPDATE cards SET encryptedCardNumber = ?, updatedAt = ? WHERE id = ?;', [
+          reEncrypted,
+          now,
+          row.id,
+        ]);
+        migratedCount++;
+      }
+    } catch {
+      // Recoverable: skip and preserve legacy record on any failure
+    }
   }
   return migratedCount;
 }

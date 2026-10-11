@@ -22,6 +22,7 @@ const SECURITY_CONFIG_ERROR =
 // In-memory fallback for environments where SecureStore is unavailable (e.g. unit tests or unlinked builds)
 const fallbackSecureMemory = new Map<string, string>();
 let isBiometricAuthInProgress = false;
+let isPinVerificationInProgress = false;
 
 async function loadPersistedLockout(): Promise<{ failedAttempts: number; lockoutUntil: number | null }> {
   try {
@@ -32,7 +33,8 @@ async function loadPersistedLockout(): Promise<{ failedAttempts: number; lockout
     const lockoutUntil = parseInt(untilStr, 10) || null;
     return { failedAttempts, lockoutUntil };
   } catch {
-    return { failedAttempts: 0, lockoutUntil: null };
+    // Fail-closed: Never treat SecureStore read failures as a clean slate
+    return { failedAttempts: 5, lockoutUntil: Date.now() + 60000 };
   }
 }
 
@@ -71,17 +73,21 @@ export function generateRandomSaltHex(byteLength = 16): string {
       .join('');
   }
   if (Crypto?.getRandomValues) {
-    const bytes = new Uint8Array(byteLength);
-    Crypto.getRandomValues(bytes);
-    return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    try {
+      const bytes = new Uint8Array(byteLength);
+      Crypto.getRandomValues(bytes);
+      return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {}
   }
   if (Crypto?.getRandomBytes) {
-    const bytes = Crypto.getRandomBytes(byteLength);
-    return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    try {
+      const bytes = Crypto.getRandomBytes(byteLength);
+      return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {}
   }
   throw new Error('Cryptographically secure random number generator is unavailable.');
 }
@@ -499,7 +505,8 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
         await deleteSecureItem(SECURE_PIN_HASH_KEY).catch(() => {});
         throw new Error('Failed to clean up legacy security data. PIN setup was cancelled.');
       }
-      set({ isPinEnabled: true });
+      set({ isPinEnabled: true, failedAttempts: 0, lockoutUntil: null, securityConfigError: null });
+      await deleteSecureItem(SECURE_LOCKOUT_KEY).catch(() => {});
     } else {
       await deleteSecureItem(SECURE_PIN_HASH_KEY);
       await deleteSecureItem(SECURE_LOCKOUT_KEY).catch(() => {});
@@ -528,73 +535,81 @@ export const useSecurityStore = create<SecurityState>((set, get) => ({
   },
 
   verifyPin: async (enteredPin: string) => {
-    const { lockoutUntil, failedAttempts } = get();
-    const now = Date.now();
-    if (lockoutUntil && now < lockoutUntil) {
+    if (isPinVerificationInProgress) {
       return false;
     }
-
-    let savedHash: string | null;
+    isPinVerificationInProgress = true;
     try {
-      savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
-    } catch {
-      set({ isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
-      return false;
-    }
-    if (!savedHash) {
-      if (get().isPinEnabled) {
+      const { lockoutUntil, failedAttempts } = get();
+      const now = Date.now();
+      if (lockoutUntil && now < lockoutUntil) {
+        return false;
+      }
+
+      let savedHash: string | null;
+      try {
+        savedHash = await getSecureItem(SECURE_PIN_HASH_KEY);
+      } catch {
         set({ isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
+        return false;
       }
-      return false;
-    }
+      if (!savedHash) {
+        if (get().isPinEnabled) {
+          set({ isLocked: true, securityConfigError: SECURITY_CONFIG_ERROR });
+        }
+        return false;
+      }
 
-    let isMatch = false;
+      let isMatch = false;
 
-    // Check if stored in modern PBKDF2 format: pbkdf2:v1:<salt>:<iterations>:<derived>
-    if (savedHash.startsWith('pbkdf2:v1:')) {
-      const parts = savedHash.split(':');
-      if (parts.length === 5) {
-        const saltHex = parts[2];
-        const iterations = parseInt(parts[3], 10) || PBKDF2_ITERATIONS;
-        const expectedDerived = parts[4];
-        const enteredDerived = await deriveKeyFromPin(enteredPin, saltHex, iterations);
-        isMatch = timingSafeEqual(expectedDerived, enteredDerived);
+      // Check if stored in modern PBKDF2 format: pbkdf2:v1:<salt>:<iterations>:<derived>
+      if (savedHash.startsWith('pbkdf2:v1:')) {
+        const parts = savedHash.split(':');
+        if (parts.length === 5) {
+          const saltHex = parts[2];
+          const iterations = parseInt(parts[3], 10) || PBKDF2_ITERATIONS;
+          const expectedDerived = parts[4];
+          const enteredDerived = await deriveKeyFromPin(enteredPin, saltHex, iterations);
+          isMatch = timingSafeEqual(expectedDerived, enteredDerived);
+        }
+      } else {
+        // Check legacy static SHA-256 hash for seamless backward compatibility
+        const legacyHash = await hashPinLegacy(enteredPin);
+        if (savedHash === legacyHash) {
+          // Automatically upgrade to modern PBKDF2 KDF with unique random salt
+          const modernHash = await hashPin(enteredPin);
+          await setSecureItem(SECURE_PIN_HASH_KEY, modernHash);
+          isMatch = true;
+        }
       }
-    } else {
-      // Check legacy static SHA-256 hash for seamless backward compatibility
-      const legacyHash = await hashPinLegacy(enteredPin);
-      if (savedHash === legacyHash) {
-        // Automatically upgrade to modern PBKDF2 KDF with unique random salt
-        const modernHash = await hashPin(enteredPin);
-        await setSecureItem(SECURE_PIN_HASH_KEY, modernHash);
-        isMatch = true;
-      }
-    }
 
-    if (isMatch) {
-      set({
-        isLocked: false,
-        failedAttempts: 0,
-        lockoutUntil: null,
-      });
-      await persistLockoutState(0, null);
-      return true;
-    } else {
-      const nextFailed = failedAttempts + 1;
-      let newLockoutUntil: number | null = null;
-      if (nextFailed >= 10) {
-        newLockoutUntil = Date.now() + 300000; // 5 minutes lockout after 10 failures
-      } else if (nextFailed >= 7) {
-        newLockoutUntil = Date.now() + 60000;  // 1 minute lockout after 7 failures
-      } else if (nextFailed >= 5) {
-        newLockoutUntil = Date.now() + 30000;  // 30 seconds lockout after 5 failures
+      if (isMatch) {
+        set({
+          isLocked: false,
+          failedAttempts: 0,
+          lockoutUntil: null,
+        });
+        await persistLockoutState(0, null);
+        return true;
+      } else {
+        const nextFailed = failedAttempts + 1;
+        let newLockoutUntil: number | null = null;
+        if (nextFailed >= 10) {
+          newLockoutUntil = Date.now() + 300000; // 5 minutes lockout after 10 failures
+        } else if (nextFailed >= 7) {
+          newLockoutUntil = Date.now() + 60000;  // 1 minute lockout after 7 failures
+        } else if (nextFailed >= 5) {
+          newLockoutUntil = Date.now() + 30000;  // 30 seconds lockout after 5 failures
+        }
+        set({
+          failedAttempts: nextFailed,
+          lockoutUntil: newLockoutUntil,
+        });
+        await persistLockoutState(nextFailed, newLockoutUntil);
+        return false;
       }
-      set({
-        failedAttempts: nextFailed,
-        lockoutUntil: newLockoutUntil,
-      });
-      await persistLockoutState(nextFailed, newLockoutUntil);
-      return false;
+    } finally {
+      isPinVerificationInProgress = false;
     }
   },
 

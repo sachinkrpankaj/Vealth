@@ -103,12 +103,14 @@ CREATE TABLE IF NOT EXISTS liabilities (
   name TEXT NOT NULL,
   amount INTEGER NOT NULL, -- minor units (paise)
   type TEXT NOT NULL, -- 'PERSONAL_LOAN'|'CREDIT_CARD'|'BORROWED_MONEY'|'OTHER'
+  accountId TEXT,
   personId TEXT,
   dueDate TEXT,
   note TEXT,
   isArchived INTEGER NOT NULL DEFAULT 0,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
+  FOREIGN KEY (accountId) REFERENCES accounts(id) ON DELETE SET NULL,
   FOREIGN KEY (personId) REFERENCES people(id) ON DELETE SET NULL
 );
 

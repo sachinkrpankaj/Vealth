@@ -15,6 +15,7 @@ interface LiabilityRow {
   name: string;
   amount: number;
   type: string;
+  accountId: string | null;
   personId: string | null;
   dueDate: string | null;
   note: string | null;
@@ -29,6 +30,7 @@ function mapRowToLiability(row: LiabilityRow): Liability {
     name: row.name,
     amount: row.amount,
     type: row.type as LiabilityType,
+    accountId: row.accountId ?? undefined,
     personId: row.personId ?? undefined,
     dueDate: row.dueDate ?? undefined,
     note: row.note ?? undefined,
@@ -162,13 +164,14 @@ export async function createLiability(
   const today = getTodayLocalDateString();
   await db.withExclusiveTransactionAsync(async (txn) => {
     await txn.runAsync(
-      `INSERT INTO liabilities (id, name, amount, type, personId, dueDate, note, isArchived, createdAt, updatedAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO liabilities (id, name, amount, type, accountId, personId, dueDate, note, isArchived, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         liability.id,
         liability.name.trim(),
         Math.round(liability.amount),
         liability.type,
+        liability.accountId ?? null,
         liability.personId ?? null,
         liability.dueDate ?? null,
         liability.note ?? null,
@@ -205,12 +208,13 @@ export async function updateLiability(id: string, updates: Partial<Liability>): 
     const current = mapRowToLiability(row);
     const updated: Liability = { ...current, ...updates, updatedAt: now };
     await txn.runAsync(
-      `UPDATE liabilities SET name = ?, amount = ?, type = ?, personId = ?, dueDate = ?, note = ?, isArchived = ?, updatedAt = ?
+      `UPDATE liabilities SET name = ?, amount = ?, type = ?, accountId = ?, personId = ?, dueDate = ?, note = ?, isArchived = ?, updatedAt = ?
        WHERE id = ?;`,
       [
         updated.name,
         Math.round(updated.amount),
         updated.type,
+        updated.accountId ?? null,
         updated.personId ?? null,
         updated.dueDate ?? null,
         updated.note ?? null,

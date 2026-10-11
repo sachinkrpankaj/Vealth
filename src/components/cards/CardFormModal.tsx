@@ -340,7 +340,7 @@ export const CardFormModal: React.FC<CardFormModalProps> = ({
               >
                 {isEditing
                   ? 'Update fields without duplicating records'
-                  : 'Encrypted storage with hardware-backed security'}
+                  : 'Encrypted storage with OS-protected secure storage'}
               </Text>
             </View>
 

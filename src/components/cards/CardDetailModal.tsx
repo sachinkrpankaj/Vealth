@@ -208,18 +208,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
   const handleCopyCardNumber = async () => {
     if (!card || isAuthenticatingRef.current) return;
 
-    // If already revealed through authorized authentication, copy directly
-    if (isRevealed && decryptedNumber) {
-      const copied = await copySensitiveTextToClipboard(decryptedNumber);
-      if (copied) {
-        showSafeFeedback('number', 'Card number copied to clipboard');
-      } else {
-        Alert.alert('Copy Failed', 'Failed to copy card number to clipboard.');
-      }
-      return;
-    }
-
-    // Otherwise, copying full card number MUST follow the exact same PIN/biometric authorization policy
+    // Consistent authorization policy: every full card number copy requires authentication
     if (isBiometricEnabled) {
       isAuthenticatingRef.current = true;
       setIsAuthenticating(true);
@@ -244,7 +233,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
       return;
     }
 
-    // No PIN configured
+    // No PIN or biometrics configured
     await copyNumberSecurely();
   };
 
@@ -380,7 +369,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
                   },
                 ]}
               >
-                Hardware Encrypted Card
+                OS-Protected Secure Card
               </Text>
             </View>
 
@@ -504,7 +493,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
                         },
                       ]}
                     >
-                      Hardware-encrypted security vault
+                      Encrypted security vault
                     </Text>
                   </View>
                 </View>
@@ -1062,7 +1051,7 @@ export const CardDetailModal: React.FC<CardDetailModalProps> = ({
             <View style={styles.securityGuaranteeBox}>
               <ShieldCheck size={16} color={colors.accent} style={{ marginRight: 6 }} />
               <Text style={[styles.securityGuaranteeText, { color: colors.textSecondary }]}>
-                Encrypted with hardware-backed keystore. Sensitive numbers masked by default. Zero financial balance impact.
+                Encrypted with device-protected secure storage. Sensitive numbers masked by default. Zero financial balance impact.
               </Text>
             </View>
           </ScrollView>

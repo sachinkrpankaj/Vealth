@@ -232,23 +232,31 @@ export function calculatePersonDebt(
   let dueStatus: DueDateStatus = 'NO_DUE_DATE';
   let nearestDueDate: string | undefined = undefined;
 
-  if (netBalance === 0) {
-    // Completely settled: settled debt must be ignored and have no due date!
+  // Truly settled: ONLY when both gross receivable and gross payable are zero!
+  // Opposing debts must NEVER be marked settled simply because net balance is zero while gross balances remain outstanding.
+  if (owedToYou === 0 && youOwe === 0) {
     dueStatus = 'SETTLED';
     nearestDueDate = undefined;
   } else {
-    // Only outstanding tranches on the NET side affect due date status
     const eligibleTranches: DebtTranche[] = [];
     if (netBalance > 0) {
-      // The person owes user on net; only lend tranches define their due date to pay user
+      // The person owes user on net; lend tranches define their due date to pay user
       for (const t of outstandingLendTranches) {
         if (t.unpaidAmount > 0 && t.dueDate) {
           eligibleTranches.push(t);
         }
       }
     } else if (netBalance < 0) {
-      // The user owes this person on net; only borrow tranches define user's due date to pay them
+      // The user owes this person on net; borrow tranches define user's due date to pay them
       for (const t of outstandingBorrowTranches) {
+        if (t.unpaidAmount > 0 && t.dueDate) {
+          eligibleTranches.push(t);
+        }
+      }
+    } else {
+      // Net balance is 0, but both gross receivable and payable are outstanding.
+      // All active tranches with due dates determine the nearest due date.
+      for (const t of [...outstandingLendTranches, ...outstandingBorrowTranches]) {
         if (t.unpaidAmount > 0 && t.dueDate) {
           eligibleTranches.push(t);
         }
@@ -524,16 +532,10 @@ export function calculateTotalStandaloneLiabilities(
     .filter((l) => {
       if (l.type === 'CREDIT_CARD') {
         if (!accounts || accounts.length === 0) return true;
-        const hasExplicitLink = accounts.some(
-          (a) =>
-            a.id === (l as any).accountId ||
-            a.id === (l as any).linkedAccountId ||
-            (a as any).liabilityId === l.id ||
-            a.id === l.id ||
-            (l.note && (l.note.trim() === a.id || l.note.trim().toLowerCase() === a.name.trim().toLowerCase())) ||
-            l.name.trim().toLowerCase() === a.name.trim().toLowerCase()
-        );
-        if (hasExplicitLink) return false;
+        // Deduplicate ONLY if there is an explicit, validated, persisted relationship via accountId
+        if (l.accountId && accounts.some((a) => a.id === l.accountId && a.type === 'CREDIT_CARD')) {
+          return false;
+        }
         return true;
       }
       return true;

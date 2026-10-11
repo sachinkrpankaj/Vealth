@@ -120,6 +120,7 @@ export interface Liability {
   name: string;
   amount: number; // minor units (paise)
   type: LiabilityType;
+  accountId?: string; // Optional typed reference to a credit-card account for deduplication
   personId?: string;
   dueDate?: string;
   note?: string;

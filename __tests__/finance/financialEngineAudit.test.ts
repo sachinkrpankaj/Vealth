@@ -157,7 +157,7 @@ describe('Financial Engine Audit & Accounting Correctness Regression Tests', () 
       expect(total).toBe(4500000);
     });
 
-    it('deduplicates standalone credit-card liability when linked via accountId, note, or exact name', () => {
+    it('deduplicates standalone credit-card liability ONLY when explicitly linked via accountId, keeping same-name/notes in total', () => {
       const hdfcAccount: Account = {
         id: 'acc-hdfc-card',
         name: 'HDFC Millennia',
@@ -174,13 +174,13 @@ describe('Financial Engine Audit & Accounting Correctness Regression Tests', () 
         name: 'Millennia Card Debt',
         type: 'CREDIT_CARD',
         amount: 2000000,
+        accountId: hdfcAccount.id,
         isArchived: false,
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       };
-      (linkedByIdLiability as any).accountId = hdfcAccount.id;
 
-      const linkedByNoteLiability: Liability = {
+      const unlinkedByNoteLiability: Liability = {
         id: 'lib-linked-by-note',
         name: 'Credit Card Bill',
         type: 'CREDIT_CARD',
@@ -191,7 +191,7 @@ describe('Financial Engine Audit & Accounting Correctness Regression Tests', () 
         updatedAt: '2026-01-01T00:00:00.000Z',
       };
 
-      const linkedByNameLiability: Liability = {
+      const unlinkedByNameLiability: Liability = {
         id: 'lib-linked-by-name',
         name: 'HDFC Millennia',
         type: 'CREDIT_CARD',
@@ -202,12 +202,13 @@ describe('Financial Engine Audit & Accounting Correctness Regression Tests', () 
       };
 
       const total = calculateTotalStandaloneLiabilities(
-        [linkedByIdLiability, linkedByNoteLiability, linkedByNameLiability],
+        [linkedByIdLiability, unlinkedByNoteLiability, unlinkedByNameLiability],
         [hdfcAccount]
       );
 
-      // All 3 are verified duplicates of hdfcAccount and must be excluded from standalone total
-      expect(total).toBe(0);
+      // Only linkedByIdLiability is deduplicated via accountId.
+      // Unrelated liabilities with matching notes or identical names must remain in total liabilities (3000000 + 1500000 = 4500000)
+      expect(total).toBe(4500000);
     });
   });
 
@@ -325,6 +326,36 @@ describe('Financial Engine Audit & Accounting Correctness Regression Tests', () 
       expect(summary.netBalance).toBe(0);
       expect(summary.dueStatus).toBe('SETTLED');
       expect(summary.dueDate).toBeUndefined();
+    });
+
+    it('does NOT mark opposing receivables and payables as SETTLED when net balance is 0 but gross balances remain', () => {
+      const lendTx: Transaction = {
+        id: 'tx-lend-opposing',
+        type: 'LEND',
+        amount: 500000,
+        date: '2026-01-01',
+        personId: person.id,
+        dueDate: '2026-01-10',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      };
+
+      const borrowTx: Transaction = {
+        id: 'tx-borrow-opposing',
+        type: 'BORROW',
+        amount: 500000,
+        date: '2026-01-01',
+        personId: person.id,
+        dueDate: '2026-01-15',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      };
+
+      const summary = calculatePersonDebt(person, [lendTx, borrowTx], today);
+      expect(summary.netBalance).toBe(0);
+      expect(summary.owedToYou).toBe(500000);
+      expect(summary.youOwe).toBe(500000);
+      expect(summary.dueStatus).not.toBe('SETTLED');
     });
   });
 
