@@ -11,7 +11,14 @@ import { showThemedAlert } from '../../src/components/ui/ThemedDialog';
 import { useTheme } from '../../src/theme';
 import { useFinancialData } from '../../src/hooks/useFinancialData';
 import { exportTransactionsToCSV } from '../../src/utils/csv';
-import { exportBackupToFile, pickAndRestoreBackupFile } from '../../src/utils/backup';
+import {
+  exportBackupToFile,
+  restoreBackup,
+  pickAndInspectBackupFile,
+  VealthBackupData,
+} from '../../src/utils/backup';
+import { getAllCards } from '../../src/database/repositories/cardRepository';
+import { BackupPassphraseModal } from '../../src/components/backup/BackupPassphraseModal';
 
 export default function BackupScreen() {
   const { colors, typography, radii, spacing } = useTheme();
@@ -20,10 +27,17 @@ export default function BackupScreen() {
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isExportingBackup, setIsExportingBackup] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
+  // Passphrase modal states
+  const [exportPassphraseVisible, setExportPassphraseVisible] = useState(false);
+  const [restorePassphraseVisible, setRestorePassphraseVisible] = useState(false);
+  const [cardCountForModal, setCardCountForModal] = useState<number>(0);
+  const [pendingRestoreBackup, setPendingRestoreBackup] = useState<VealthBackupData | null>(null);
+
   const handleExportCsv = async () => {
-    if (isExportingCsv) return;
+    if (isExportingCsv || isExportingBackup || isRestoring || isSubmittingModal) return;
     try {
       setIsExportingCsv(true);
       setStatusMessage(null);
@@ -37,10 +51,16 @@ export default function BackupScreen() {
   };
 
   const handleExportBackup = async () => {
-    if (isExportingBackup) return;
+    if (isExportingBackup || isRestoring || isExportingCsv || isSubmittingModal) return;
     try {
       setIsExportingBackup(true);
       setStatusMessage(null);
+      const cards = await getAllCards({ includeArchived: true });
+      if (cards && cards.length > 0) {
+        setCardCountForModal(cards.length);
+        setExportPassphraseVisible(true);
+        return;
+      }
       await exportBackupToFile();
       setStatusMessage('Backup generated and shared successfully');
     } catch (e: any) {
@@ -50,8 +70,22 @@ export default function BackupScreen() {
     }
   };
 
+  const handleExportWithPassphrase = async (passphrase: string) => {
+    if (isSubmittingModal) return;
+    try {
+      setIsSubmittingModal(true);
+      await exportBackupToFile({ cardBackupPassphrase: passphrase });
+      setExportPassphraseVisible(false);
+      setStatusMessage('Backup generated and shared successfully');
+    } catch (e: any) {
+      throw e;
+    } finally {
+      setIsSubmittingModal(false);
+    }
+  };
+
   const handleRestoreBackup = () => {
-    if (isRestoring) return;
+    if (isRestoring || isExportingBackup || isExportingCsv || isSubmittingModal) return;
     showThemedAlert(
       'Restore Backup',
       'Restoring a backup will replace current records with the data from your backup file. Do you want to select a backup file to proceed?',
@@ -60,18 +94,34 @@ export default function BackupScreen() {
         {
           text: 'Select Backup File',
           onPress: async () => {
-            if (isRestoring) return;
+            if (isRestoring || isExportingBackup || isSubmittingModal) return;
             try {
               setIsRestoring(true);
               setStatusMessage(null);
-              const result = await pickAndRestoreBackupFile();
-              if (result.success) {
-                await refresh();
-                setStatusMessage(result.message);
-                showThemedAlert('Restore Complete', result.message);
-              } else if (result.message !== 'Restore cancelled.') {
-                showThemedAlert('Restore Failed', result.message);
+              const result = await pickAndInspectBackupFile();
+              if (result.cancelled) {
+                setStatusMessage('Restore cancelled.');
+                return;
               }
+              if (!result.success || !result.parsed) {
+                showThemedAlert('Restore Failed', result.message || 'Invalid backup file.');
+                return;
+              }
+
+              const backupData = result.parsed;
+              const hasCards = backupData.data?.cards && backupData.data.cards.length > 0;
+              if (hasCards) {
+                setPendingRestoreBackup(backupData);
+                setCardCountForModal(backupData.data.cards!.length);
+                setRestorePassphraseVisible(true);
+                return;
+              }
+
+              await restoreBackup(backupData);
+              await refresh();
+              const msg = `Successfully restored ${backupData.data?.transactions?.length ?? 0} transactions and ${backupData.data?.accounts?.length ?? 0} accounts.`;
+              setStatusMessage(msg);
+              showThemedAlert('Restore Complete', msg);
             } catch (err: any) {
               showThemedAlert('Restore Error', err?.message || 'Failed to restore backup.');
             } finally {
@@ -81,6 +131,33 @@ export default function BackupScreen() {
         },
       ]
     );
+  };
+
+  const handleRestoreWithPassphrase = async (passphrase: string) => {
+    if (!pendingRestoreBackup || isSubmittingModal) return;
+    try {
+      setIsSubmittingModal(true);
+      await restoreBackup(pendingRestoreBackup, { cardBackupPassphrase: passphrase });
+      setRestorePassphraseVisible(false);
+      const restoredTxCount = pendingRestoreBackup.data?.transactions?.length ?? 0;
+      const restoredAccCount = pendingRestoreBackup.data?.accounts?.length ?? 0;
+      setPendingRestoreBackup(null);
+      await refresh();
+      const msg = `Successfully restored ${restoredTxCount} transactions and ${restoredAccCount} accounts.`;
+      setStatusMessage(msg);
+      showThemedAlert('Restore Complete', msg);
+    } catch (err: any) {
+      throw err;
+    } finally {
+      setIsSubmittingModal(false);
+    }
+  };
+
+  const handleCloseRestoreModal = () => {
+    if (isSubmittingModal) return;
+    setRestorePassphraseVisible(false);
+    setPendingRestoreBackup(null);
+    setStatusMessage('Restore cancelled.');
   };
 
   return (
@@ -127,6 +204,7 @@ export default function BackupScreen() {
           title="Export CSV"
           onPress={handleExportCsv}
           loading={isExportingCsv}
+          disabled={isExportingCsv || isExportingBackup || isRestoring || isSubmittingModal}
           style={{ marginTop: 16 }}
         />
       </Card>
@@ -152,7 +230,7 @@ export default function BackupScreen() {
               Full Local Backup (JSON)
             </Text>
             <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
-              Safely exports all accounts, people, categories, transactions, assets, and liabilities. No PIN or security keys are included.
+              Safely exports all accounts, people, categories, transactions, assets, and liabilities. Card Wallet credentials are encrypted with your passphrase.
             </Text>
           </View>
         </View>
@@ -161,6 +239,7 @@ export default function BackupScreen() {
           title="Create JSON Backup"
           onPress={handleExportBackup}
           loading={isExportingBackup}
+          disabled={isExportingCsv || isExportingBackup || isRestoring || isSubmittingModal}
           style={{ marginTop: 16 }}
         />
       </Card>
@@ -195,6 +274,7 @@ export default function BackupScreen() {
           title="Select & Restore Backup"
           onPress={handleRestoreBackup}
           loading={isRestoring}
+          disabled={isExportingCsv || isExportingBackup || isRestoring || isSubmittingModal}
           style={{ marginTop: 16 }}
         />
       </Card>
@@ -206,6 +286,26 @@ export default function BackupScreen() {
           <Text style={[styles.statusText, { color: colors.positive }]}>{statusMessage}</Text>
         </View>
       ) : null}
+
+      {/* Card Wallet Export Passphrase Modal */}
+      <BackupPassphraseModal
+        visible={exportPassphraseVisible}
+        mode="export"
+        cardCount={cardCountForModal}
+        onClose={() => setExportPassphraseVisible(false)}
+        onSubmit={handleExportWithPassphrase}
+        isSubmitting={isSubmittingModal}
+      />
+
+      {/* Card Wallet Restore Passphrase Modal */}
+      <BackupPassphraseModal
+        visible={restorePassphraseVisible}
+        mode="restore"
+        cardCount={cardCountForModal}
+        onClose={handleCloseRestoreModal}
+        onSubmit={handleRestoreWithPassphrase}
+        isSubmitting={isSubmittingModal}
+      />
     </ScreenContainer>
   );
 }

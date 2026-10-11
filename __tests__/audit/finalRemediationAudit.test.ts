@@ -147,6 +147,72 @@ describe('Final Security, Accounting & Data Integrity Remediation Regression Sui
       const afterKey = await getMasterEncryptionKeyHex();
       expect(afterKey).toBe(originalKey);
     });
+
+    it('decrypts incoming cards with envelope key and re-encrypts with destination master key', async () => {
+      const sourceMasterKey = await getMasterEncryptionKeyHex();
+      const rawCardNumber = '5200821234567890';
+      const sourceCiphertext = await encryptCardNumber(rawCardNumber, sourceMasterKey);
+
+      // Create envelope using user passphrase
+      const envelope = await createCardKeyEnvelope('CardWalletBackup123!');
+
+      // Unwrap incoming key from envelope
+      const restoredKey = await restoreCardKeyFromEnvelope(envelope, 'CardWalletBackup123!');
+      expect(restoredKey).toBe(sourceMasterKey);
+
+      // Decrypt incoming card with restored key
+      const decryptedPlain = await decryptCardNumber(sourceCiphertext, restoredKey);
+      expect(decryptedPlain).toBe(rawCardNumber);
+
+      // Destination device key
+      const destinationKey = await getMasterEncryptionKeyHex();
+      const reEncrypted = await encryptCardNumber(decryptedPlain, destinationKey);
+
+      // Card is decryptable with destination device's local master key
+      const finalPlain = await decryptCardNumber(reEncrypted, destinationKey);
+      expect(finalPlain).toBe(rawCardNumber);
+
+      // Destination device's key remains completely unchanged
+      const currentDestKey = await getMasterEncryptionKeyHex();
+      expect(currentDestKey).toBe(destinationKey);
+    }, 30000);
+
+    it('rejects backup with cards when key envelope is missing or corrupted', () => {
+      const backupMissingEnvelope: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2026-01-01T00:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          settings: {},
+          cards: [
+            {
+              id: 'c1',
+              cardholderName: 'User',
+              cardType: 'CREDIT',
+              network: 'VISA',
+              encryptedCardNumber: 'aes-gcm:v1:0123456789abcdef01234567:0123456789abcdef0123456789abcdef',
+              lastFour: '1234',
+              expiryMonth: 12,
+              expiryYear: 2028,
+              issuer: 'Bank',
+              isArchived: false,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      };
+
+      const result = validateBackupData(backupMissingEnvelope);
+      expect(result.isValid).toBe(false);
+      expect(result.error).toContain('missing the required card key envelope');
+    });
   });
 
   describe('3. Liability Deduplication & Financial Accounting', () => {

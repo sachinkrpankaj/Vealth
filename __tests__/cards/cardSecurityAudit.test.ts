@@ -387,4 +387,85 @@ describe('Card Wallet Security & Authentication Audit Regression Tests', () => {
       ).rejects.toThrow(/Failed to decrypt card key envelope/);
     });
   });
+
+  describe('6. Master Encryption Key Safety & Corruption Protection', () => {
+    it('initializes a new 64-hex key when key is genuinely absent in SecureStore', async () => {
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+      let savedKey: string | null = null;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (key, val) => {
+        savedKey = val;
+      });
+
+      const key = await getMasterEncryptionKeyHex();
+      expect(key).toHaveLength(64);
+      expect(/^[0-9a-f]{64}$/i.test(key)).toBe(true);
+      expect(savedKey).toBe(key);
+    });
+
+    it('reuses existing valid key from SecureStore without overwriting it', async () => {
+      const existingKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(existingKey);
+      const setItemSpy = jest.spyOn(SecureStore, 'setItemAsync');
+
+      const key = await getMasterEncryptionKeyHex();
+      expect(key).toBe(existingKey);
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
+    });
+
+    it('throws a recovery error and leaves storage untouched when existing key is malformed', async () => {
+      const corruptedKey = 'short-corrupted-key-123';
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(corruptedKey);
+      const setItemSpy = jest.spyOn(SecureStore, 'setItemAsync');
+
+      await expect(getMasterEncryptionKeyHex()).rejects.toThrow(
+        /corrupted or unreadable master encryption key/i
+      );
+      // Ensure SecureStore was NEVER written to, preserving the original stored value
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
+    });
+
+    it('fails closed and never replaces key when SecureStore read fails', async () => {
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockRejectedValue(
+        new Error('Hardware security module read error')
+      );
+      const setItemSpy = jest.spyOn(SecureStore, 'setItemAsync');
+
+      await expect(getMasterEncryptionKeyHex()).rejects.toThrow(
+        /failed to read master encryption key/i
+      );
+      expect(setItemSpy).not.toHaveBeenCalled();
+      setItemSpy.mockRestore();
+    });
+
+    it('fails closed when SecureStore write fails during initialization', async () => {
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+      (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
+      (SecureStore.setItemAsync as jest.Mock).mockRejectedValue(
+        new Error('Storage quota exceeded')
+      );
+
+      await expect(getMasterEncryptionKeyHex()).rejects.toThrow(
+        /failed to persist newly generated master encryption key/i
+      );
+    });
+
+    it('existing valid cards remain decryptable after failed backup operations', async () => {
+      (SecureStore.isAvailableAsync as jest.Mock).mockResolvedValue(false);
+      const rawCard = '4532015098765432';
+      const ciphertext = await encryptCardNumber(rawCard);
+
+      // Attempt invalid backup export without passphrase (will fail)
+      await expect(createCardKeyEnvelope('')).rejects.toThrow();
+
+      // Card remains perfectly decryptable with master key
+      const decrypted = await decryptCardNumber(ciphertext);
+      expect(decrypted).toBe(rawCard);
+    });
+  });
 });

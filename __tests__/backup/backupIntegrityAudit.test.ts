@@ -76,6 +76,38 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
           });
           return { changes: 1 };
         }
+        if (sql.includes('INSERT INTO shopping_items')) {
+          const [id, listId, name, note, productUrl, estimatedPrice, status] = params;
+          shoppingItemsTable.set(id, {
+            id, listId, name, note, productUrl, estimatedPrice, status,
+          });
+          return { changes: 1 };
+        }
+        if (sql.includes('INSERT INTO shopping_lists')) {
+          const [id, name, isArchived, createdAt, updatedAt] = params;
+          shoppingListsTable.set(id, {
+            id, name, isArchived, createdAt, updatedAt,
+          });
+          return { changes: 1 };
+        }
+        if (sql.includes('UPDATE cards SET linkedAccountId = ? WHERE id = ?')) {
+          const [accId, cardId] = params;
+          const card = cardsTable.get(cardId);
+          if (card) {
+            card.linkedAccountId = accId;
+          }
+          return { changes: 1 };
+        }
+        if (sql.includes('UPDATE shopping_items SET purchaseAccountId = ?, transactionId = ?, categoryId = ? WHERE id = ?')) {
+          const [purchaseAccountId, transactionId, categoryId, itemId] = params;
+          const item = shoppingItemsTable.get(itemId);
+          if (item) {
+            item.purchaseAccountId = purchaseAccountId;
+            item.transactionId = transactionId;
+            item.categoryId = categoryId;
+          }
+          return { changes: 1 };
+        }
         if (sql.includes('DELETE FROM cards WHERE id = ?')) {
           cardsTable.delete(params[0]);
           return { changes: 1 };
@@ -102,16 +134,28 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
         if (sql.includes('DELETE FROM cards')) cardsTable.clear();
         if (sql.includes('DELETE FROM shopping_lists')) shoppingListsTable.clear();
         if (sql.includes('DELETE FROM shopping_items')) shoppingItemsTable.clear();
-        if (sql.includes('DELETE FROM accounts')) accountsTable.clear();
+        if (sql.includes('DELETE FROM accounts')) {
+          accountsTable.clear();
+          // Simulate SQLite cascading foreign-key action: ON DELETE SET NULL on cards and shopping items
+          for (const card of cardsTable.values()) {
+            card.linkedAccountId = null;
+          }
+          for (const item of shoppingItemsTable.values()) {
+            item.purchaseAccountId = null;
+            item.transactionId = null;
+            item.categoryId = null;
+          }
+        }
       }),
       withTransactionAsync: jest.fn(async (cb: any) => cb()),
+      withExclusiveTransactionAsync: jest.fn(async (cb: any) => cb(mockDb)),
     };
 
     openMock.mockResolvedValue(mockDb);
   });
 
-  describe('1. Non-Destructive Legacy Backup Restore', () => {
-    it('restoring legacy backup without cards or shopping lists DOES NOT delete existing local cards', async () => {
+  describe('1. Non-Destructive Legacy and Partial Backup Restore', () => {
+    it('restoring legacy backup with matching account preserves existing cards and reconstructs links', async () => {
       // 1. Existing local state has a card and a bank account
       const bank = await createAccount({
         id: 'acc-existing-bank',
@@ -134,7 +178,7 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
 
       expect(cardsTable.size).toBe(1);
 
-      // 2. Incoming legacy backup from schema v1 (no cards, no shoppingLists in data)
+      // 2. Incoming legacy backup from schema v1 containing matching bank account
       const legacyBackup: any = {
         appName: 'vealth',
         schemaVersion: 1,
@@ -142,10 +186,11 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
         data: {
           accounts: [
             {
-              id: 'acc-legacy-restored',
-              name: 'Restored Cash Account',
-              type: 'CASH',
-              openingBalance: 50000,
+              id: 'acc-existing-bank',
+              name: 'HDFC Savings',
+              type: 'BANK',
+              openingBalance: 100000,
+              creditLimit: 0,
               currency: 'INR',
               isArchived: false,
               createdAt: '2025-01-01T00:00:00.000Z',
@@ -159,7 +204,7 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
           liabilities: [],
           snapshots: [],
           settings: {},
-          // Notice: cards, shoppingLists, shoppingItems are UNDEFINED (legacy schema)
+          // cards, shoppingLists, shoppingItems are UNDEFINED (legacy schema)
         },
       };
 
@@ -169,10 +214,293 @@ describe('Backup and Restore Integrity Audit Regression Tests', () => {
       // 3. Perform restore
       await restoreBackup(legacyBackup);
 
-      // 4. Assert non-destructive behavior: existing card MUST NOT be deleted!
+      // 4. Assert non-destructive behavior: existing card NOT deleted and link reconstructed!
       expect(cardsTable.size).toBe(1);
       expect(cardsTable.has(card.id)).toBe(true);
       expect(cardsTable.get(card.id).cardholderName).toBe('Aarav Sharma');
+      expect(cardsTable.get(card.id).linkedAccountId).toBe('acc-existing-bank');
+    });
+
+    it('aborts restoration when a retained card references an account missing from the incoming backup', async () => {
+      // Local state has card linked to acc-local-bank
+      accountsTable.set('acc-local-bank', {
+        id: 'acc-local-bank',
+        name: 'Local Bank',
+        type: 'BANK',
+      });
+      cardsTable.set('card-1', {
+        id: 'card-1',
+        cardholderName: 'Pooja Verma',
+        cardType: 'DEBIT',
+        lastFour: '1234',
+        linkedAccountId: 'acc-local-bank',
+      });
+
+      // Backup only has acc-other-bank
+      const backupMissingAcc: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-01-01T00:00:00.000Z',
+        data: {
+          accounts: [
+            {
+              id: 'acc-other-bank',
+              name: 'Other Bank',
+              type: 'BANK',
+              openingBalance: 1000,
+              creditLimit: 0,
+              currency: 'INR',
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+        },
+      };
+
+      await expect(restoreBackup(backupMissingAcc)).rejects.toThrow(
+        /references account ID "acc-local-bank" which does not exist in the incoming backup/i
+      );
+
+      // Database modifications aborted: original local records remain untouched
+      expect(cardsTable.has('card-1')).toBe(true);
+      expect(cardsTable.get('card-1').linkedAccountId).toBe('acc-local-bank');
+    });
+
+    it('restores backup with shoppingLists present but shoppingItems omitted', async () => {
+      // Local shopping items exist referencing list-1
+      shoppingListsTable.set('list-1', { id: 'list-1', name: 'Groceries' });
+      shoppingItemsTable.set('item-1', {
+        id: 'item-1',
+        listId: 'list-1',
+        name: 'Apples',
+        status: 'PENDING',
+      });
+
+      // Backup contains shoppingLists containing list-1, but shoppingItems is omitted
+      const backupListsOnly: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-01-01T00:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          shoppingLists: [
+            {
+              id: 'list-1',
+              name: 'Groceries Updated',
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      };
+
+      await restoreBackup(backupListsOnly);
+
+      // shoppingItemsTable was NOT erased because shoppingItems was omitted in backup
+      expect(shoppingItemsTable.size).toBe(1);
+      expect(shoppingItemsTable.get('item-1').name).toBe('Apples');
+    });
+
+    it('aborts when retained shopping item references a list omitted from incoming backup', async () => {
+      shoppingListsTable.set('list-old', { id: 'list-old', name: 'Old List' });
+      shoppingItemsTable.set('item-old', {
+        id: 'item-old',
+        listId: 'list-old',
+        name: 'Item Old',
+        status: 'PENDING',
+      });
+
+      // Incoming backup has shoppingLists, but not list-old
+      const backupNewListOnly: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-01-01T00:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          shoppingLists: [
+            {
+              id: 'list-new',
+              name: 'New List',
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      };
+
+      await expect(restoreBackup(backupNewListOnly)).rejects.toThrow(
+        /references shopping list ID "list-old" which is missing in the incoming backup/i
+      );
+    });
+
+    it('restores backup with shoppingItems present but shoppingLists omitted when list exists locally', async () => {
+      shoppingListsTable.set('list-local', { id: 'list-local', name: 'My List' });
+
+      const backupItemsOnly: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-01-01T00:00:00.000Z',
+        data: {
+          accounts: [],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          shoppingItems: [
+            {
+              id: 'item-incoming',
+              listId: 'list-local',
+              name: 'Milk',
+              status: 'PENDING',
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+        },
+      };
+
+      await restoreBackup(backupItemsOnly);
+
+      expect(shoppingListsTable.has('list-local')).toBe(true);
+      expect(shoppingItemsTable.has('item-incoming')).toBe(true);
+    });
+
+    it('preserves shopping purchase links when shopping data is omitted but account/tx/category IDs match', async () => {
+      // Local state has purchased item referencing acc-1, tx-1, cat-1
+      shoppingItemsTable.set('item-purchased', {
+        id: 'item-purchased',
+        listId: 'list-1',
+        name: 'Headphones',
+        status: 'PURCHASED',
+        purchasePrice: 5000,
+        purchasedAt: '2025-05-10T12:00:00.000Z',
+        purchaseAccountId: 'acc-1',
+        transactionId: 'tx-1',
+        categoryId: 'cat-1',
+      });
+
+      // Backup contains matching acc-1, cat-1, and tx-1 with consistent metadata
+      const backupMatchingCore: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-05-10T00:00:00.000Z',
+        data: {
+          accounts: [
+            {
+              id: 'acc-1',
+              name: 'Bank',
+              type: 'BANK',
+              openingBalance: 100000,
+              currency: 'INR',
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+          categories: [
+            {
+              id: 'cat-1',
+              name: 'Electronics',
+              type: 'EXPENSE',
+              icon: 'tv',
+              isDefault: false,
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+          transactions: [
+            {
+              id: 'tx-1',
+              type: 'EXPENSE',
+              amount: 5000,
+              date: '2025-05-10',
+              accountId: 'acc-1',
+              categoryId: 'cat-1',
+              metadata: JSON.stringify({ shoppingItemId: 'item-purchased' }),
+              createdAt: '2025-05-10T12:00:00.000Z',
+              updatedAt: '2025-05-10T12:00:00.000Z',
+            },
+          ],
+          people: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+          // shopping data omitted in backup
+        },
+      };
+
+      await restoreBackup(backupMatchingCore);
+
+      const retainedItem = shoppingItemsTable.get('item-purchased');
+      expect(retainedItem).toBeDefined();
+      expect(retainedItem.purchaseAccountId).toBe('acc-1');
+      expect(retainedItem.transactionId).toBe('tx-1');
+      expect(retainedItem.categoryId).toBe('cat-1');
+    });
+
+    it('rolls back database modifications when failure occurs midway through transaction', async () => {
+      mockDb.runAsync.mockImplementationOnce(async (sql: string) => {
+        if (sql.includes('INSERT INTO accounts')) {
+          throw new Error('Simulated SQLite disk write I/O error');
+        }
+      });
+
+      const backup: any = {
+        appName: 'vealth',
+        schemaVersion: 1,
+        exportedAt: '2025-01-01T00:00:00.000Z',
+        data: {
+          accounts: [
+            {
+              id: 'acc-new',
+              name: 'New Bank',
+              type: 'BANK',
+              openingBalance: 5000,
+              currency: 'INR',
+              isArchived: false,
+              createdAt: '2025-01-01T00:00:00.000Z',
+              updatedAt: '2025-01-01T00:00:00.000Z',
+            },
+          ],
+          people: [],
+          categories: [],
+          transactions: [],
+          assets: [],
+          liabilities: [],
+          snapshots: [],
+          settings: {},
+        },
+      };
+
+      await expect(restoreBackup(backup)).rejects.toThrow(/Simulated SQLite disk write I\/O error/);
     });
   });
 

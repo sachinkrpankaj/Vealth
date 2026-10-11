@@ -442,7 +442,7 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
           validId(i.name) &&
           VALID_SHOPPING_STATUSES.has(i.status) &&
           (i.estimatedPrice == null || (validMoney(i.estimatedPrice) && i.estimatedPrice > 0)) &&
-          (!data.shoppingLists ? !data.shoppingItems?.length : listIds.has(i.listId)) &&
+          (!data.shoppingLists ? true : listIds.has(i.listId)) &&
           (i.status !== 'PURCHASED' ||
             (validMoney(i.purchasePrice) &&
               i.purchasePrice > 0 &&
@@ -460,48 +460,48 @@ export function validateBackupData(parsed: any): { isValid: boolean; error?: str
     ) {
       return { isValid: false, error: 'Backup contains invalid shopping item records or broken references.' };
     }
-  }
 
-  const shoppingItemsById = new Map<string, any>(
-    (data.shoppingItems || []).map((item: any) => [item.id, item])
-  );
-  const transactionsById = new Map<string, any>(data.transactions.map((tx: any) => [tx.id, tx]));
-  const activeShoppingReferences = new Map<string, number>();
-  for (const item of data.shoppingItems || []) {
-    if (item.status !== 'PURCHASED') continue;
-    const tx = transactionsById.get(item.transactionId);
-    const purchasedDate = typeof item.purchasedAt === 'string' ? item.purchasedAt.slice(0, 10) : '';
-    if (
-      !tx || tx.deletedAt || tx.type !== 'EXPENSE' ||
-      shoppingItemIdFromMetadata(tx.metadata) !== item.id ||
-      tx.amount !== item.purchasePrice || tx.date !== purchasedDate ||
-      tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null) ||
-      (item.categoryId && categoriesById.get(item.categoryId)?.type !== 'EXPENSE')
-    ) {
-      return { isValid: false, error: 'Backup contains mismatched shopping purchases and transactions.' };
-    }
-  }
-
-  for (const tx of data.transactions) {
-    if (tx.deletedAt) continue;
-    const shoppingItemId = shoppingItemIdFromMetadata(tx.metadata);
-    if (!shoppingItemId) continue;
-    activeShoppingReferences.set(
-      shoppingItemId,
-      (activeShoppingReferences.get(shoppingItemId) || 0) + 1
+    const shoppingItemsById = new Map<string, any>(
+      data.shoppingItems.map((item: any) => [item.id, item])
     );
-    const item = shoppingItemsById.get(shoppingItemId);
-    if (
-      !item || item.status !== 'PURCHASED' || item.transactionId !== tx.id ||
-      tx.type !== 'EXPENSE' || tx.amount !== item.purchasePrice ||
-      tx.date !== String(item.purchasedAt || '').slice(0, 10) ||
-      tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null)
-    ) {
-      return { isValid: false, error: 'Backup contains a dangling or mismatched shopping transaction.' };
+    const transactionsById = new Map<string, any>(data.transactions.map((tx: any) => [tx.id, tx]));
+    const activeShoppingReferences = new Map<string, number>();
+    for (const item of data.shoppingItems) {
+      if (item.status !== 'PURCHASED') continue;
+      const tx = transactionsById.get(item.transactionId);
+      const purchasedDate = typeof item.purchasedAt === 'string' ? item.purchasedAt.slice(0, 10) : '';
+      if (
+        !tx || tx.deletedAt || tx.type !== 'EXPENSE' ||
+        shoppingItemIdFromMetadata(tx.metadata) !== item.id ||
+        tx.amount !== item.purchasePrice || tx.date !== purchasedDate ||
+        tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null) ||
+        (item.categoryId && categoriesById.get(item.categoryId)?.type !== 'EXPENSE')
+      ) {
+        return { isValid: false, error: 'Backup contains mismatched shopping purchases and transactions.' };
+      }
     }
-  }
-  if (Array.from(activeShoppingReferences.values()).some((count) => count !== 1)) {
-    return { isValid: false, error: 'Backup contains shopping items with multiple active transactions.' };
+
+    for (const tx of data.transactions) {
+      if (tx.deletedAt) continue;
+      const shoppingItemId = shoppingItemIdFromMetadata(tx.metadata);
+      if (!shoppingItemId) continue;
+      activeShoppingReferences.set(
+        shoppingItemId,
+        (activeShoppingReferences.get(shoppingItemId) || 0) + 1
+      );
+      const item = shoppingItemsById.get(shoppingItemId);
+      if (
+        !item || item.status !== 'PURCHASED' || item.transactionId !== tx.id ||
+        tx.type !== 'EXPENSE' || tx.amount !== item.purchasePrice ||
+        tx.date !== String(item.purchasedAt || '').slice(0, 10) ||
+        tx.accountId !== item.purchaseAccountId || tx.categoryId != (item.categoryId ?? null)
+      ) {
+        return { isValid: false, error: 'Backup contains a dangling or mismatched shopping transaction.' };
+      }
+    }
+    if (Array.from(activeShoppingReferences.values()).some((count) => count !== 1)) {
+      return { isValid: false, error: 'Backup contains shopping items with multiple active transactions.' };
+    }
   }
 
   const VALID_PAYMENT_NETWORKS = new Set([
@@ -658,17 +658,175 @@ export async function restoreBackup(
     }
   }
 
-  await executeInTransaction(async (db) => {
-    // Only delete feature records if the backup explicitly contains them!
-    // Restoring a legacy backup without cards or shopping must NOT delete current data.
-    const hasShopping =
-      backup.data.shoppingLists !== undefined || backup.data.shoppingItems !== undefined;
-    const hasCards = backup.data.cards !== undefined;
+  const hasIncomingCards = backup.data.cards !== undefined;
+  const hasIncomingShoppingLists = backup.data.shoppingLists !== undefined;
+  const hasIncomingShoppingItems = backup.data.shoppingItems !== undefined;
 
-    if (hasShopping) {
-      await db.execAsync('DELETE FROM shopping_items; DELETE FROM shopping_lists;');
+  // Staging for references of retained local collections
+  const stagedCardLinks = new Map<string, string>();
+  const stagedShoppingPurchases = new Map<
+    string,
+    { purchaseAccountId: string; transactionId: string; categoryId: string | null }
+  >();
+
+  const incomingAccountsById = new Map<string, any>(
+    backup.data.accounts.map((a: any) => [a.id, a])
+  );
+  const incomingTransactionsById = new Map<string, any>(
+    backup.data.transactions.map((t: any) => [t.id, t])
+  );
+  const incomingCategoriesById = new Map<string, any>(
+    backup.data.categories.map((c: any) => [c.id, c])
+  );
+
+  const db = await getDatabase();
+
+  // A. Retained cards validation: ensure linked accounts exist and are compatible
+  if (!hasIncomingCards) {
+    let localCards: SavedCard[] = [];
+    try {
+      localCards = await db.getAllAsync<SavedCard>('SELECT * FROM cards;');
+    } catch {}
+
+    for (const card of localCards) {
+      if (card.linkedAccountId != null) {
+        const targetAcc = incomingAccountsById.get(card.linkedAccountId);
+        if (!targetAcc) {
+          throw new Error(
+            `Cannot restore backup: retained card "${card.cardholderName} (•••• ${card.lastFour})" references account ID "${card.linkedAccountId}" which does not exist in the incoming backup.`
+          );
+        }
+        if (card.cardType === 'DEBIT' && targetAcc.type !== 'BANK') {
+          throw new Error(
+            `Cannot restore backup: retained debit card "${card.cardholderName} (•••• ${card.lastFour})" references account "${targetAcc.name}" which is a ${targetAcc.type} account instead of a BANK account.`
+          );
+        }
+        if (card.cardType === 'CREDIT' && targetAcc.type !== 'CREDIT_CARD') {
+          throw new Error(
+            `Cannot restore backup: retained credit card "${card.cardholderName} (•••• ${card.lastFour})" references account "${targetAcc.name}" which is a ${targetAcc.type} account instead of a CREDIT_CARD account.`
+          );
+        }
+        stagedCardLinks.set(card.id, card.linkedAccountId);
+      }
     }
-    if (hasCards) {
+  }
+
+  // B. Retained shopping validation: handle lists and items independently
+  let localShoppingLists: ShoppingList[] = [];
+  try {
+    localShoppingLists = await db.getAllAsync<ShoppingList>('SELECT * FROM shopping_lists;');
+  } catch {}
+
+  let localShoppingItems: ShoppingItem[] = [];
+  try {
+    localShoppingItems = await db.getAllAsync<ShoppingItem>('SELECT * FROM shopping_items;');
+  } catch {}
+
+  if (!hasIncomingShoppingLists && hasIncomingShoppingItems) {
+    const localListIds = new Set(localShoppingLists.map((l) => l.id));
+    for (const item of backup.data.shoppingItems || []) {
+      if (!localListIds.has(item.listId)) {
+        throw new Error(
+          `Cannot restore backup: incoming shopping item "${item.name}" references shopping list ID "${item.listId}" which does not exist in local retained shopping lists.`
+        );
+      }
+    }
+  }
+
+  if (hasIncomingShoppingLists && !hasIncomingShoppingItems) {
+    const incomingListIds = new Set((backup.data.shoppingLists || []).map((l) => l.id));
+    for (const item of localShoppingItems) {
+      if (!incomingListIds.has(item.listId)) {
+        throw new Error(
+          `Cannot restore backup: retained shopping item "${item.name}" references shopping list ID "${item.listId}" which is missing in the incoming backup.`
+        );
+      }
+    }
+  }
+
+  if (!hasIncomingShoppingItems) {
+    for (const item of localShoppingItems) {
+      if (item.status === 'PURCHASED') {
+        if (!item.purchaseAccountId || !incomingAccountsById.has(item.purchaseAccountId)) {
+          throw new Error(
+            `Cannot restore backup: retained purchased shopping item "${item.name}" references account ID "${item.purchaseAccountId}" which does not exist in the incoming backup.`
+          );
+        }
+        if (!item.transactionId) {
+          throw new Error(
+            `Cannot restore backup: retained purchased shopping item "${item.name}" is missing its linked transaction ID.`
+          );
+        }
+        const tx = incomingTransactionsById.get(item.transactionId);
+        if (!tx || tx.deletedAt) {
+          throw new Error(
+            `Cannot restore backup: retained purchased shopping item "${item.name}" references transaction ID "${item.transactionId}" which does not exist or is deleted in the incoming backup.`
+          );
+        }
+        const purchasedDate = typeof item.purchasedAt === 'string' ? item.purchasedAt.slice(0, 10) : '';
+        const metaShoppingId = shoppingItemIdFromMetadata(tx.metadata);
+        if (
+          tx.type !== 'EXPENSE' ||
+          tx.amount !== item.purchasePrice ||
+          tx.accountId !== item.purchaseAccountId ||
+          tx.date !== purchasedDate ||
+          tx.categoryId != (item.categoryId ?? null) ||
+          (metaShoppingId !== null && metaShoppingId !== item.id)
+        ) {
+          throw new Error(
+            `Cannot restore backup: retained purchased shopping item "${item.name}" has mismatched transaction details in the incoming backup.`
+          );
+        }
+        if (item.categoryId != null) {
+          const cat = incomingCategoriesById.get(item.categoryId);
+          if (!cat || cat.type !== 'EXPENSE') {
+            throw new Error(
+              `Cannot restore backup: retained purchased shopping item "${item.name}" references category ID "${item.categoryId}" which is missing or incompatible in the incoming backup.`
+            );
+          }
+        }
+        stagedShoppingPurchases.set(item.id, {
+          purchaseAccountId: item.purchaseAccountId,
+          transactionId: item.transactionId,
+          categoryId: item.categoryId ?? null,
+        });
+      }
+    }
+
+    const localShoppingItemsById = new Map<string, ShoppingItem>(
+      localShoppingItems.map((item) => [item.id, item])
+    );
+    for (const tx of backup.data.transactions) {
+      if (tx.deletedAt) continue;
+      const shoppingItemId = shoppingItemIdFromMetadata(tx.metadata);
+      if (!shoppingItemId) continue;
+      const localItem = localShoppingItemsById.get(shoppingItemId);
+      if (
+        !localItem ||
+        localItem.status !== 'PURCHASED' ||
+        localItem.transactionId !== tx.id ||
+        tx.type !== 'EXPENSE' ||
+        tx.amount !== localItem.purchasePrice ||
+        tx.date !== String(localItem.purchasedAt || '').slice(0, 10) ||
+        tx.accountId !== localItem.purchaseAccountId ||
+        tx.categoryId != (localItem.categoryId ?? null)
+      ) {
+        throw new Error(
+          `Cannot restore backup: incoming transaction "${tx.id}" references shopping item "${shoppingItemId}" which does not match retained local shopping records.`
+        );
+      }
+    }
+  }
+
+  await executeInTransaction(async (db) => {
+    // Only delete optional collections if the backup explicitly contains them!
+    if (hasIncomingShoppingItems) {
+      await db.execAsync('DELETE FROM shopping_items;');
+    }
+    if (hasIncomingShoppingLists) {
+      await db.execAsync('DELETE FROM shopping_lists;');
+    }
+    if (hasIncomingCards) {
       await db.execAsync('DELETE FROM cards;');
     }
 
@@ -933,8 +1091,8 @@ export async function restoreBackup(
       }
     }
 
-    // 11. Restore cards (strictly encrypted; no plain numbers or CVV)
-    if (hasCards && preparedCards && Array.isArray(preparedCards)) {
+    // 11. Restore cards if present in backup
+    if (hasIncomingCards && preparedCards && Array.isArray(preparedCards)) {
       for (const card of preparedCards) {
         if (!card.encryptedCardNumber || !card.lastFour) continue;
         await db.runAsync(
@@ -962,46 +1120,37 @@ export async function restoreBackup(
           ]
         );
       }
-    } else if (!hasCards) {
-      // Legacy backup missing cards: protect retained local cards' foreign keys
-      const incomingAccountIds = new Set(backup.data.accounts.map((a) => a.id));
-      const accountsById = new Map(backup.data.accounts.map((a) => [a.id, a]));
-      const retainedCards = await db.getAllAsync<{ id: string; cardType: string; linkedAccountId: string | null }>(
-        'SELECT id, cardType, linkedAccountId FROM cards WHERE linkedAccountId IS NOT NULL;'
-      );
-      for (const c of retainedCards) {
-        if (c.linkedAccountId) {
-          const acc = accountsById.get(c.linkedAccountId);
-          const isValidLink = acc && ((c.cardType === 'DEBIT' && acc.type === 'BANK') || (c.cardType === 'CREDIT' && acc.type === 'CREDIT_CARD'));
-          if (!isValidLink) {
-            await db.runAsync('UPDATE cards SET linkedAccountId = NULL WHERE id = ?;', [c.id]);
-          }
-        }
+    }
+
+    // 12. Reconstruct valid staged references for retained collections
+    if (!hasIncomingCards && stagedCardLinks.size > 0) {
+      for (const [cardId, accountId] of stagedCardLinks.entries()) {
+        await db.runAsync('UPDATE cards SET linkedAccountId = ? WHERE id = ?;', [accountId, cardId]);
       }
     }
 
-    // If legacy backup missing shopping, protect retained local shopping items' foreign keys
-    if (!hasShopping) {
-      const incomingAccountIds = new Set(backup.data.accounts.map((a) => a.id));
-      const incomingCategoryIds = new Set(backup.data.categories.map((c) => c.id));
-      const retainedShopping = await db.getAllAsync<{
-        id: string;
-        purchaseAccountId: string | null;
-        categoryId: string | null;
-      }>('SELECT id, purchaseAccountId, categoryId FROM shopping_items;');
-      for (const item of retainedShopping) {
-        if (item.purchaseAccountId && !incomingAccountIds.has(item.purchaseAccountId)) {
-          await db.runAsync('UPDATE shopping_items SET purchaseAccountId = NULL WHERE id = ?;', [item.id]);
-        }
-        if (item.categoryId && !incomingCategoryIds.has(item.categoryId)) {
-          await db.runAsync('UPDATE shopping_items SET categoryId = NULL WHERE id = ?;', [item.id]);
-        }
+    if (!hasIncomingShoppingItems && stagedShoppingPurchases.size > 0) {
+      for (const [itemId, refs] of stagedShoppingPurchases.entries()) {
+        await db.runAsync(
+          'UPDATE shopping_items SET purchaseAccountId = ?, transactionId = ?, categoryId = ? WHERE id = ?;',
+          [refs.purchaseAccountId, refs.transactionId, refs.categoryId, itemId]
+        );
       }
     }
   });
 }
 
-export async function pickAndRestoreBackupFile(): Promise<{ success: boolean; message: string }> {
+/**
+ * Prompts user to select a backup file, then reads and validates its data.
+ * Does not mutate the database or request passphrases.
+ */
+export async function pickAndInspectBackupFile(): Promise<{
+  success: boolean;
+  message?: string;
+  cancelled?: boolean;
+  parsed?: VealthBackupData;
+  fileUri?: string;
+}> {
   try {
     if (!DocumentPicker) {
       throw new Error('Document picker module is not available in this build.');
@@ -1012,7 +1161,7 @@ export async function pickAndRestoreBackupFile(): Promise<{ success: boolean; me
     });
 
     if (result.canceled || !result.assets || result.assets.length === 0) {
-      return { success: false, message: 'Restore cancelled.' };
+      return { success: false, message: 'Restore cancelled.', cancelled: true };
     }
 
     const fileAsset = result.assets[0];
@@ -1020,8 +1169,67 @@ export async function pickAndRestoreBackupFile(): Promise<{ success: boolean; me
       encoding: FileSystem.EncodingType.UTF8,
     });
 
-    const parsed = JSON.parse(fileContent);
-    await restoreBackup(parsed);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(fileContent);
+    } catch {
+      return { success: false, message: 'Selected file is not valid JSON.' };
+    }
+
+    const validation = validateBackupData(parsed);
+    if (!validation.isValid) {
+      return {
+        success: false,
+        message: validation.error || 'Invalid backup file format.',
+      };
+    }
+
+    return {
+      success: true,
+      parsed,
+      fileUri: fileAsset.uri,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Failed to read or parse backup file.',
+    };
+  }
+}
+
+export async function pickAndRestoreBackupFile(options?: {
+  cardBackupPassphrase?: string;
+  onPassphraseRequired?: (parsed: VealthBackupData) => Promise<string | null>;
+}): Promise<{ success: boolean; message: string; cancelled?: boolean }> {
+  try {
+    const inspected = await pickAndInspectBackupFile();
+    if (!inspected.success || !inspected.parsed) {
+      return {
+        success: false,
+        message: inspected.message || 'Failed to inspect backup file.',
+        cancelled: inspected.cancelled,
+      };
+    }
+
+    const parsed = inspected.parsed;
+    let passphrase = options?.cardBackupPassphrase;
+    if (parsed.data?.cards && parsed.data.cards.length > 0) {
+      if (!passphrase && options?.onPassphraseRequired) {
+        const entered = await options.onPassphraseRequired(parsed);
+        if (entered == null) {
+          return { success: false, message: 'Restore cancelled.', cancelled: true };
+        }
+        passphrase = entered;
+      }
+      if (!passphrase || !passphrase.trim()) {
+        return {
+          success: false,
+          message: 'A backup passphrase is required to restore encrypted Card Wallet records.',
+        };
+      }
+    }
+
+    await restoreBackup(parsed, { cardBackupPassphrase: passphrase });
 
     return {
       success: true,

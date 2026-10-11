@@ -77,38 +77,71 @@ export async function getMasterEncryptionKeyHex(): Promise<string> {
 
   // 1. Try reading existing key from SecureStore
   if (SecureStore) {
+    let isAvailable = false;
     try {
-      const isAvailable = await SecureStore.isAvailableAsync();
-      if (isAvailable) {
-        let key = await SecureStore.getItemAsync(MASTER_CARD_KEY_NAME);
-        if (key && key.length === 64 && /^[0-9a-f]{64}$/i.test(key)) {
-          return key;
-        }
-
-        // Generate a new 256-bit key
-        const newKeyBytes = getSecureRandomBytes(32);
-        key = bytesToHex(newKeyBytes);
-        await SecureStore.setItemAsync(MASTER_CARD_KEY_NAME, key, {
-          keychainAccessible: SecureStore.WHEN_UNLOCKED,
-        });
-        return key;
-      }
+      isAvailable = await SecureStore.isAvailableAsync();
     } catch (e: any) {
-      if (!isTest) {
+      throw new Error(
+        `OS secure storage unavailable: could not check keystore availability (${e?.message || 'storage error'}).`
+      );
+    }
+
+    if (isAvailable) {
+      let existingKey: string | null = null;
+      try {
+        existingKey = await SecureStore.getItemAsync(MASTER_CARD_KEY_NAME);
+      } catch (e: any) {
+        // SecureStore read failure: FAIL CLOSED, never treat read error as an empty keystore!
         throw new Error(
-          `OS secure storage unavailable: could not securely initialize encryption key (${e?.message || 'storage error'}).`
+          `OS secure storage unavailable: failed to read master encryption key (${e?.message || 'storage read error'}).`
         );
       }
+
+      // Check if key is genuinely absent: null, undefined, or empty string
+      if (existingKey == null || existingKey === '') {
+        // Genuinely absent: generate a new 256-bit key
+        const newKeyBytes = getSecureRandomBytes(32);
+        const newKey = bytesToHex(newKeyBytes);
+        try {
+          await SecureStore.setItemAsync(MASTER_CARD_KEY_NAME, newKey, {
+            keychainAccessible: SecureStore.WHEN_UNLOCKED,
+          });
+        } catch (e: any) {
+          throw new Error(
+            `OS secure storage unavailable: failed to persist newly generated master encryption key (${e?.message || 'storage write error'}).`
+          );
+        }
+        return newKey;
+      }
+
+      // Key exists and is non-empty: validate format
+      if (existingKey.length === 64 && /^[0-9a-f]{64}$/i.test(existingKey)) {
+        return existingKey;
+      }
+
+      // Key exists but is malformed / corrupted:
+      // THROW RECOVERY ERROR, DO NOT OVERWRITE!
+      throw new Error(
+        'OS secure storage contains a corrupted or unreadable master encryption key. Cannot initialize or overwrite existing key material.'
+      );
     }
   }
 
-  // Fallback ONLY for unit tests with mocked/stubbed secure store
+  // Fallback ONLY for unit tests when SecureStore is not provided
   if (isTest) {
-    let key = fallbackKeyMemory.get(MASTER_CARD_KEY_NAME);
-    if (!key) {
-      key = bytesToHex(getSecureRandomBytes(32));
-      fallbackKeyMemory.set(MASTER_CARD_KEY_NAME, key);
+    if (fallbackKeyMemory.has(MASTER_CARD_KEY_NAME)) {
+      const key = fallbackKeyMemory.get(MASTER_CARD_KEY_NAME);
+      if (key != null && key !== '') {
+        if (key.length === 64 && /^[0-9a-f]{64}$/i.test(key)) {
+          return key;
+        }
+        throw new Error(
+          'OS secure storage contains a corrupted or unreadable master encryption key. Cannot initialize or overwrite existing key material.'
+        );
+      }
     }
+    const key = bytesToHex(getSecureRandomBytes(32));
+    fallbackKeyMemory.set(MASTER_CARD_KEY_NAME, key);
     return key;
   }
 
@@ -130,16 +163,19 @@ export async function setMasterEncryptionKeyHex(keyHex: string): Promise<void> {
   }
 
   if (SecureStore) {
+    let isAvailable = false;
     try {
-      const isAvailable = await SecureStore.isAvailableAsync();
-      if (isAvailable) {
+      isAvailable = await SecureStore.isAvailableAsync();
+    } catch (e: any) {
+      throw new Error(`OS secure storage unavailable: ${e?.message || 'error'}`);
+    }
+    if (isAvailable) {
+      try {
         await SecureStore.setItemAsync(MASTER_CARD_KEY_NAME, keyHex, {
           keychainAccessible: SecureStore.WHEN_UNLOCKED,
         });
         return;
-      }
-    } catch (e: any) {
-      if (!isTestEnvironment()) {
+      } catch (e: any) {
         throw new Error(`Failed to store master key into OS secure storage: ${e?.message || 'error'}`);
       }
     }
