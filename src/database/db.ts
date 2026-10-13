@@ -205,7 +205,7 @@ export async function migrateDatabase(db: SQLite.SQLiteDatabase): Promise<void> 
     try {
       const runTxn = typeof (db as any).withExclusiveTransactionAsync === 'function'
         ? (cb: (txn: any) => Promise<any>) => (db as any).withExclusiveTransactionAsync(cb)
-        : (cb: (txn: any) => Promise<any>) => (db as any).withTransactionAsync(async () => cb(db));
+        : (cb: (txn: any) => Promise<any>) => (db as any).withTransactionAsync(async (txn?: any) => cb(txn || db));
 
       await runTxn(async (txn: any) => {
         const executor = typeof txn?.execAsync === 'function' ? txn : db;
@@ -286,12 +286,14 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   }
 
   initPromise = (async () => {
+    console.warn('[DB] Initializing SQLite database (vaelth.db)...');
     const rawDb = await SQLite.openDatabaseAsync('vaelth.db');
     const db = serializeDatabase(rawDb);
 
-    // Enable foreign keys and WAL mode
+    // Enable foreign keys, WAL mode, and busy timeout
     await db.execAsync('PRAGMA foreign_keys = ON;');
     await db.execAsync('PRAGMA journal_mode = WAL;');
+    await db.execAsync('PRAGMA busy_timeout = 5000;');
 
     // Run schema creation
     await db.execAsync(CREATE_TABLES_SQL);
@@ -316,11 +318,15 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
     }
 
     dbInstance = db;
+    console.warn('[DB] SQLite database initialized successfully.');
     return db;
   })();
 
   // A failed open/migration must not permanently poison future attempts.
-  initPromise.catch(() => { initPromise = null; });
+  initPromise.catch((err) => {
+    console.error('[DB ERROR] Database initialization failed:', err?.message || err);
+    initPromise = null;
+  });
   return initPromise;
 }
 
@@ -335,8 +341,8 @@ export async function executeInTransaction<T>(
       result = await action(txn as unknown as SQLite.SQLiteDatabase);
     });
   } else {
-    await (db as any).withTransactionAsync(async () => {
-      result = await action(db);
+    await (db as any).withTransactionAsync(async (txn?: any) => {
+      result = await action((txn || db) as unknown as SQLite.SQLiteDatabase);
     });
   }
 

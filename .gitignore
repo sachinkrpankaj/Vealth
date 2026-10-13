@@ -64,3 +64,7 @@ android/app/src/main/res/raw/
 android/app/src/main/res/drawable-*/node_modules_*
 android/app/src/main/res/drawable-*/assets_*
 
+# Local diagnostic logs
+vaelth-*.txt
+
+

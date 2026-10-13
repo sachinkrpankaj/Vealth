@@ -162,44 +162,42 @@ export default function TransactionDetailScreen() {
 
   const handleSaveEdit = async () => {
     if (isSaving || !transaction || editAmount <= 0) return;
-    setIsSaving(true);
 
     const effectiveDate = editDate.trim() || transaction.date;
     const dateVal = validateTransactionDate(effectiveDate, false);
     if (!dateVal.isValid) {
-      setIsSaving(false);
       showThemedAlert('Validation Error', dateVal.error || 'Future-dated transactions are not supported.');
       return;
     }
 
     const dueVal = validateDueDate(editDueDate, effectiveDate);
     if (!dueVal.isValid) {
-      setIsSaving(false);
       showThemedAlert('Validation Error', dueVal.error || 'Due date cannot be earlier than transaction date.');
       return;
     }
 
-    // Enforce repayment balance checks on edit
-    if (transaction.type === 'REPAYMENT_RECEIVED' || transaction.type === 'REPAYMENT_MADE') {
-      if (person) {
-        const allTx = await getAllTransactions();
-        const debt = calculatePersonDebt(person, allTx);
-        const currentOutstanding =
-          transaction.type === 'REPAYMENT_RECEIVED' ? debt.owedToYou : debt.youOwe;
-        // Total allowable is current balance plus the amount this transaction originally repaid
-        const maxAllowed = currentOutstanding + transaction.amount;
-        if (editAmount > maxAllowed) {
-          setIsSaving(false);
-          showThemedAlert(
-            'Overpayment Error',
-            `Edited repayment (${formatRupee(editAmount)}) cannot exceed total outstanding balance of ${formatRupee(maxAllowed)}.`
-          );
-          return;
+    try {
+      setIsSaving(true);
+
+      // Enforce repayment balance checks on edit
+      if (transaction.type === 'REPAYMENT_RECEIVED' || transaction.type === 'REPAYMENT_MADE') {
+        if (person) {
+          const allTx = await getAllTransactions();
+          const debt = calculatePersonDebt(person, allTx);
+          const currentOutstanding =
+            transaction.type === 'REPAYMENT_RECEIVED' ? debt.owedToYou : debt.youOwe;
+          // Total allowable is current balance plus the amount this transaction originally repaid
+          const maxAllowed = currentOutstanding + transaction.amount;
+          if (editAmount > maxAllowed) {
+            showThemedAlert(
+              'Overpayment Error',
+              `Edited repayment (${formatRupee(editAmount)}) cannot exceed total outstanding balance of ${formatRupee(maxAllowed)}.`
+            );
+            return;
+          }
         }
       }
-    }
 
-    try {
       await updateTransaction(transaction.id, {
         amount: editAmount,
         note: editNote.trim() || undefined,

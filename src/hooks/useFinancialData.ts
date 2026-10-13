@@ -73,6 +73,9 @@ export async function fetchFinancialSnapshot(): Promise<FinancialSnapshotData> {
         };
       });
       return snapshot;
+    } catch (err: any) {
+      console.error('[DB ERROR] fetchFinancialSnapshot failed:', err?.message || err);
+      throw err;
     } finally {
       activeSnapshotPromise = null;
     }

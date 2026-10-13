@@ -88,6 +88,7 @@ export default function AddPersonScreen() {
       setIsSuccess(true);
     } catch (e: any) {
       setError(e?.message ?? 'Failed to save person');
+    } finally {
       setIsSubmitting(false);
     }
   };
